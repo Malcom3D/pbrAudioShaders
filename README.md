@@ -69,7 +69,7 @@ References [not confirmed]:
 - https://www.cs.cornell.edu/projects/Sound/ifa/ifa.pdf
 
 
-### 3D simulation of acoustical shock waves propagation.
+### 3D simulation of acoustic shock waves propagation.
 
 References [not confirmed]:
 - https://theses.hal.science/tel-01360574/document
