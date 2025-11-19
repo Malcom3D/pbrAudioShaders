@@ -1,0 +1,3 @@
+/home/malcom/Sources/pbrAudio/pbrAudioShaders/src/dsp_faust/build/CMakeFiles/dsp_faust.dir
+/home/malcom/Sources/pbrAudio/pbrAudioShaders/src/dsp_faust/build/CMakeFiles/edit_cache.dir
+/home/malcom/Sources/pbrAudio/pbrAudioShaders/src/dsp_faust/build/CMakeFiles/rebuild_cache.dir
