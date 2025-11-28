@@ -1,0 +1,16 @@
+// local version of pm.lib
+
+import("stdfaust.lib");
+
+modeFilter(f,t60) = fi.tf2(b0,b1,b2,a1,a2)
+with{
+	b0 = 1;
+	b1 = 0;
+	b2 = -1;
+	w = 2*ma.PI*f/ma.SR;
+	r = pow(0.001,1/float(t60*ma.SR));
+	a1 = -2*r*cos(w);
+	a2 = r^2;
+};
+
+modalResonator(n,modesFreq,modesGain,modesT60) = _ <: par(i,n,modeFilter(modesFreq(i),modeT60(i))*modesGain(i)) :> _;
