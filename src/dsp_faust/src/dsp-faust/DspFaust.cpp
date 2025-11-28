@@ -1,7 +1,7 @@
-#define ALSA_DRIVER 1
+#define DUMMY_DRIVER 1
 #define DYNAMIC_DSP 1
 /* ------------------------------------------------------------
-name: "dummy"
+name: "modal_dummy"
 Code generated with Faust 2.54.9 (https://faust.grame.fr)
 Compilation options: -a api/DspFaust.cpp -lang cpp -i -es 1 -mcd 16 -single -ftz 0
 ------------------------------------------------------------ */
@@ -36,7 +36,6 @@ Compilation options: -a api/DspFaust.cpp -lang cpp -i -es 1 -mcd 16 -single -ftz
  ************************************************************************
  ************************************************************************/
 
-#include <iostream>
 #include <cmath>
 #include <cstring>
 #include <string.h>
@@ -5184,8 +5183,8 @@ class mydsp : public dsp {
 	
 	void metadata(Meta* m) { 
 		m->declare("compile_options", "-a api/DspFaust.cpp -lang cpp -i -es 1 -mcd 16 -single -ftz 0");
-		m->declare("filename", "dummy.dsp");
-		m->declare("name", "dummy");
+		m->declare("filename", "modal_dummy.dsp");
+		m->declare("name", "modal_dummy");
 	}
 
 	virtual int getNumInputs() {
@@ -5227,7 +5226,7 @@ class mydsp : public dsp {
 	}
 	
 	virtual void buildUserInterface(UI* ui_interface) {
-		ui_interface->openVerticalBox("dummy");
+		ui_interface->openVerticalBox("modal_dummy");
 		ui_interface->closeBox();
 	}
 	
@@ -16040,6 +16039,7 @@ class oboeaudio : public audio, public oboe::AudioStreamCallback {
 #include <pwd.h>
 #include <limits.h>
 #include <algorithm>
+#include <iostream>
 
 #include <alsa/asoundlib.h>
 
@@ -18232,7 +18232,6 @@ class juceaudio : public audio, private juce::AudioAppComponent {
  that work under terms of your choice, so long as this FAUST
  architecture section is not modified.
  ************************************************************************/
-
 #ifndef __dummy_audio__
 #define __dummy_audio__
 
@@ -18242,6 +18241,7 @@ class juceaudio : public audio, private juce::AudioAppComponent {
 #include <limits.h>
 #include <iostream>
 #include <iomanip>
+#include <vector>
 
 #ifdef USE_PTHREAD
 #include <pthread.h>
@@ -18249,38 +18249,41 @@ class juceaudio : public audio, private juce::AudioAppComponent {
 #include <thread>
 #endif
 
-
 #define BUFFER_TO_RENDER 10
 
 struct dummyaudio_base : public audio {
-    
     virtual void render() = 0;
+
+    // NEW: Add virtual methods for accessing samples
+    virtual const std::vector<std::vector<FAUSTFLOAT>>& getOutputBuffers() const = 0;
+    virtual int getNumBuffersRendered() const = 0;
+    virtual std::vector<FAUSTFLOAT> getAllSamples() const = 0;
+    virtual std::vector<FAUSTFLOAT> getChannelSamples(int channel) const = 0;
+    
 };
 
 template <typename REAL>
 class dummyaudio_real : public dummyaudio_base {
-    
+
     private:
-        
         dsp* fDSP;
-        
         int fSampleRate;
         int fBufferSize;
-        
         REAL** fInChannel;
         REAL** fOutChannel;
-        
         int fNumInputs;
         int fNumOutputs;
-        
         bool fRunning;
-        
         int fRender;
         int fCount;
         int fSample;
         bool fManager;
         bool fExit;
-    
+
+        // NEW: Storage for output samples
+        std::vector<std::vector<REAL>> fOutputBuffers;
+        int fCurrentBufferIndex;
+
         void runAux()
         {
             try {
@@ -18289,7 +18292,7 @@ class dummyaudio_real : public dummyaudio_base {
                 if (fExit) exit(EXIT_FAILURE);
             }
         }
-        
+
     #ifdef USE_PTHREAD
         pthread_t fAudioThread;
         static void* run(void* ptr)
@@ -18303,18 +18306,18 @@ class dummyaudio_real : public dummyaudio_base {
             audio->runAux();
         }
     #endif
-        
+
         void process()
         {
             while (fRunning && (fRender-- > 0)) {
-                if (fSample > 0) { std::cout << "Render one buffer\n"; }
+//                if (fSample > 0) { std::cout << "Render one buffer"; }
+                if (fSample > 0)
                 render();
             }
             fRunning = false;
         }
-        
+
     public:
-        
         dummyaudio_real(int sr, int bs,
                         int count = BUFFER_TO_RENDER,
                         int sample = -1,
@@ -18325,18 +18328,28 @@ class dummyaudio_real : public dummyaudio_base {
         fNumInputs(-1), fNumOutputs(-1),
         fRender(0), fCount(count),
         fSample(sample), fManager(manager),
-        fExit(exit)
-        {}
-        
+        fExit(exit), fCurrentBufferIndex(0)
+        {
+            // NEW: Pre-allocate storage for output buffers
+            if (fCount > 0) {
+                fOutputBuffers.resize(fCount);
+            }
+        }
+
         dummyaudio_real(int count = BUFFER_TO_RENDER)
         :fSampleRate(48000), fBufferSize(512),
         fInChannel(nullptr), fOutChannel(nullptr),
         fNumInputs(-1), fNumOutputs(-1),
         fRender(0), fCount(count),
         fSample(512), fManager(false),
-        fExit(false)
-        {}
-        
+        fExit(false), fCurrentBufferIndex(0)
+        {
+            // NEW: Pre-allocate storage for output buffers
+            if (fCount > 0) {
+                fOutputBuffers.resize(fCount);
+            }
+        }
+
         virtual ~dummyaudio_real()
         {
             for (int i = 0; i < fNumInputs; i++) {
@@ -18348,18 +18361,16 @@ class dummyaudio_real : public dummyaudio_base {
             delete [] fInChannel;
             delete [] fOutChannel;
         }
-        
+
         virtual bool init(const char* name, dsp* dsp)
         {
             fDSP = dsp;
-            
-            // To be used in destructor
             fNumInputs = fDSP->getNumInputs();
             fNumOutputs = fDSP->getNumOutputs();
-            
+
             fInChannel = new REAL*[fNumInputs];
             fOutChannel = new REAL*[fNumOutputs];
-            
+
             for (int i = 0; i < fNumInputs; i++) {
                 fInChannel[i] = new REAL[fBufferSize];
                 memset(fInChannel[i], 0, sizeof(REAL) * fBufferSize);
@@ -18368,17 +18379,16 @@ class dummyaudio_real : public dummyaudio_base {
                 fOutChannel[i] = new REAL[fBufferSize];
                 memset(fOutChannel[i], 0, sizeof(REAL) * fBufferSize);
             }
-            
+
             if (fManager) {
-                // classInit is called elsewhere with a custom memory manager
                 fDSP->instanceInit(fSampleRate);
             } else {
                 fDSP->init(fSampleRate);
             }
-            
+
             return true;
         }
-        
+
         virtual bool start()
         {
             fRender = fCount;
@@ -18397,7 +18407,7 @@ class dummyaudio_real : public dummyaudio_base {
                 return true;
             }
         }
-        
+
         virtual void stop()
         {
             if (fRunning) {
@@ -18411,45 +18421,89 @@ class dummyaudio_real : public dummyaudio_base {
             #endif
             }
         }
-        
+
         void render()
         {
             AVOIDDENORMALS;
-            
+
             fDSP->compute(fBufferSize, reinterpret_cast<FAUSTFLOAT**>(fInChannel), reinterpret_cast<FAUSTFLOAT**>(fOutChannel));
-            if (fNumInputs > 0) {
-                for (int frame = 0; frame < fSample; frame++) {
-                    std::cout << std::fixed << std::setprecision(6) << "sample in " << fInChannel[0][frame] << std::endl;
+            
+            // NEW: Store output samples
+            if (fCurrentBufferIndex < fOutputBuffers.size()) {
+                fOutputBuffers[fCurrentBufferIndex].resize(fBufferSize * fNumOutputs);
+                for (int frame = 0; frame < fBufferSize; frame++) {
+                    for (int chan = 0; chan < fNumOutputs; chan++) {
+                        fOutputBuffers[fCurrentBufferIndex][frame * fNumOutputs + + chan] = fOutChannel[chan][frame];
+                    }
                 }
+                fCurrentBufferIndex++;
             }
-            if (fNumOutputs > 0) {
-                for (int frame = 0; frame < fSample; frame++) {
-                    std::cout << std::fixed << std::setprecision(6) << "sample out " << fOutChannel[0][frame] << std::endl;
-                }
-            }
+            
+//            if (fNumInputs > 0) {
+//                for (int frame = 0; frame < fSample; frame++) {
+//                    std::cout << std::fixed << std::setprecision(6) << "sample in " << fInChannel[0][frame] << std::endl;
+//                }
+//            }
+//            if (fNumOutputs > 0) {
+//                for (int frame = 0; frame < fSample; frame++) {
+//                    std::cout << std::fixed << std::setprecision(16) << "sample out " << fOutChannel[0][frame] << std::endl;
+//                }
+//            }
+        }
+
+        // NEW: Methods to access stored samples - must be public
+        const std::vector<std::vector<REAL>>& getOutputBuffers() const override {
+            return fOutputBuffers;
         }
         
+        int getNumBuffersRendered() const override {
+            return fCurrentBufferIndex;
+        }
+        
+        std::vector<REAL> getAllSamples() const override {
+            std::vector<REAL> allSamples;
+            for (int i = 0; i < fCurrentBufferIndex; i++) {
+                allSamples.insert(allSamples.end(), fOutputBuffers[i].begin(), fOutputBuffers[i].end());
+            }
+            return allSamples;
+        }
+        
+        std::vector<REAL> getChannelSamples(int channel) const override {
+            std::vector<REAL> channelSamples;
+            for (int i = 0; i < fCurrentBufferIndex; i++) {
+                for (int frame = 0; frame < fBufferSize; frame++) {
+                    if (channel < fNumOutputs) {
+                        channelSamples.push_back(fOutputBuffers[i][frame * fNumOutputs + channel]);
+                    }
+                }
+            }
+            return channelSamples;
+        }
+
         virtual int getBufferSize() { return fBufferSize; }
         virtual int getSampleRate() { return fSampleRate; }
-        
         virtual int getNumInputs() { return fNumInputs; }
         virtual int getNumOutputs() { return fNumOutputs; }
-    
 };
 
 struct dummyaudio : public dummyaudio_real<FAUSTFLOAT> {
-    
     dummyaudio(int sr, int bs,
                int count = BUFFER_TO_RENDER,
                int sample = -1,
                bool manager = false,
                bool exit = false)
-    : dummyaudio_real(sr, bs, count, sample, manager, exit)
+    : dummyaudio_real<FAUSTFLOAT>(sr, bs, count, sample, manager, exit)
     {}
-    
-    dummyaudio(int count = BUFFER_TO_RENDER) : dummyaudio_real(count)
+
+    dummyaudio(int count = BUFFER_TO_RENDER) 
+    : dummyaudio_real<FAUSTFLOAT>(count)
     {}
-    
+
+    // NEW: Explicitly inherit the methods
+    using dummyaudio_real<FAUSTFLOAT>::getOutputBuffers;
+    using dummyaudio_real<FAUSTFLOAT>::getNumBuffersRendered;
+    using dummyaudio_real<FAUSTFLOAT>::getAllSamples;
+    using dummyaudio_real<FAUSTFLOAT>::getChannelSamples;
 };
 
 #endif
@@ -18613,7 +18667,6 @@ class teensyaudio : public AudioStream, public audio {
     
         virtual int getBufferSize() { return AUDIO_BLOCK_SAMPLES; }
         virtual int getSampleRate() { return AUDIO_SAMPLE_RATE_EXACT; }
-
         virtual int getNumInputs() { return 2; }
         virtual int getNumOutputs() { return 2; }
     
