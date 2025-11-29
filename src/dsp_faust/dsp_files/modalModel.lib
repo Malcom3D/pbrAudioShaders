@@ -1,4 +1,4 @@
-import("stdfaust.lib");
+import("dsp_files/faustlib/stdfaust.lib");
 
 modalModel(exPos,t60,t60DecayRatio,t60DecaySlope) = _ <: par(i,nModes,pm.modeFilter(modesFreqs(i),modesT60s(i),modesGains(int(exPos),i))) :> /(nModes)
 with{

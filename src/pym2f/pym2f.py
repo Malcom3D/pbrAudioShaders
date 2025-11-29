@@ -45,9 +45,6 @@ class Pym2f:
             - output_name: name for generated Faust modal model lib
 
         """
-
-        print(self.mesh2faust)
-
         cmd = f"{self.mesh2faust} --debug "
         if not young_modulus == None and poisson_ration == None and density == None:
             if alpha_rayleigh == None and beta_rayleigh == None:

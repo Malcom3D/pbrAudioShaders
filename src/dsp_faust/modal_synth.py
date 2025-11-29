@@ -16,5 +16,26 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-__version__ = "0.3.5"
-__author__ = "Malcom3D"
+import os
+import numpy as np
+from typing import List
+from dataclasses import dataclass
+
+@dataclass
+class ModalSynth:
+    faust_render: str = "./bin/render_faust_snd"
+    dsp_file: str = None
+    output_file: str = None
+    duration: float = 4.0
+    """
+        Input parameters
+
+        - dsp_file: file with Faust code
+        - output_file: RAW PCM FLOAT32 audio file
+    """
+
+    def __post_init__(self):
+        cmd = f"{self.faust_render} {self.dsp_file} {self.output_file} {self.duration}"
+        exit_code = os.system(cmd)
+        if not exit_code == 0:
+            print('Error')
