@@ -1,0 +1,35 @@
+my_package/
+├── setup.py
+├── pyproject.toml
+├── README.md
+├── requirements.txt
+├── MANIFEST.in
+├── src/
+│   ├── my_package/
+│   │   ├── __init__.py
+│   │   ├── core.py
+│   │   ├── utils.py
+│   │   ├── cpp_extensions/
+│   │   │   ├── __init__.py
+│   │   │   ├── wrapper.cpp
+│   │   │   ├── native_lib.cpp
+│   │   │   └── native_lib.h
+│   │   └── binaries/
+│   │       ├── __init__.py
+│   │       └── compiled/
+│   │           ├── libnative.so (or .dll/.dylib)
+│   │           └── my_tool (executable)
+│   ├── cpp_src/
+│   │   ├── CMakeLists.txt
+│   │   ├── main.cpp
+│   │   ├── library/
+│   │   │   ├── math_ops.cpp
+│   │   │   ├── math_ops.h
+│   │   │   └── file_utils.cpp
+│   │   └── tools/
+│   │       ├── tool_main.cpp
+│   │       └── helper.cpp
+│   └── build_scripts/
+│       ├── build_cpp.sh
+│       ├── build_cpp.bat
+│       └── cmake_build.py

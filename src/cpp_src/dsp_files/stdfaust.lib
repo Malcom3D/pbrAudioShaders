@@ -1,0 +1,38 @@
+//################################ stdfaust.lib ##########################################
+// The purpose of this library is to give access to all the Faust standard libraries
+// through a series of environments.
+//########################################################################################
+
+aa = library("dsp_files/faustlib/aanl.lib");
+sf = library("dsp_files/faustlib/all.lib");
+an = library("dsp_files/faustlib/analyzers.lib");
+ba = library("dsp_files/faustlib/basics.lib");
+co = library("dsp_files/faustlib/compressors.lib");
+de = library("dsp_files/faustlib/delays.lib");
+dm = library("dsp_files/faustlib/demos.lib");
+dx = library("dsp_files/faustlib/dx7.lib");
+en = library("dsp_files/faustlib/envelopes.lib");
+fd = library("dsp_files/faustlib/fds.lib");
+fi = library("dsp_files/faustlib/filters.lib");
+ho = library("dsp_files/faustlib/hoa.lib");
+it = library("dsp_files/faustlib/interpolators.lib");
+ma = library("dsp_files/faustlib/maths.lib");
+mi = library("dsp_files/faustlib/mi.lib");
+ef = library("dsp_files/faustlib/misceffects.lib");
+os = library("dsp_files/faustlib/oscillators.lib");
+no = library("dsp_files/faustlib/noises.lib");
+pf = library("dsp_files/faustlib/phaflangers.lib");
+pl = library("dsp_files/faustlib/platform.lib");
+pm = library("dsp_files/faustlib/physmodels.lib");
+qu = library("dsp_files/faustlib/quantizers.lib");
+rm = library("dsp_files/faustlib/reducemaps.lib");
+re = library("dsp_files/faustlib/reverbs.lib");
+ro = library("dsp_files/faustlib/routes.lib");
+sp = library("dsp_files/faustlib/spats.lib");
+si = library("dsp_files/faustlib/signals.lib");
+so = library("dsp_files/faustlib/soundfiles.lib");
+sy = library("dsp_files/faustlib/synths.lib");
+ve = library("dsp_files/faustlib/vaeffects.lib");
+vl = library("dsp_files/faustlib/version.lib");
+wa = library("dsp_files/faustlib/webaudio.lib");
+wd = library("dsp_files/faustlib/wdmodels.lib");
