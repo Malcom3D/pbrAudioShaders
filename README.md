@@ -8,12 +8,10 @@ See the [LICENSE](LICENSE) file for the full text.
 
 Physically based rendered audio shaders.
 
-### Physically plausible impact sound for rigid world simulation.
+### Physically plausible impact sound for rigid body simulation.
 
-References [not confirmed]:
+References:
 - https://github.com/grame-cncm/faust/tree/master-dev/tools/physicalModeling to generate audio physical modal model from 3D mesh
-- https://github.com/hrtlacek/faust_python as python cffi binding to faust
-
 
 ### Physically plausible impact sound for nonlinear thin-shell simulation.
 

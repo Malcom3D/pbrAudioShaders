@@ -1,0 +1,36 @@
+//##################################### all.lib ##########################################
+// The purpose of this library is to give access to all the Faust standard libraries
+// from a single point.
+//########################################################################################
+
+import("dsp_files/faustlib/aanl.lib");
+import("dsp_files/faustlib/analyzers.lib");
+import("dsp_files/faustlib/basics.lib");
+import("dsp_files/faustlib/compressors.lib");
+import("dsp_files/faustlib/delays.lib");
+import("dsp_files/faustlib/demos.lib");
+import("dsp_files/faustlib/dx7.lib");
+import("dsp_files/faustlib/envelopes.lib");
+import("dsp_files/faustlib/fds.lib");
+import("dsp_files/faustlib/filters.lib");
+import("dsp_files/faustlib/hoa.lib");
+import("dsp_files/faustlib/interpolators.lib");
+import("dsp_files/faustlib/maths.lib");
+import("dsp_files/faustlib/mi.lib");
+import("dsp_files/faustlib/misceffects.lib");
+import("dsp_files/faustlib/oscillators.lib");
+import("dsp_files/faustlib/noises.lib");
+import("dsp_files/faustlib/phaflangers.lib");
+import("dsp_files/faustlib/physmodels.lib");
+import("dsp_files/faustlib/quantizers.lib");
+import("dsp_files/faustlib/reducemaps.lib");
+import("dsp_files/faustlib/reverbs.lib");
+import("dsp_files/faustlib/routes.lib");
+import("dsp_files/faustlib/signals.lib");
+import("dsp_files/faustlib/soundfiles.lib");
+import("dsp_files/faustlib/spats.lib");
+import("dsp_files/faustlib/synths.lib");
+import("dsp_files/faustlib/vaeffects.lib");
+import("dsp_files/faustlib/version.lib");
+import("dsp_files/faustlib/wdmodels.lib");
+import("dsp_files/faustlib/webaudio.lib");
