@@ -21,21 +21,34 @@ import numpy as np
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass, field
 
-from ..lib.impact_data import Collision, ObjCollision, ImpactData
+@dataclass
+class SystemConfig:
+    sample_rate: int = 48000
+    bit_depth: int = 32
+    fps: float = 24 # video fps
+    low_frequency: float = 1.0
+    high_frequency: float = 24000.0
+    collision_margin: float = 0.05
+    min_vertex: int = None
+    output_path: str = "./output_impact"
 
 @dataclass
 class ObjectConfig:
     idx: int
+    name: str
     obj_path: str
-    young_modulus: float
-    poisson_ration: float
-    density: float
-    damping: float
+    optimize: bool = False
+    young_modulus: float = None
+    poisson_ratio: float = None
+    density: float = None
+    damping: float = None
 
 class Config:
     def __init__(self, config_file: str):
         with open(config_file, 'r') as f:
             self.data = json.load(f)
+
+        self.system = SystemConfig(**self.data.get('system', {}))
 
         # Handle objects physical data
         self.objects = []
@@ -43,10 +56,10 @@ class Config:
             physical_properties = o.get('physical_properties', {})
 
             object_config = ObjectConfig(
-                **{k: v for k, v in o.items() if != 'physical_properties'},
+                **{k: v for k, v in o.items() if k != 'physical_properties'},
                 young_modulus = physical_properties.get('young_modulus', []),
-                poisson_ration = physical_properties.get('poisson_ration', []),
+                poisson_ratio = physical_properties.get('poisson_ratio', []),
                 density = physical_properties.get('density', []),
-                damping = physical_properties.get('damping', [])
+                damping = physical_properties.get('damping', []),
             )
             self.objects.append(object_config)

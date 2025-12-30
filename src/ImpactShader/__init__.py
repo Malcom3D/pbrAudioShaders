@@ -16,14 +16,16 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-__version__ = "0.4.0"
+__version__ = "0.4.6"
 __author__ = "Malcom3D"
 __description__ = "Physically plausible impact sound for rigid body simulation"
 
 import os, sys
 from .core.impact_manager import ImpactManager
+from .core.impact_engine import ImpactEngine
 
 class ImpactShader:
     def __init__(self, config_file: str):
         self.im = ImpactManager(config_file)
         self.ie = ImpactEngine(self.im)
+        self.ie.compute()

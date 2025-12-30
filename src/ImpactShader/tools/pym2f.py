@@ -18,50 +18,66 @@
 
 import os, sys
 import numpy as np
-from typing import List
+import shutil
+from typing import List, Tuple
 from dataclasses import dataclass
+
+from ..core.impact_manager import ImpactManager
+#from core.impact_manager import ImpactManager
 
 @dataclass
 class Pym2f:
+    impact_manager: ImpactManager
     mesh2faust: str = "mesh2faust"
-    low_freq: float = 1.0
-    high_freq: float = 24000
 
-    def convert(self, obj_file: str, young_modulus: float = None, poisson_ration: float = None, density: float = None, damping: float = None, nfemmodes: int = None, minmode: float = None, maxmode: float = None, expos: List = None, output_name: str = None):
+    def __post_init__(self):
+        self.config = self.impact_manager.get('config')
+        self.low_freq = self.config.system.low_frequency
+        self.high_freq = self.config.system.high_frequency
+        bin_dir = f"{os.path.dirname(os.path.abspath(sys.modules[Pym2f.__module__].__file__))}/../bin"
+        os.environ['LD_LIBRARY_PATH'] = bin_dir
+        self.mesh2faust = f"{bin_dir}/{self.mesh2faust}"
+
+    def compute(self, obj_idx: int, expos: List[int] = None) -> None:
         """
-            Input parameters
+            mesh2faust Input parameters
 
-            - obj_file: volumetric mesh in Wavefront .obj file (triangulated mesh with normals)
-
+            - obj_file: volumetric mesh in Wavefront .obj file (watertight triangulated mesh with normals)
             - young_modulus: Young's modulus (in N/m^2)
-            - poisson_ration: Poisson's ratio (no unit)
+            - poisson_ratio: Poisson's ratio (no unit)
             - density: Density (in kg/m^3)
             - damping: Rayleigh damping ratio (no unit)
-            - nfemmodes: number of modes to be computed for the finite element analysis
             - minmode: minimum frequency of the lowest mode (in Hz)
             - maxmode: maximum frequency of the highest mode (in Hz)
             - expos: list of vertex of active excitation positions (e.g. 89 63 45 ...)
             - output_name: name for generated Faust modal model lib
         """
-        bin_dir = f"{os.path.dirname(os.path.abspath(sys.modules[Pym2f.__module__].__file__))}/../bin"
-        os.environ['LD_LIBRARY_PATH'] = bin_dir
-        self.mesh2faust = f"{bin_dir}/{self.mesh2faust}"
-        cmd = f"{self.mesh2faust} --debug "
-        if not young_modulus == None and poisson_ration == None and density == None:
-            damping = damping if not damping == None else 0.02 # conservative value
-                """
-                compute alpha and beta Rayleigh damping coefficient from low and high frequency:
-                alpha: stiffness-proportional damping coefficient (in seconds)
-                beta: mass-proportional damping coefficient (in 1/seconds)
-                """
-                omega_1 = 2 * np.pi * self.low_freq 
-                omega_2 = 2 * np.pi * self.high_freq
-                alpha_rayleigh = damping * 2 * omega_1 + omega_1 * omega_2 ** 2
-                beta_rayleigh = omega_1 + omega_2 * damping
-            cmd += f"--material {young_modulus} {poisson_ration} {density} {alpha_rayleigh} {beta_rayleigh} "
+        for config_obj in self.config.objects:
+            if config_obj.idx == obj_idx:
+
+                obj_file = f"{config_obj.obj_path}/optimized_{config_obj.name}.obj"
+                young_modulus = config_obj.young_modulus
+                poisson_ratio = config_obj.poisson_ratio
+                density = config_obj.density
+                damping = config_obj.damping if not config_obj.damping == None else 0.02 # conservative value
+                minmode = self.low_freq
+                maxmode = self.high_freq
+                output_name = f"{config_obj.name}"
+
+        cmd = f"{self.mesh2faust} "
+        if not young_modulus == None and not poisson_ratio == None and not density == None:
+            """
+            compute alpha and beta Rayleigh damping coefficient from low and high frequency:
+            alpha: stiffness-proportional damping coefficient (in seconds)
+            beta: mass-proportional damping coefficient (in 1/seconds)
+            """
+            alpha_rayleigh, beta_rayleigh = self._compute_rayleigh_damping(self.low_freq, self.high_freq, damping)
+#            omega_1 = 2 * np.pi * self.low_freq 
+#            omega_2 = 2 * np.pi * self.high_freq
+#            alpha_rayleigh = damping * 2 * omega_1 + omega_1 * omega_2 ** 2
+#            beta_rayleigh = omega_1 + omega_2 * damping
+            cmd += f"--material {young_modulus} {poisson_ratio} {density} {alpha_rayleigh} {beta_rayleigh} "
         cmd += f"--infile {obj_file} "
-        if not nfemmodes == None:
-            cmd += f"--nfemmodes {nfemmodes} "
         if not minmode == None:
             cmd += f"--minmode {minmode} "
         else:
@@ -78,6 +94,73 @@ class Pym2f:
         if not output_name == None:
             cmd += f"--name {output_name} "
 
+        print(cmd)
         exit_code = os.system(cmd)
         if not exit_code == 0:
             print('Error')
+        output_path = f"{self.config.system.output_path}/dsp"
+        os.makedirs(output_path, exist_ok=True)
+        file_name = f"{output_name}.lib"
+
+        # remove import stdfaust.lib
+        with open(file_name, 'r') as file:
+            data = file.read()
+        data = data.replace('import(', '//import(')
+        with open(file_name, 'w') as file:
+            file.write(data)
+
+        dest_path = f"{output_path}/{output_name}.lib"
+        shutil.move(file_name, dest_path)
+
+
+    def _compute_rayleigh_damping(self, f1: float, f2: float, xi1: float, xi2: float = None) -> Tuple[float, float]:
+        """
+        Compute Rayleigh damping coefficients α and β.
+    
+        Parameters:
+        -----------
+        f1 : float
+            First frequency (Hz)
+        f2 : float
+            Second frequency (Hz)
+        xi1 : float
+            Damping ratio at f11 (dimensionless, e.g., 0.05 for 5%)
+        xi2 : float
+            Damping ratio at f2 (dimensionless, e.g., 0.05 for 5%)
+    
+        Returns:
+        --------
+        tuple : (alpha, beta)
+            Mass-proportional coefficient α (1/s)
+            Stiffness-proportional coefficient β (s)
+    
+        Notes:
+        ------
+        Rayleigh damping: C = αM + βK
+        Damping ratio at frequency ω: ξ = α/(2ω) + βω/2
+        """
+        xi2 = xi1 if xi2 == None else xi2
+
+        # Convert frequencies to angular frequencies (rad/s)
+        omega1 = 2 * np.pi * f1
+        omega2 = 2 * np.pi * f2
+    
+        # Solve the system of equations:
+        # ξ1 = α/(2ω1) + βω1/2
+        # ξ2 = α/(2ω2) + βω2/2
+    
+        # Create the coefficient matrix
+        A = np.array([
+            [1/(2*omega1), omega1/2],
+            [1/(2*omega2), omega2/2]
+        ])
+        
+        # Create the right-hand side vector
+        b = np.array([xi1, xi2])
+    
+        # Solve for α and β
+        try:
+            alpha, beta = np.linalg.solve(A, b)
+            return alpha, beta
+        except np.linalg.LinAlgError:
+            raise ValueError("The two frequencies must be different to compute unique Rayleigh damping coefficients.")
