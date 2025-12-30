@@ -18,7 +18,9 @@
 
 import threading
 from typing import List, Tuple, Any
+
 from ..utils.config import Config
+#from utils.config import Config
 
 class ImpactManager:
     _instance = None
@@ -32,16 +34,16 @@ class ImpactManager:
         return cls._instance
 
     def __init__(self, config: str):
+        print('ImpactManager.init')
         with self._lock:
             if not self._initialized:
                 self._impacts = {}
                 self._initialized = True
-
                 self._config = Config(config)
 
-    def register(self, impact_data: Any, idx: int = None) -> None:
+    def register(self, impact_data: Any) -> None:
         if 'ImpactData' in str(type(impact_data)):
-            self._impacts[idx] = impact_data
+            self._impacts[len(self._impacts)] = impact_data
 
     def get(self, type: str = None, idx: int = None) -> Any:
         if type == None:
@@ -51,6 +53,37 @@ class ImpactManager:
         elif 'impact' in type:
             return self._impacts[idx] if not idx == None else self._impacts
 
+    def get_expos(self, obj_idx: int) -> List[int]:
+        """
+        Get all vertex IDs (excitation positions) for a specific object
+        from all registered impacts.
+        """
+        expos_list = []
+        
+        # Iterate through all registered impacts
+        for idx, impact in self._impacts.items():
+            # Get vertex IDs for this specific object from the current impact
+            vertex_ids = impact.get_all_vertices(obj_idx)
+            
+            # Add all vertex IDs to the list removing duplicates
+            for vertex_id in vertex_ids:
+                if vertex_id not in expos_list:
+                    expos_list.append(vertex_id)
+        
+        expos_list.sort()
+        return expos_list
+    
+    def get_force_mag(self) -> float:
+        """Get maximum force magnitude across all impacts"""
+        max_force = 0.0
+        for idx, impact in self._impacts.items():
+            force_mag = impact.get_force_magnitude()
+            max_force = max(max_force, force_mag)
+        
+        # Return order of magnitude
+        if max_force > 0:
+            return 10**math.ceil(math.log10(max_force))
+        return 1.0
+
     def unregister(self) -> None:
         pass
-

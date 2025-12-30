@@ -40,14 +40,7 @@ In case you would like to use the built-in accelerometer or gyroscope of your de
 
 ### Main Parameters
 
-* **0**: `/Polyphonic/Voices/Panic`
-* **1**: `/Polyphonic/Voices/test/exPos_A`
-* **2**: `/Polyphonic/Voices/test/exPos_B`
 
-### Independent Voice
-
-* **0**: `/test/exPos_A`
-* **1**: `/test/exPos_B`
 
 ## API Reference
 

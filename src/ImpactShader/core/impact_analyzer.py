@@ -18,293 +18,624 @@
 
 import os
 import numpy as np
-from scipy.spatial import KDTree
-from scipy.interpolate import interp1d
-from scipy.integrate import cumtrapz
+import math
 import trimesh
+from dask import delayed, compute
+from typing import List, Dict, Tuple, Optional
+from dataclasses import dataclass, field
+from scipy.interpolate import interp1d
+import glob
+import re
+
+from ..core.impact_manager import ImpactManager
+from ..lib.impacts_data import ImpactData, ObjCollision, Collision
 
 @dataclass
 class ImpactAnalyzer:
-    impact_manager: ImpactManager
-
-    def __post_init__(self):
+    impact_manager:: ImpactManager
+    
+    def compute(self) -> None:
+        print('ImpactAnalyzer.compute')
+        """
+        Main computation function that:
+        1. Loads optimized meshes for all objects
+        2. Reads and interpolates object trajectories from obj files
+        3. Detects collisions between objects over time
+        4. Computes impact forces and collision details using proper physics
+        5. Registers ImpactData instances with ImpactManager
+        """
         config = self.impact_manager.get('config')
-
-#, fps, young_modulus, poisson_ratio, density, alpha_damping, beta_damping):
-        """
-        Initialize the impact force analyzer.
         
-        Parameters:
-        - fps: frames per second
-        - young_modulus: Young's modulus in N/m²
-        - poisson_ratio: Poisson's ratio
-        - density: density in kg/m³
-        - alpha_damping, beta_damping: Rayleigh damping coefficients
-        """
-        self.fps = fps
-        self.dt = 1.0 / fps
-        self.young_modulus = young_modulus
-        self.poisson_ratio = poisson_ratio
-        self.density = density
-        self.alpha_damping = alpha_damping
-        self.beta_damping = beta_damping
+        # Step 1: Load optimized meshes for all objects
+        meshes = {}
+        masses = {}
+        inertia_tensors = {}
+        centers_of_mass = {}
         
-        # Calculate derived material properties
-        self.shear_modulus = young_modulus / (2 * (1 + poisson_ratio))
-        self.bulk_modulus = young_modulus / (3 * (1 - 2 * poisson_ratio))
-        
-        # Storage for analysis results
-        self.impact_data = {}
-        
-    def load_obj_sequence(self, directory):
-        """
-        Load a sequence of OBJ files from a directory.
-        
-        Returns:
-        - vertices_list: list of vertex arrays per frame
-        - faces_list: list of face arrays per frame
-        - normals_list: list of normal arrays per frame
-        - timestamps: array of timestamps
-        """
-        obj_files = sorted([f for f in os.listdir(directory) if f.endswith('.obj')])
-        
-        vertices_list = []
-        faces_list = []
-        normals_list = []
-        timestamps = []
-        
-        for i, obj_file in enumerate(obj_files):
-            filepath = os.path.join(directory, obj_file)
-            mesh = trimesh.load_mesh(filepath)
+        for config_obj in config.objects:
+            # Load optimized mesh
+            optimized_obj_path = os.path.join(config_obj.obj_path, f"optimized_{config_obj.name}.obj")
             
-            vertices_list.append(mesh.vertices)
-            faces_list.append(mesh.faces)
-            normals_list.append(mesh.vertex_normals)
-            timestamps.append(i * self.dt)
+            if not os.path.exists(optimized_obj_path):
+                raise FileNotFoundError(f"Optimized mesh not found: {optimized_obj_path}")
             
-        return vertices_list, faces_list, normals_list, np.array(timestamps)
+            mesh = trimesh.load(optimized_obj_path, force='mesh')
+            meshes[config_obj.idx] = mesh
+            
+            # Calculate mass, center of mass, and inertia tensor using trimesh
+            volume = mesh.volume
+            mass = config_obj.density * volume if config_obj.density else 1.0  # Default mass if density not specified
+            masses[config_obj.idx] = mass
+            
+            # Get center of mass (trimesh calculates this properly)
+            center_of_mass = mesh.center_mass
+            centers_of_mass[config_obj.idx] = center_of_mass
+            
+            # Calculate inertia tensor using trimesh's moment of inertia calculation
+            # This gives the inertia tensor about the center of mass
+            inertia_tensor = mesh.moment_inertia
+            inertia_tensors[config_obj.idx] = inertia_tensor
+            
+            print(f"Object {config_obj.idx} ({config_obj.name}):")
+            print(f"  Mass: {mass:.4f} kg")
+            print(f"  Volume: {volume:.6f} m³")
+            print(f"  Center of mass: {center_of_mass}")
+            print(f"  Inertia tensor:\n{inertia_tensor}")
+        
+        # Step 2: Read object trajectories from obj files
+        trajectories = self._read_object_trajectories(config.objects)
+        
+        # Step 3: Interpolate trajectories to audio sample rate temporal resolution
+        interpolated_trajectories = self._interpolate_trajectories(
+            trajectories, 
+            config.system.sample_rate
+        )
+        
+        # Step 4: Detect collisions over time
+        impacts = self._detect_collisions(
+            meshes, 
+            interpolated_trajectories, 
+            masses, 
+            inertia_tensors,
+            centers_of_mass
+        )
+        
+        # Step 5: Register impacts with ImpactManager
+        for impact_idx, impact_data in enumerate(impacts):
+            self.impact_manager.register(impact_data)
+            
+        print(f"Total impacts detected: {len(impacts)}")
     
-    def find_impact_location(self, vertices_list_1, vertices_list_2, threshold=0.01):
+    def _read_object_trajectories(self, objects: List) -> Dict[int, Dict]:
         """
-        Find the impact location by detecting when objects get close.
-        
-        Parameters:
-        - vertices_list_1, vertices_list_2: vertex sequences for both objects
-        - threshold: distance threshold for impact detection in meters
+        Read object trajectories from obj files.
         
         Returns:
-        - impact_time: time of impact
-        - impact_location: world coordinates of impact
-        - vertex_id_1, vertex_id_2: IDs of closest vertices
+            Dictionary mapping object idx to trajectory data
         """
-        min_distances = []
-        closest_pairs = []
+        config = self.impact_manager.get('config')
+        trajectories = {}
         
-        for frame_idx in range(min(len(vertices_list_1), len(vertices_list_2))):
-            vertices1 = vertices_list_1[frame_idx]
-            vertices2 = vertices_list_2[frame_idx]
+        for obj in objects:
+            obj_idx = obj.idx
+            obj_path = obj.obj_path
             
-            # Use KDTree for efficient nearest neighbor search
-            tree1 = KDTree(vertices1)
-            tree2 = KDTree(vertices2)
+            # Get all obj files in the directory
+            obj_files = glob.glob(os.path.join(obj_path, "*.obj"))
             
-            # Find closest points between objects
-            distances, indices = tree1.query(vertices2)
-            min_idx = np.argmin(distances)
-            min_distance = distances[min_idx]
+            # Filter out optimized mesh if present
+            obj_files = [f for f in obj_files if not f.endswith(f"optimized_{obj.name}.obj")]
             
-            min_distances.append(min_distance)
-            closest_pairs.append((indices[min_idx_idx], min_idx, vertices2[min_idx]))
+            if not obj_files:
+                raise FileNotFoundError(f"No obj files found in {obj_path}")
             
-            # Check if impact occurred
-            if min_distance <= threshold:
-                impact_frame = frame_idx
-                vertex_id_1 = indices[min_idx]
-                vertex_id_2 = min_idx
-                impact_location = vertices2[min_idx]
+            # Sort files by frame number
+            obj_files.sort(key=self._extract_frame_number)
+            
+            # Read positions and rotations from each frame
+            positions = []
+            rotations = []
+            times = []
+            
+            for i, obj_file in enumerate(obj_files):
+                mesh = trimesh.load(obj_file, force='mesh')
                 
-                # Interpolate to get more precise impact time
-                if frame_idx > 0:
-                    prev_dist = min_distances[frame_idx - 1]
-                    curr_dist = min_distance
-                    if prev_dist > threshold:
-                        # Linear interpolation for impact time
-                        t_frac = (threshold - prev_dist) / (curr_dist - prev_dist)
-                        impact_time = (frame_idx - 1 + t_frac) * self.dt
-                    else:
-                        impact_time = frame_idx * self.dt
+                # Get center of mass position
+                position = mesh.center_mass
+                positions.append(position)
+                
+                # Get rotation matrix from mesh transformation
+                # trimesh stores the transformation in mesh.principal_inertia_transform
+                # or we can extract it from the mesh's vertices
+                if hasattr(mesh, 'principal_inertia_transform'):
+                    transform = mesh.principal_inertia_transform
+                    rotation = transform[:3, :3]
                 else:
-                    impact_time = frame_idx * self.dt
+                    # Fallback: use identity matrix
+                    rotation = np.eye(3)
                 
-                return impact_time, impact_location, vertex_id_1, vertex_id_2
+                rotations.append(rotation)
+                
+                # Time based on frame number
+                times.append(i(i / config.system.fps)
+            
+            trajectories[obj_idx] = {
+                'positions': np.array(positions),
+                'rotations': np.array(rotations),
+                'times': np.array(times),
+                'frames': len(obj_files)
+            }
+            
+            print(f"Object {obj_idx} trajectory: {len(obj_files)} frames, "
+                  f"duration: {times[-1]:.3f}s")
         
-        # If no impact found, return the closest approach
-        min_frame = np.argmin(min_distances)
-        vertex_id_1, vertex_id_2, impact_location = closest_pairs[min_frame]
-        impact_time = min_frame * self.dt
-        
-        print(f"Warning: No impact detected below threshold. Closest approach: {min(min_distances):.4f}m")
-        return impact_time, impact_location, vertex_id_1, vertex_id_2
+        return trajectories
     
-    def interpolate_vertex_motion(self, vertices_list, vertex_id, timestamps):
+    def _extract_frame_number(self, filename: str) -> int:
         """
-        Interpolate the motion of a specific vertex over time.
+        Extract frame number from filename.
+        Supports formats like: icosphere0001.obj, 0001.obj, frame_001.obj
+        """
+        basename = os.path.basename(filename)
+        
+        # Try to find numbers in the filename
+        numbers = re.findall(r'\d+', basename)
+        
+        if numbers:
+            return int(numbers[-1])  # Use the last number found
+        
+        # If no numbers found, use alphabetical order
+        return 0
+    
+    def _interpolate_trajectories(self, trajectories: Dict, sample_rate: float) -> Dict[int, Dict]:
+        """
+        Interpolate trajectories to audio sample rate temporal resolution for collision detection.
+        
+        Args:
+            trajectories: Original trajectory data
+            sample_rate: Audio sample rate in Hz
+            
+        Returns:
+            Interpolated trajectories with audio sample rate temporal resolution
+        """
+        interpolated = {}
+        
+        for obj_idx, traj in trajectories.items():
+            times = traj['times']
+            positions = traj['positions']
+            rotations = traj['rotations']
+            
+            # Create interpolation functions
+            if len(times) > 1:
+                # Linear interpolation for positions
+                pos_interp = interp1d(
+                    times, 
+                    positions, 
+                    axis=0, 
+                    kind='linear',
+                    fill_value='extrapolate',
+                    bounds_error=False
+                )
+                
+                # For rotations, we need to interpolate quaternions for proper rotation interpolation
+                # Convert rotation matrices to quaternions first
+                from scipy.spatial.transform import Rotation
+                
+                # Convert rotation matrices to quaternions
+                rot_matrices = rotations
+                rots = Rotation.from_matrix(rot_matrices)
+                quats = rots.as_quat()  # [x, y, z, w] format
+                
+                # Create quaternion interpolation function
+                quat_interp = interp1d(
+                    times,
+                    quats,
+                    axis=0,
+                    kind='linear',
+                    fill_value='extrapolate',
+                    bounds_error=False
+                )
+                
+                # Create new time array with audio sample rate resolution
+                total_time = times[-1]
+                new_times = np.arange(0, total_time, 1/sample_rate)
+                
+                
+                # Ensure we include the last time point
+                if new_times[-1] < total_time:
+                    new_times = np.append(new_times, total_time)
+                
+                # Interpolate positions
+                new_positions = pos_interp(new_times)
+                
+                # Interpolate quaternions and convert back to rotation matrices
+                new_quats = quat_interp(new_times)
+                new_rots = Rotation.from_quat(new_quats)
+                new_rotations = new_rots.as_matrix()
+                
+                # Calculate velocities and accelerations (for force calculation)
+                velocities = np.gradient(new_positions, new_times, axis=0)
+                accelerations = np.gradient(velocities, new_times, axis=0)
+                
+                # Calculate angular velocities from rotation matrices
+                angular_velocities = self._calculate_angular_velocities(
+                    new_rotations, new_times
+                )
+                
+                interpolated[obj_idx] = {
+                    'times': new_times,
+                    'positions': new_positions,
+                    'rotations': new_rotations,
+                    'velocities': velocities,
+                    'accelerations': accelerations,
+                    'angular_velocities': angular_velocities,
+                    'sample_rate': sample_rate,
+                    'num_samples': len(new_times)
+                }
+                
+                print(f"Object {obj_idx} interpolated: {len(new_times)} samples "
+                      f"at {sample_rate}Hz, duration: {new_times[-1]:.3f}s")
+            else:
+                # Single frame case
+                interpolated[obj_idx] = {
+                    'times': times,
+                    'positions': positions,
+                    'rotations': rotations,
+                    'velocities': np.zeros_like(positions),
+                    'accelerations': np.zeros_like(positions),
+                    'angular_velocities': np.zeros((1, 3)),
+                    'sample_rate': sample_rate,
+                    'num_samples': len(times)
+                }
+        
+        return interpolated
+    
+    def _calculate_angular_velocities(self, rotations: np.ndarray, times: np.ndarray) -> np.ndarray:
+        """
+        Calculate angular velocities from rotation matrices.
+        
+        Args:
+            rotations: Array of rotation matrices [n_samples, 3, 3]
+            times: Array of time points
+            
+        Returns:
+            Array of angular velocity vectors [n_samples, 3]
+        """
+        n_samples = len(rotations)
+        angular_velocities = np.zeros((n_samples, 3))
+        
+        if n_samples < 2:
+            return angular_velocities
+        
+        # Calculate angular velocity using finite differences of rotation matrices
+        for i in range(1, n_samples):
+            dt = times[i] - times[i-1]
+            if dt > 0:
+                # R_diff = R_i * R_{i-1}^T
+                R_diff = rotations[i] @ rotations[i-1].T
+                
+                # Extract skew-symmetric part: (R_diff - R_diff^T)/2
+                skew_sym = 0.5 * (R_diff - R_diff.T)
+                
+                # Extract angular velocity vector from skew-symmetric matrix
+                # [0, -wz, wy; wz, 0, -wx; -wy, wx, 0]
+                wx = skew_sym[2, 1]
+                wy = skew_sym[0, 2]
+                wz = skew_sym[1, 0]
+                
+                angular_velocities[i] = np.array([wx, wy, wz]) / dt
+        
+        # Forward difference for first element
+        angular_velocities[0] = angular_velocities[1]
+        
+        return angular_velocities
+    
+    def _detect_collisions(self, meshes: Dict, trajectories: Dict, 
+                          masses: Dict, inertia_tensors: Dict,
+                          centers_of_mass: Dict) -> List[ImpactData]:
+        """
+        Detect collisions between objects over time.
         
         Returns:
-        - position_interp: interpolation function for position
-        - velocity_interp: interpolation function for velocity
-        - acceleration_interp: interpolation function for acceleration
+            List of ImpactData objects for each detected collision
         """
-        # Extract vertex positions over time
-        vertex_positions = np.array([vertices[vertex_id] for vertices in vertices_list])
+        impacts = []
         
-        # Create interpolation functions
-        position_interp = interp1d(timestamps, vertex_positions, axis=0, 
-                                 kind='cubic', fill_value='extrapolate')
+        # Get all object pairs for collision checking
+        object_indices = list(meshes.keys())
+        object_pairs = []
         
-        # Calculate velocity and acceleration
-        velocity = np.gradient(vertex_positions, timestamps, axis=0)
-        acceleration = np.gradient(velocity, timestamps, axis=0)
+        for i in range(len(object_indices)):
+            for j in range(i + 1, len(object_indices)):
+                object_pairs.append((object_indices[i], object_indices[j]))
         
-        velocity_interp = interp1d(timestamps, velocity, axis=0, 
-                                 kind='cubic', fill_value='extrapolate')
-        acceleration_interp = interp1d(timestamps, acceleration, axis=0, 
-                                     kind='cubic', fill_value='extrapolate')
+        # Get collision margin from config
+        config = self.impact_manager.get('config')
+        collision_margin = config.system.collision_margin
         
-        return position_interp, velocity_interp, acceleration_interp
+        # Check collisions at each time step (using audio sample rate resolution)
+        sample_rate = trajectories[object_indices[0]]['sample_rate']
+        num_samples = trajectories[object_indices[0]]['num_samples']
+        
+        print(f"Checking collisions at {sample_rate}Hz for {num_samples} samples...")
+        
+        # Use Dask for parallel collision detection
+        tasks = []
+        for time_idx in range(num_samples):
+            current_time = trajectories[object_indices[0]]['times'][time_idx]
+            
+            for obj1_idx, obj2_idx in object_pairs:
+                task = delayed(self._check_collision_at_time)(
+                    time_idx, current_time,
+                    obj1_idx, obj2_idx,
+                    meshes, trajectories,
+                    masses, inertia_tensors, centers_of_mass,
+                    collision_margin
+                )
+                tasks.append(task)
+        
+        # Execute all collision checks in parallel
+        results = compute(*tasks)
+        
+        # Flatten results and filter out None (no collision)
+        for result in results:
+            if result is not None:
+                impacts.append(result)
+        
+        return impacts
     
-    def calculate_contact_force(self, vertices_list_1, vertices_list_2, 
-                              vertex_id_1, vertex_id_2, timestamps, 
-                              contact_area_estimate=0.001):
+    def _check_collision_at_time(self, time_idx: int, current_time: float,
+                                obj1_idx: int, obj2_idx: int,
+                                meshes: Dict, trajectories: Dict,
+                                masses: Dict, inertia_tensors: Dict,
+                                centers_of_mass: Dict,
+                                collision_margin: float) -> Optional[ImpactData]:
         """
-        Calculate contact force based on material properties and motion.
+        Check for collision between two objects at a specific time.
         
-        Parameters:
-        - contact_area_estimate: estimated contact area in m²
+        Returns:
+            ImpactData if collision detected, None otherwise
         """
-        # Interpolate motion of contact vertices
-        pos_interp_1, vel_interp_1, acc_interp_1 = self.interpolate_vertex_motion(
-            vertices_list_1, vertex_id_1, timestamps)
-        pos_interp_2, vel_interp_2, acc_interp_2 = self.interpolate_vertex_motion(
-            vertices_list_2, vertex_id_2, timestamps)
+        # Get current positions and rotations
+        pos1 = trajectories[obj1_idx]['positions'][time_idx]
+        rot1 = trajectories[obj1_idx]['rotations'][time_idx]
+        vel1 = trajectories[obj1_idx]['velocities'][time_idx]
+        ang_vel1 = trajectories[obj1_idx]['angular_velocities'][time_idx]
         
-        # Calculate relative motion at contact point
-        time_fine = np.linspace(timestamps[0], timestamps[-1], len(timestamps) * 10)
+        pos2 = trajectories[obj2_idx]['positions'][time_idx]
+        rot2 = trajectories[obj2_idx]['rotations'][time_idx]
+        vel2 = trajectories[obj2_idx]['velocities'][time_idx]
+        ang_vel2 = trajectories[obj2_idx]['angular_velocities'][time_idx]
         
-        rel_position = pos_interp_1(time_fine) - pos_interp_2(time_fine)
-        rel_velocity = vel_interp_1(time_fine) - vel_interp_2(time_fine)
-        rel_acceleration = acc_interp_1(time_fine) - acc_interp_2(time_fine)
+        # Transform meshes to current positions and rotations
+        mesh1_transformed = self._transform_mesh(
+            meshes[obj1_idx], pos1, rot1
+        )
+        mesh2_transformed = self._transform_mesh(
+            meshes[obj2_idx], pos2, rot2
+        )
         
-        # Calculate penetration depth (magnitude of relative position)
-        penetration = np.linalg.norm(rel_position, axis=1)
+        # Check for collision using trimesh collision detection
+        collision_manager = trimesh.collision.CollisionManager()
+        collision_manager.add_object(f'obj_{obj1_idx}', mesh1_transformed)
+        collision_manager.add_object(f'obj_{obj2_idx}', mesh2_transformed)
         
-        # Calculate contact force using Hertzian contact theory
-        # Simplified model - you might want to use a more sophisticated contact model
-        effective_young = 1 / ((1 - self.poisson_ratio**2) / self.young_modulus + 
-                              (1 - self.poisson_ratio**2) / self.young_modulus)
+        # Check if objects are in collision
+        in_collision, collision_data = collision_manager.in_collision_single(
+            mesh=mesh1_transformed,
+            return_data=True
+        )
         
-        # Spring force (Hertzian contact)
-        spring_force = effective_young * np.sqrt(contact_area_estimate) * penetration
+        if in_collision:
+            # Get detailed collision information
+            distance, data = collision_manager.min_distance_single(
+                mesh=mesh1_transformed,
+                return_data=True
+            )
+            
+            if distance <= collision_margin:
+                # Get collision points
+                point1 = data.point(f'obj_{obj1_idx}')
+                point2 = data.point(f'obj_{obj2_idx}')
+                
+                # Calculate impact coordinate as midpoint between collision points
+                impact_coord = (point1 + point2) / 2.0
+                
+                # Calculate collision normal (from obj1 to obj2 at collision point)
+                normal = point2 - point1
+                normal_norm = np.linalg.norm(normal)
+                if normal_norm > 0:
+                    normal = normal / normal_norm
+                else:
+                    # If points are coincident, use direction between centers
+                    normal = pos2 - pos1
+                    normal_norm = np.linalg.norm(normal)
+                    if normal_norm > 0:
+                        normal = normal / normal_norm
+                    else:
+                        normal = np.array([1, 0, 0])
+                
+                # Create ImpactData for this collision
+                impact_data = self._create_impact_data(
+                    impact_coord, obj1_idx, obj2_idx,
+                    mesh1_transformed, mesh2_transformed,
+                    pos1, pos2, vel1, vel2, ang_vel1, ang_vel2,
+                    masses[obj1_idx], masses[obj2_idx],
+                    inertia_tensors[obj1_idx], inertia_tensors[obj2_idx],
+                    centers_of_mass[obj1_idx], centers_of_mass[obj2_idx],
+                    normal, current_time,
+                    collision_margin
+                )
+                
+                return impact_data
         
-        # Damping force (Rayleigh damping)
-        damping_force = (self.alpha_damping * self.density * contact_area_estimate * 
-                        np.linalg.norm(rel_velocity, axis=1) +
-                        self.beta_damping * effective_young * contact_area_estimate * 
-                        np.linalg.norm(rel_velocity, axis=1))
-        
-        # Total contact force
-        total_force = spring_force + damping_force
-        
-        # Create force interpolation function
-        force_interp = interp1d(time_fine, total_force, kind='cubic', 
-                              fill_value=0.0, bounds_error=False)
-        
-        return force_interp, time_fine, total_force
+        return None
     
-    def analyze_impact(self, dir_object_1, dir_object_2, impact_threshold=0.01):
+    def _transform_m_mesh(self, mesh: trimesh.Trimesh, 
+                       position: np.ndarray, 
+                       rotation: np.ndarray) -> trimesh.Trimesh:
         """
-        Complete impact analysis between two objects.
+        Transform mesh to given position and rotation.
+        
+        Returns:
+            Transformed copy of the mesh
         """
-        print(f"Analyzing impact between {dir_object_1} and {dir_object_2}")
+        # Create transformation matrix
+        transform = np.eye(4)
+        transform[:3, :3] = rotation
+        transform[:3, 3] = position
         
-        # Load OBJ sequences
-        vertices_1, faces_1, normals_1, timestamps_1 = self.load_obj_sequence(dir_object_1)
-        vertices_2, faces_2, normals_2, timestamps_2 = self.load_obj_sequence(dir_object_2)
+        # Apply transformation
+        transformed = mesh.copy()
+        transformed.apply_transform(transform)
         
-        # Find impact location and time
-        impact_time, impact_location, vertex_id_1, vertex_id_2 = self.find_impact_location(
-            vertices_1, vertices_2, impact_threshold)
-        
-        # Calculate contact force
-        timestamps = timestamps_1[:min(len(vertices_1), len(vertices_2))]
-        force_interp, force_time, force_magnitude = self.calculate_contact_force(
-            vertices_1, vertices_2, vertex_id_1, vertex_id_2, timestamps)
-        
-        # Store results
-        impact_id = f"{os.path.basename(dir_object_1)}_{os.path.basename(dir_object_2)}"
-        self.impact_data[impact_id] = {
-            'impact_time': impact_time,
-            'impact_location': impact_location,
-            'vertex_id_1': vertex_id_1,
-            'vertex_id_2': vertex_id_2,
-            'force_interpolator': force_interp,
-            'force_time_series': force_time,
-            'force_magnitude_series': force_magnitude,
-            'max_force': np.max(force_magnitude),
-            'impulse': np.trapz(force_magnitude, force_time)
-        }
-        
-        return self.impact_data[impact_id]
+        return transformed
     
-    def get_impact_force_at_time(self, impact_id, time):
-        """Get impact force at specific time for a given impact."""
-        if impact_id in self.impact_data:
-            return self.impact_data[impact_id]['force_interpolator'](time)
-        else:
-            raise ValueError(f"Impact ID {impact_id} not found")
-    
-    def generate_report(self, impact_id):
-        """Generate a report for a specific impact analysis."""
-        if impact_id not in self.impact_data:
-            raise ValueError(f"Impact ID {impact_id} not found")
-        
-        data = self.impact_data[impact_id]
-        
-        report = f"""
-        IMPACT ANALYSIS REPORT: {impact_id}
-        =================================
-        Impact Time: {data['impact_time']:.4f} seconds
-        Impact Location: {data['impact_location']}
-        Closest Vertex IDs: Object 1: {data['vertex_id_1']}, Object 2: {data['vertex_id_2']}
-        Maximum Force: {data['max_force']:.2f} N
-        Total Impulse: {data['impulse']:.4f} N·s
-        =================================
+    def _nearest_optimized_vertex(self, mesh: trimesh.Trimesh, 
+                                 imp_coord: np.ndarray) -> Tuple[float, int]:
         """
-        return report
-
-# Example usage
-if __name__ == "__main__":
-    # Initialize analyzer with material properties
-    analyzer = ImpactForceAnalyzer(
-        fps=1000,  # 1000 frames per second
-        young_modulus=2e9,  # 2 GPa
-        poisson_ratio=0.3,
-        density=1200,  # kg/m³
-        alpha_damping=0.1,
-        beta_damping=0.01
-    )
+        Find nearest vertex on optimized mesh to impact coordinate.
+        
+        Returns:
+            distance and vertex index of nearest vertex on optimized mesh
+        """
+        vertices = mesh.vertices
+        distances = np.linalg.norm((vertices - imp_coord, axis=1)
+        min_idx = np.argmin(distances)
+        min_dist = distances[min_idx]
+        
+        return min_dist, int(min_idx)
     
-    # Analyze impact between two objects
-    try:
-        impact_results = analyzer.analyze_impact("dir_1", "dir_2", impact_threshold=0.005)
+    def _create_impact_data(self, impact_coord: np.ndarray, 
+                           obj1_idx: int, obj2_idx: int,
+                           mesh1: trimesh.Trimesh, mesh2: trimesh.Trimesh,
+                           pos1: np.ndarray, pos2: np.ndarray,
+                           vel1: np.ndarray, vel2: np.ndarray,
+                           ang_vel1: np.ndarray, ang_vel2: np.ndarray,
+                           mass1: float, mass2: float,
+                           inertia1: np.ndarray, inertia2: np.ndarray,
+                           com1: np.ndarray, com2: np.ndarray,
+                           normal: np.ndarray, time: float,
+                           collision_margin: float) -> ImpactData:
+        """
+        Create ImpactData object from collision information using proper physics.
         
-        # Generate report
-        print(analyzer.generate_report("dir_1_dir_2"))
+        Returns:
+            ImpactData object with all collision details
+        """
+        # Find nearest vertices on optimized meshes
+        dist1, vertex_idx1 = self._nearest_optimized_vertex(mesh1, impact_coord)
+        dist2, vertex_idx2 = self._nearest_optimized_vertex(mesh2, impact_coord)
         
-        # Get force at specific time
-        force_at_0_1s = analyzer.get_impact_force_at_time("dir_1_dir_2", 0.1)
-        print(f"Force at 0.1s: {force_at_0_1s:.2f} N")
+        # Calculate impact forces using impulse-based collision response
+        # Based on rigid body dynamics
         
-    except Exception as e:
-        print(f"Analysis failed: {e}")
-
+        # 1. Calculate relative velocity at collision point
+        # Position vectors from center of mass to collision point
+        r1 = impact_coord - (pos1 + com1)
+        r2 = impact_coord - (pos2 + com2)
+        
+        # Velocity at collision point = linear velocity + angular velocity × r
+        v1 = vel1 + np.cross(ang_vel1, r1)
+        v2 = vel2 + np.cross(ang_vel2, r2)
+        
+        # Relative velocity
+        v_rel = v2 - v1
+        
+        # Velocity along collision normal
+        v_rel_normal = np.dot(v_rel, normal)
+        
+        # Only process collisions with approaching objects
+        if v_rel_normal >= 0:
+            return None
+        
+        # 2. Calculate effective mass at collision point
+        # This accounts for both linear and rotational inertia
+        
+        # Helper function to calculate effective mass
+        def calculate_effective_mass(mass, inertia, r, normal):
+            # Calculate inverse inertia tensor in world coordinates
+            # For simplicity, we assume inertia tensor is diagonal in body coordinates
+            # and use the current rotation
+            
+            # Calculate term: normal · (I^-1 · (r × normal)) × r
+            r_cross_n = np.cross(r, normal)
+            
+            # For simplified calculation, use scalar approximation
+            # More accurate would use full tensor math
+            effective_mass_linear = 1.0 / mass
+            
+            # Approximate rotational contribution
+            # Using average of diagonal elements of inertia tensor
+            I_avg = np.trace(inertia) / 3.0
+            if I_avg > 0:
+                effective_mass_rotational = np.dot(r_cross_n, r_cross_n) / I_avg
+            else:
+                effective_mass_rotational = 0
+            
+            effective_mass = 1.0 / (effective_mass_linear + effective_mass_rotational)
+            return effective_mass
+        
+        # Calculate effective masses
+        m_eff1 = calculate_effective_mass(mass1, inertia1, r1, normal)
+        m_eff2 = calculate_effective_mass(mass2, inertia2, r2, normal)
+        
+        # Combined effective mass
+        m_eff = m_eff1 + m_eff2
+        
+        # 3. Calculate impulse magnitude
+        # Coefficient of restitution (0 = perfectly inelastic, 1 = perfectly elastic)
+        e = 0.7  # Typical value for hard objects
+        
+        # Impulse magnitude (negative because objects are approaching)
+        J = -(1 + e) * v v_rel_normal * m_eff
+        
+        # 4. Calculate force vectors (impulse over small time)
+        # Use audio sample period as time step
+        config = self.impact_manager.get('config')
+        dt = 1.0 / config.system.sample_rate
+        
+        # Force magnitude
+        force_magnitude = abs(J) / dt if dt > 0 else abs(J) / 0.001
+        
+        # Force vectors in opposite directions along normal
+        force1 = -force_magnitude * normal
+        force2 = force_magnitude * normal
+        
+        # 5. Create ImpactData object
+        impact_idx = len(self.impact_manager.get('impacts'))
+        impact_data = ImpactData(
+            idx=impact_idx,
+            time=time,
+            coord=tuple(impact_coord)
+        )
+        
+        # Add collisions for both objects
+        collision_obj1 = ObjCollision(
+            obj_idx=obj1_idx,
+            collision=Collision(
+                id_vertex=int(vertex_idx1),
+                force_vector=force1
+            )
+        )
+        
+        collision_obj2 = ObjCollision(
+            obj_idx=obj2_idx,
+            collision=Collision(
+                id_vertex=int(vertex_idx2),
+                force_vector=force2
+            )
+        )
+        
+        impact_data.add_collision(collision_obj1)
+        impact_data.add_collision(collision_obj2)
+        
+        # Print collision details for debugging
+        print(f"Collision detected at t={time:.3f}s:")
+        print(f"  Objects: {obj1_idx} ↔ {obj2_idx}")
+        print(f"  Coordinate: {impact_coord}")
+        print(f"  Relative velocity: {v_rel_normal:.3f} m/s")
+        print(f"  Force magnitude: {force_magnitude:.3f} N")
+        print(f"  Vertex IDs: {vertex_idx1}, {vertex_idx2}")
+        
+        return impact_data
