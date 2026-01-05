@@ -35,12 +35,8 @@ class CollisionData:
 @dataclass
 class tmpCollisionData:
     """Temporary container for solved collision event data."""
-    name: str
     obj_idx1: int
     obj_idx2: int
-    frame: float
-    delta_time: float
-    value: np.ndarray
-    frames_idx: np.ndarray = None
-    idx_smallest: np.ndarray = None
-    dists: np.ndarray = None
+    restitution: float = None
+    distances: np.ndarray = None
+    consec_idx: np.ndarray = None

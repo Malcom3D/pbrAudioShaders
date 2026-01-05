@@ -18,11 +18,11 @@
 
 import os
 import numpy as np
+import trimesh
+from scipy.spatial import cKDTree
 from typing import List, Tuple
 from dataclasses import dataclass, field
 from itertools import groupby
-from scipy.optimize import minimize, least_squares
-from dask import delayed, compute
 
 from ..core.entity_manager import EntityManager
 from ..utils.config import Config, ObjectConfig
@@ -31,202 +31,136 @@ from ..lib.collision_data import tmpCollisionData
 @dataclass
 class CollisionSolver:
     entity_manager: EntityManager
+    frames: int = None
 
-    def compute(self, objs_idx: Tuple[int, int], detected_distances: List[Tuple[int, float]]):
+    def compute(self, objs_idx: List[Tuple[int, int]]) -> List[Tuple[int, float]]:
         config = self.entity_manager.get('config')
-        fps = config.system.fps
-        fps_base = config.system.fps_base
-        subframes = config.system.subframes
-        sfps = ( fps / fps_base ) * subframes # subframes per seconds
         collision_margin = config.system.collision_margin
+ 
+        config_objs = []
+        config_objs.append(config.objects[objs_idx[0]])
+        config_objs.append(config.objects[objs_idx[1]])
+        if not config_objs[0].static or not config_objs[1].static:
+            self.frames = max(len(os.listdir(config_objs[0].obj_path)), len(os.listdir(config_objs[1].obj_path)))
+        elif config_objs[0].static and config_objs[1].static:
+            # exit: objs_idx[0] and objs_idx[1] are static
+            return
 
-        # find idx of mins
-        frames_idx, dists = np.hsplit(np.array(detected_distances), 2)
-        t_frames = frames_idx / sfps
+        distances_data = []
+        for frame_idx in range(1, self.frames):
+            mesh1 = self._load_obj(objs_idx[0], frame_idx)
+            mesh2 = self._load_obj(objs_idx[1], frame_idx)
+
+            # add dask delayed tasks
+            min_dist, _ = self._min_distance(mesh1, mesh2, refine=True)
+            distances_data.append([frame_idx, min_dist])
+
+        frames_idx, dists = np.hsplit(np.array(distances_data), 2)
         idx_smallest = np.where(dists < collision_margin)[0]
         if idx_smallest.any():
             consec_idx = []
+            collision_frame_idx = []
             for k, g in groupby(enumerate(idx_smallest), lambda x: x[0] - x[1]):
                 group = list(g)
-                consec_idx.append([idx for _, idx in group])
+                consec_idx.append([_idx for _, _idx in group])
 
-            # load objs pose
-            array_length = 5
-            for config_obj in config.objects:
-                if config_obj.idx == objs_idx[0] or config_obj.idx == objs_idx[1]:
-                    if not config_obj.static:
-#                        positions, rotations, landmarks_vertices = self._load_pose(config_obj)
-#                        landmarks_0, landmarks_1, landmarks_2 = np.hsplit(landmarks_vertices, 3)
+        tmp_collision_data = tmpCollisionData(obj_idx1=objs_idx[0], obj_idx2=objs_idx[1], distances=distances_data, consec_idx=consec_idx)
+        tmp_collision_idx = len(self.entity_manager.get('collisions')) + 1
+        self.entity_manager.register('collisions', tmp_collision_data, tmp_collision_idx)
+ 
+    def _load_obj(self, obj_idx: int, frame_idx: int):
+        config = self.entity_manager.get('config')
+        # Load mesh
+        for config_obj in config.objects:
+            if config_obj.idx == obj_idx:
+                if config_obj.static == True:
+                    for filename in os.listdir(config_obj.obj_path):
+                        if filename.endswith('.obj'):
+                            obj_file = f"{config_obj.obj_path}/{filename}"
+                            return trimesh.load_mesh(obj_file)
+                elif config_obj.static == False:
+                    items = os.listdir(config_obj.obj_path)
+                    obj_filenames = sorted(items, key=lambda x: int(''.join(filter(str.isdigit, x))))
+                    obj_file = os.path.join(config_obj.obj_path, obj_filenames[frame_idx])
+                    if not os.path.exists(obj_file):
+                        raise FileNotFoundError(f"OBJ file not found for {obj_name}: {obj_file}")
+                    return trimesh.load_mesh(obj_file)
 
-                        # split array in before and after(flipped) collision frame_idx +/- 3 (or 4 if len(consec_idx[index]) == 2) and find collision_time, collision_point
-                        print(f"{objs_idx} distances")
-                        tasks = [self._solve_collision('distances', dists, consec_idx[index], t_frames, array_length) for index in range(len(consec_idx))]
-                        results = compute(*tasks)
-                        for name, x, intersection in results:
-                            tmp_collision_data = tmpCollisionData(name=name, obj_idx1=objs_idx[0], obj_idx2=objs_idx[1], frame=consec_idx[index], delta_time=x, value=intersection['point'], frames_idx=frames_idx, idx_smallest=idx_smallest, dists=dists)
-                            collision_idx = len(self.entity_manager.get('collisions')) + 1
-                            self.entity_manager.register('collisions', tmp_collision_data, collision_idx)
-
-#                        print(f"{objs_idx} pos")
-#                        pos = [self._solve_collision('positions', positions, consec_idx[index], t_frames, array_length) for index in range(len(consec_idx))]
-#                        results = compute(*pos)
-#                        for name, x, intersection in results:
-#                            tmp_collision_data = tmpCollisionData(name='positions', obj_idx1=objs_idx[0], obj_idx2=objs_idx[1], delta_time=x, value=intersection['point'])
-#                            self.entity_manager.register('collisions', tmpCollisionData, collision_idx)
-
-#                        print(f"{objs_idx} land_0")
-#                        lands_0 = [self._solve_collision('landmarks_0', landmarks_0, consec_idx[index], t_frames, array_length) for index in range(len(consec_idx))]
-#                        results = compute(*lands_0)
-#                        for name, x, frame, intersection in results:
-#                            tmp_collision_data = tmpCollisionData(name='landmarks_0', obj_idx1=objs_idx[0], obj_idx2=objs_idx[1], frame=frame, delta_time=x, value=intersection['point'])
-#                            self.entity_manager.register('collisions', tmpCollisionData, collision_idx)
-
-#                        print(f"{objs_idx} land_1")
-#                        lands_1 = [self._solve_collision('landmarks_1', landmarks_1, consec_idx[index], t_frames, array_length) for index in range(len(consec_idx))]
-#                        results = compute(*lands_1)
-#                        for name, x, frame, intersection in results:
-#                            tmp_collision_data = tmpCollisionData(name='landmarks_1', obj_idx1=objs_idx[0], obj_idx2=objs_idx[1], frame=frame, delta_time=x, value=intersection['point'])
-#                            self.entity_manager.register('collisions', tmpCollisionData, collision_idx)
-
-#                        print(f"{objs_idx} land_2")
-#                        lands_2 = [self._solve_collision('landmarks_2', landmarks_2, consec_idx[index], t_frames, array_length) for index in range(len(consec_idx))]
-#                        results = compute(*lands_2)
-#                        for name, x, frame, intersection in results:
-#                            tmp_collision_data = tmpCollisionData(name='landmarks_2', obj_idx1=objs_idx[0], obj_idx2=objs_idx[1], frame=frame, delta_time=x, value=intersection['point'])
-#                            self.entity_manager.register('collisions', tmpCollisionData, collision_idx)
-
-    def _load_pose(self, config_obj: ObjectConfig) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        pose_path = config_obj.pose_path
-        obj_name = config_obj.name
-
-        npz_file = os.path.join(pose_path, f"{obj_name}.npz")
-
-        if not npz_file:
-            raise ValueError(f"No pose files found for {obj_name} in {pose_path}")
-
-        pose = np.load(npz_file)
-        positions = pose[pose.files[0]]
-        rotations = pose[pose.files[1]]
-        landmarks_vertices = pose[pose.files[2]]
-
-        return positions, rotations, landmarks_vertices
-        
-    def _bernstein_poly(self, n, i, t):
-        """Bernstein polynomial of degree n."""
-        from scipy.special import comb
-        return comb(n, i) * (t**i) * ((1 - t)**(n - i))
+    def _approx_distance(self, mesh1, mesh2, sample_density=1000000):
+        """
+        Compute minimal distance between two meshes using KD-tree sampling.
     
-    def _bezier_curve(self, control_points, t):
-        """Evaluate Bézier curve at parameter t."""
-        n = len(control_points) - 1
-        if n == 0:
-            return control_points[0]
-        
-        result = np.zeros_like(control_points[0])
-        for i in range(n + 1):
-            result += self._bernstein_poly(n, i, t) * control_points[i]
-        return result
+        Args:
+            mesh1, mesh2: trimesh objects
+            sample_density: number of points to sample per unit surface area
     
-    def _fit_bezier_curve(self, trajectory: np.ndarray, t_norm: np.ndarray, max_degree: int = 3):
-        """Fit Bézier curve to trajectory data and determine optimal degree."""
-        n_samples = len(trajectory)
-        best_result = None
-        best_results = []
-        best_score = float('inf')
-        
-        for degree in range(1, max_degree + 1):
-            # Number of control points = degree + 1
-            n_control = degree + 1
-            
-            # Initial guess for control points
-            init_control = np.zeros((n_control, trajectory.shape[1]))
-            
-            def objective(params):
-                control = params.reshape((n_control, trajectory.shape[1]))
-                error = 0
-                for j, t in enumerate(t_norm):
-                    predicted = self._bezier_curve(control, t)
-                    error += np.sum((predicted - trajectory[j])**2)
-                return error
-            
-#            # Flatten for optimization
-#            init_params = init_control.flatten()
-            for i in range(n_control):
-                idx = int((i / degree) * (n_samples - 1))
-                init_control[i] = trajectory[idx]
-            
-                init_params = init_control.flatten()
-                
-                # Optimize control points
-                result = minimize(objective, init_params, method='L-BFGS-B')
-            
-                if result.fun < best_score:
-                    best_score = result.fun
-                    best_results.append({'degree': degree, 'control_points': result.x.reshape((n_control, trajectory.shape[1])), 'error': result.fun})
-
-        key = 'error'
-        min_value = min(d[key] for d in best_results if key in d)
-        index = [i for i, d in enumerate(best_results) if d[key] == min_value]
-        print(index[0], best_results[index[0]])
-        return best_results[index[0]]
+        Returns:
+            min_distance: minimal distance between meshes
+            closest_points: tuple of closest points (point1, point2)
+        """
+        # Sample points from both meshes
+        area1 = mesh1.area
+        area2 = mesh2.area
     
-    def _find_intersection(self, curve1, curve2, degree1, degree2):
-        """Find intersection point between two Bézier curves."""
-        def intersection_error(params):
-            t1, t2 = params
-            point1 = self._bezier_curve(curve1, t1)
-            point2 = self._bezier_curve(curve2, t2)
-            return np.sum((point1 - point2)**2)
-        
-#        # Initial guesses (midpoint of each curve)
-#        init_guess = [0.5, 0.5]
-        
-        # Constrain t from [0, 1] to [0, 3]
-        bounds = [(0,  3), (0, 3)]
-        
-        for t1_start in np.linspace(0, 5, 10):
-           for t2_start in np.linspace(0, 5, 10):
-                # Initial guesses
-                init_guess = [t1_start, t2_start]
-                result = minimize(intersection_error, init_guess, bounds=bounds, method='L-BFGS-B')
-        
-        if result.fun < 2e-6:  # Tolerance for intersection
-            t1_opt, t2_opt = result.x
-            intersection_point = self._bezier_curve(curve1, t1_opt)
-            return {
-                't1': t1_opt,
-                't2': t2_opt,
-                'point': intersection_point,
-                'error': result.fun
-            }
-        return None
+        n_samples1 = max(100, int(area1 * sample_density))
+        n_samples2 = max(100, int(area2 * sample_density))
+    
+        points1 = mesh1.sample(n_samples1)
+        points2 = mesh2.sample(n_samples2)
+    
+        # Build KD-tree for mesh2 points
+        tree2 = cKDTree(points2)
+    
+        # Query all points from mesh1 against mesh2
+        distances, indices = tree2.query(points1)
+    
+        # Find minimal distance
+        min_idx = np.argmin(distances)
+        min_distance = distances[min_idx]
+        closest_point1 = points1[min_idx]
+        closest_point2 = points2[indices[min_idx]]
+    
+        return min_distance, (closest_point1, closest_point2)
 
-    @delayed
-    def _solve_collision(self, name: str, array: np.ndarray, consec_idx: List[int], t_frames: np.ndarray, array_length: int = 5):
-        """split array in before and after(flipped) collision frame_idx +/- 3 (or 4 if len(consec_idx[index]) == 2)"""
-        array_length = -abs(array_length)
-        collision_frame_idx = consec_idx[0]
-        if len(consec_idx) == 1:
-            before_collision = array[:collision_frame_idx - 1][array_length:]
-            after_collision = np.flip(array[collision_frame_idx + 2:])[array_length:]
-            # split t_norm as before_collision array
-            t_frame_before = t_frames[:collision_frame_idx - 1][array_length:]
-        elif len(consec_idx) >= 2:
-            before_collision = array[:collision_frame_idx - 2][array_length:]
-            after_collision = np.flip(array[collision_frame_idx + 2:])[array_length:]
-            # split t_frames as before_collision array
-            t_frame_before = t_frames[:collision_frame_idx - 2][array_length:]
-
-        """Main solving routine."""
-        t_norm = (t_frame_before - t_frame_before[0]) / (t_frame_before[-1] - t_frame_before[0])
-        dist1_result = self._fit_bezier_curve(before_collision, t_norm)
-        dist2_result = self._fit_bezier_curve(after_collision, t_norm)
+    def _min_distance(self, mesh1, mesh2, initial_sample_density=1000000, refine=True):
+        """
+        Hybrid approach: fast KD-tree sampling followed by exact computation
+        in the region of interest.
+        """
+        # Step 1: Fast approximate search
+        approx_dist, (approx_p1, approx_p2) = self._approx_distance(
+            mesh1, mesh2, sample_density=initial_sample_density
+        )
+    
+        if not refine:
+            return approx_dist, (approx_p1, approx_p2)
+    
+        # Step 2: Refine search in the neighborhood
+        # Create bounding boxes around approximate closest points
+        search_radius = approx_dist * 2.0  # Search in twice the approximate distance
+    
+        # Find vertices within search radius
+        vertices1 = mesh1.vertices
+        vertices2 = mesh2.vertices
+    
+        # Find vertices near the approximate closest points
+        mask1 = np.linalg.norm(vertices1 - approx_p1, axis=1) < search_radius
+        mask2 = np.linalg.norm(vertices2 - approx_p2, axis=1) < search_radius
+    
+        if np.any(mask1) and np.any(mask2):
+            # Build KD-tree for nearby vertices
+            nearby_vertices2 = vertices2[mask2]
+            tree2 = cKDTree(nearby_vertices2)
         
-        # Find intersections
-        intersection = self._find_intersection(dist1_result['control_points'], dist2_result['control_points'], dist1_result['degree'], dist2_result['degree'])
+            # Query nearby vertices from mesh1
+            distances, indices = tree2.query(vertices1[mask1])
         
-        # Calculate intersection time x
-#        x = intersection['t1'] * (self.kT - self.T0)  # Convert to actual time
-        print(f"intersection: {intersection} dist1: {dist1_result} dist2: {dist2_result}")
-        x = intersection['t1'] * (t_frame_before[-1] - t_frame_before[0])  # Convert to actual time
-        return name, x, intersection
+            # Find minimal distance
+            min_idx = np.argmin(distances)
+            min_distance = distances[min_idx]
+            closest_point1 = vertices1[mask1][min_idx]
+            closest_point2 = nearby_vertices2[indices[min_idx]]
+        
+            return min_distance, (closest_point1, closest_point2)
+    
+        return approx_dist, (approx_p1, approx_p2)

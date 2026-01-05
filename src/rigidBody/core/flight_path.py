@@ -29,6 +29,8 @@ from ..core.entity_manager import EntityManager
 from ..lib.trajectory_data import TrajectoryData
 from ..utils.config import Config, ObjectConfig
 
+from ..lib.functions import _load_pose
+
 @dataclass
 class FlightPath:
     """Class to compute flight paths from OBJ sequences."""
@@ -37,23 +39,6 @@ class FlightPath:
         self.em = entity_manager
         self.config = self.em.get('config')
         
-    def _load_pose(self, config_obj: ObjectConfig) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Load all pose sequence for an object including landmarks."""
-        pose_path = config_obj.pose_path
-        obj_name = config_obj.name
-        
-        npz_file = os.path.join(pose_path, f"{obj_name}.npz")
-        
-        if not npz_file:
-            raise ValueError(f"No pose files found for {obj_name} in {pose_path}")
-        
-        pose = np.load(npz_file)
-        positions = pose[pose.files[0]]
-        rotations = pose[pose.files[1]]
-        landmarks_vertices = pose[pose.files[2]]
-        
-        return positions, rotations, landmarks_vertices
-
     @delayed
     def _compute_trajectory_from_pose(self, obj_idx: int, positions: np.ndarray, rotations: np.ndarray, landmarks_vertices: np.ndarray) -> TrajectoryData:
         """Compute trajectory from a sequence of meshes with Procrustes refinement."""
@@ -410,7 +395,7 @@ class FlightPath:
     
         return interpolated_quats
     
-    def compute(self) -> None:
+    def compute(self, obj: int, detected_distances) -> None:
         """Compute trajectories for all objects in parallel using Dask."""
         config = self.config
     
@@ -427,7 +412,7 @@ class FlightPath:
         
     def _dask_tasks(self, config_obj) -> TrajectoryData:
         # Load positions, rotations, and landmarks sequence
-        positions, rotations, landmarks_vertices = self._load_pose(config_obj)
+        positions, rotations, landmarks_vertices = _load_pose(config_obj)
             
         # Compute trajectory with Procrustes refinement
         trajectory_data = self._compute_trajectory_from_pose(config_obj.idx, positions, rotations, landmarks_vertices)

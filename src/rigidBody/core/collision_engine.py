@@ -23,17 +23,22 @@ from dataclasses import dataclass, field
 from dask import delayed, compute
 
 from ..core.entity_manager import EntityManager
-from ..core.distance_detector import DistanceDetector
+from ..core.position_solver import PositionSolver
+from ..core.rotation_solver import RotationSolver
+from ..core.landmark_solver import LandmarkSolver
 from ..core.collision_solver import CollisionSolver
-#from ..core.flight_path import FlightPath
+from ..core.flight_path import FlightPath
 
 @dataclass
 class CollisionEngine:
     entity_manager: EntityManager
+    obj_done: List[int] = field(default_factory=list)
 
     def __post_init__(self):
-        self.dd = DistanceDetector(self.entity_manager)
         self.cs = CollisionSolver(self.entity_manager)
+        self.ps = PositionSolver(self.entity_manager)
+        self.rs = RotationSolver(self.entity_manager)
+        self.ls = LandmarkSolver(self.entity_manager)
 #        self.fp = FlightPath(self.entity_manager)
 
     def compute(self):
@@ -45,14 +50,14 @@ class CollisionEngine:
         tasks = [self.prebake(objs_idx) for objs_idx in obj_pairs]
         results = compute(*tasks)
 
-        # to dask
-#        for frames_idx, obj1, obj2, distance, points in results:
-#            self.fp.compute(frames_idx, obj1, distance, points[0])
-#            self.fp.compute(frames_idx, obj2, distance, points[1])
-
     @delayed
     def prebake(self, objs_idx: Tuple[int, int]):
-        detected_distances = self.dd.compute(objs_idx)
-        if not detected_distances == None:
-            print('CollisionSolver: ', objs_idx)
-            self.cs.compute(objs_idx, detected_distances)
+        config = self.entity_manager.get('config')
+        for config_obj in config.objects:
+            if config_obj.idx == objs_idx[0] or config_obj.idx == objs_idx[1]:
+                if not config_obj.static and not config_obj.idx in self.obj_done:
+                    self.obj_done.append(config_obj.idx)
+                    self.ps.compute(config_obj.idx)
+                    self.rs.compute(config_obj.idx)
+                    self.ls.compute(config_obj.idx)
+#        self.cs.compute(objs_idx)
