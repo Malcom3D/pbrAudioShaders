@@ -1,0 +1,37 @@
+{
+  "system": {
+    "sample_rate": 48000,
+    "bit_depth": 24,
+    "fps": 30,
+    "low_frequency": 1.0,
+    "high_frequency": 24000.0,
+    "collision_margin": 0.005,
+    "min_vertex": 10000,
+    "output_path": "./output_impact"
+  },
+  "objects": [
+    {
+      "idx": 0,
+      "name": "Stair.000",
+      "obj_path": "./data/Stair.000",
+      "optimize": true,
+      "physical_properties": {
+            "young_modulus": 8.5E9,
+            "poisson_ratio": 0.4,
+            "density": 400,
+            "damping": 0.02
+      }
+    },
+    {
+      "idx": 1,
+      "name": "Sphere",
+      "obj_path": "./data/Sphere",
+      "physical_properties": {
+            "young_modulus": 13.4E9,
+            "poisson_ratio": 0.45,
+            "density": 1400,
+            "damping": 0.07
+      }
+    }
+  ]
+}

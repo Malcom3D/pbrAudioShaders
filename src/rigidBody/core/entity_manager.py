@@ -42,6 +42,7 @@ class EntityManager:
                 self._layer_managers = {}
                 self._trajectories = {}
                 self._collisions = {}
+                self._tmp_collisions = {}
                 self._singleton = {}
                 self._initialized = True
 
@@ -56,8 +57,8 @@ class EntityManager:
                     'objects': ['AcousticObject'],
                     'outputs': ['AmbisonicOutput', 'OmnidirectionalOutput', 'Figure8Output', 'CardioidOutput', 'HypercardioidOutput'],
                     'wave_propagators': 'WavePropagator',
-                    'trajectories': 'TrajectoryData',
-                    'collisions': ['CollisionData', 'tmpCollisionData']
+                    'trajectories': ['TrajectoryData', 'tmpTrajectoryData'],
+                    'collisions': [ 'CollisionData', 'tmpCollisionData']
                 }
 
                 config = Config(config)

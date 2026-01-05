@@ -104,6 +104,7 @@ class Config:
             poisson_ratio=shader_data.get('poisson_ratio', []),
             density=shader_data.get('density', 1.225),
             damping=shader_data.get('damping', []),
+            friction=shader_data.get('friction', []),
             low_frequency=shader_data.get('low_frequency', 1.0),
             high_frequency=shader_data.get('high_frequency', 24000.0),
             acoustic_properties=acoustic_properties

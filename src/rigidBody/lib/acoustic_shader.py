@@ -61,6 +61,7 @@ class AcousticShader:
     poisson_ratio: float = None
     density: float = None
     damping: float = None
+    friction: float = None
     low_frequency: float = 1.0
     high_frequency: float = 24000.0
     acoustic_properties: Optional[AcousticProperties] = field(default_factory=AcousticProperties)

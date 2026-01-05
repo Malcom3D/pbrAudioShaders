@@ -21,7 +21,6 @@ __author__ = "Malcom3D"
 __description__ = "Physically plausible impact sound for rigid body simulation"
 
 import os, sys
-from .core.prebaking import PreBaking
 from .core.entity_manager import EntityManager
 from .core.flight_path import FlightPath
 from .core.collision_engine import CollisionEngine

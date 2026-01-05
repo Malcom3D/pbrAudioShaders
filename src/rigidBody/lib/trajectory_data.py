@@ -21,6 +21,24 @@ import numpy as np
 from typing import List, Dict, Tuple, Optional, Any
 from dataclasses import dataclass, field
 
+from ..lib.functions import _euler_to_rotation_matrix
+
+@dataclass
+class tmpTrajectoryData:
+    """Temporary container for solved trajectory data."""
+    obj_idx: int
+    frame: float
+    position: np.ndarray
+    rotation: np.ndarray = None
+    landmark0: np.ndarray = None
+    landmark1: np.ndarray = None
+    landmark2: np.ndarray = None
+
+    def add_data(self, component: str, data: np.ndarray):
+        """Add a data component if not exist"""
+        if getattr(self, component) is None:
+            setattr(self, component, data)
+
 @dataclass
 class TrajectoryData:
     """Container for trajectory and orientation data."""
@@ -58,7 +76,7 @@ class TrajectoryData:
         quaternion = self.orientations[sample_idx]
         
         # Convert quaternion to rotation matrix
-        rotation_matrix = self._euler_to_rotation_matrix(quaternion)
+        rotation_matrix = _euler_to_rotation_matrix(quaternion)
         
         # Create homogeneous transformation matrix
         transformation = np.eye(4)
@@ -66,55 +84,6 @@ class TrajectoryData:
         transformation[:3, 3] = position
         
         return transformation
-
-    @staticmethod
-    def _euler_to_rotation_matrix(q: np.ndarray, degrees=False):
-        """
-        Convert Euler angles to rotation matrix (ZYX convention).
-    
-        Parameters:
-        -----------
-        q : np.ndarray
-            yaw, pitch, roll
-            yaw : float
-                Rotation around Z axis (yaw)
-            pitch : float
-                Rotation around Y axis (pitch)
-            roll : float
-                Rotation around X axis (roll)
-        degrees : bool, optional
-            If True, input angles are in degrees. Default is False (radians).
-    
-        Returns:
-        --------
-        R : np.ndarray
-            3x3 rotation matrix
-        """
-
-        roll, pitch, yaw = q
-
-        if degrees:
-            # Convert degrees to radians
-            yaw = np.radians(yaw)
-            pitch = np.radians(pitch)
-            roll = np.radians(roll)
-    
-        # Precompute trigonometric functions
-        cy = np.cos(yaw)
-        sy = np.sin(yaw)
-        cp = np.cos(pitch)
-        sp = np.sin(pitch)
-        cr = np.cos(roll)
-        sr = np.sin(roll)
-    
-        # ZYX rotation matrix (R = Rz(yaw) * Ry(pitch) * Rx(roll))
-        R = np.array([
-            [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
-            [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
-            [-sp, cp * sr, cp * cr]
-        ])
-    
-        return R
 
     def get_relative_transformation(self, from_sample: int, to_sample: int) -> np.ndarray:
         """

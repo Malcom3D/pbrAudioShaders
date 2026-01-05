@@ -1,0 +1,69 @@
+{
+  "system": {
+    "sample_rate": 96000,
+    "bit_depth": 60,
+    "fps": 30,
+    "low_frequency": 1.0,
+    "high_frequency": 24000.0,
+    "collision_margin": 0.00005,
+    "min_vertex": 10000,
+    "output_path": "./data/output_impact"
+  },
+  "objects": [
+    {
+      "idx": 0,
+      "name": "Floor.001",
+      "obj_path": "./data/Floor.001",
+      "physical_properties": {
+            "young_modulus": 8.5E9,
+            "poisson_ratio": 0.28,
+            "density": 760,
+            "damping": 1.06
+      }
+    },
+    {
+      "idx": 1,
+      "name": "Cube",
+      "obj_path": "./data/Cube",
+      "physical_properties": {
+            "young_modulus": 1.4E9,
+            "poisson_ratio": 0.3,
+            "density": 1600,
+            "damping": 0.02
+      }
+    },
+    {
+      "idx": 2,
+      "name": "Circle",
+      "obj_path": "./data/Circle",
+      "physical_properties": {
+            "young_modulus": 1.5E10,
+            "poisson_ratio": 0.24,
+            "density": 2200,
+            "damping": 0.03
+      }
+    },
+    {
+      "idx": 3,
+      "name": "Suzanne",
+      "obj_path": "./data/Suzanne",
+      "physical_properties": {
+            "young_modulus": 1.9E9,
+            "poisson_ratio": 0.35,
+            "density": 400,
+            "damping": 0.01
+      }
+    },
+    {
+      "idx": 4,
+      "name": "Icosphere",
+      "obj_path": "./data/Icosphere",
+      "physical_properties": {
+            "young_modulus": 6E9,
+            "poisson_ratio": 0.27,
+            "density": 2711,
+            "damping": 0.04
+      }
+    }
+  ]
+}
