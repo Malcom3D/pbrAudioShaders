@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from ..core.entity_manager import EntityManager
 from ..utils.config import Config, ObjectConfig
 
-from ..lib.functions import _load_pose
+from ..lib.functions import _load_pose, _load_mesh
 
 @dataclass
 class RotationSolver:
@@ -48,33 +48,15 @@ class RotationSolver:
 
         tmp_trajectories = self.entity_manager.get('trajectories')
         for index in tmp_trajectories:
-            tmp_trajectory = tmp_trajectories[index]
-            if hasattr(tmp_trajectory, 'add_data') and tmp_trajectory.obj_idx == obj_idx:
+            if 'tmpTrajectoryData' in str(type(tmp_trajectories[index])) and tmp_trajectories[index].obj_idx == obj_idx:
+                tmp_trajectory = tmp_trajectories[index]
                 frame = tmp_trajectory.frame
                 impact_position = tmp_trajectory.position
                 for config_obj in config.objects:
                     if config_obj.idx == obj_idx:
-                            positions, rotations, landmarks_vertices = _load_pose(config_obj)
-                            rotation = self._impact_rotation(config_obj, positions, rotations, impact_position, frame, sfps)
+                            positions, rotations = _load_pose(config_obj)
+                            rotation = self._impact_rotation(config_obj=config_obj, positions=positions, rotations=rotations, impact_position=impact_position, frame=frame, sfps=sfps)
                             tmp_trajectory.add_data('rotation', rotation)
-
-    def _load_obj(self, obj_idx: int, frame_idx: int):
-        config = self.entity_manager.get('config')
-        # Load mesh
-        for config_obj in config.objects:
-            if config_obj.idx == obj_idx:
-                if config_obj.static == True:
-                    for filename in os.listdir(config_obj.obj_path):
-                        if filename.endswith('.obj'):
-                            obj_file = f"{config_obj.obj_path}/{filename}"
-                            return trimesh.load_mesh(obj_file)
-                elif config_obj.static == False:
-                    items = os.listdir(config_obj.obj_path)
-                    obj_filenames = sorted(items, key=lambda x: int(''.join(filter(str.isdigit, x))))
-                    obj_file = os.path.join(config_obj.obj_path, obj_filenames[frame_idx])
-                    if not os.path.exists(obj_file):
-                        raise FileNotFoundError(f"OBJ file not found for {obj_name}: {obj_file}")
-                    return trimesh.load_mesh(obj_file)
 
     def _impact_rotation(self, config_obj: ObjectConfig, positions: np.ndarray, rotations: np.ndarray, impact_position: np.ndarray, frame: float, sfps: int, max_iterations: int = 100, tolerance: float = 1e-6) -> Rotation:
         """
@@ -158,7 +140,8 @@ class RotationSolver:
         impact_pos = impact_position
 
         # Object properties
-        mesh = self._load_obj(config_obj.idx, frame_before)
+        vertices, normals, faces = _load_mesh(config_obj, frame_before)
+        mesh = trimesh.Trimesh(vertices=vertices, faces=faces, vertex_normals=normals)
         faces = mesh.faces
         self.vertices_local = mesh.vertices - pre_impact_pos
         mesh = trimesh.Trimesh(vertices=self.vertices_local, faces=faces)

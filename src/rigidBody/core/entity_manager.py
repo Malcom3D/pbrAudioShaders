@@ -42,7 +42,6 @@ class EntityManager:
                 self._layer_managers = {}
                 self._trajectories = {}
                 self._collisions = {}
-                self._tmp_collisions = {}
                 self._singleton = {}
                 self._initialized = True
 
@@ -97,9 +96,10 @@ class EntityManager:
         """Unregister an object"""
         for key in self.sigleton_map.keys():
             if entity in key:
-                self._singleton.__delitem__(entity)
+                del self._singleton[entity]
             elif not idx == None:
                 for key in self.entities_map.keys():
                     if entity in key:
                         entities = eval(f"self._{entity}")
-                        entities.__delitem__(idx)
+                        if idx in entities.keys():
+                            del entities[idx]
