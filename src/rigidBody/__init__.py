@@ -16,11 +16,16 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-__version__ = "0.2.3"
+__version__ = "0.2.8"
 __author__ = "Malcom3D"
 __description__ = "Physically plausible impact sound for rigid body simulation"
 
 import os, sys
+import numpy as np
+
+decimals = 18
+np.set_printoptions(precision=decimals, floatmode='fixed', threshold=np.inf)
+
 from .core.entity_manager import EntityManager
 from .core.flight_path import FlightPath
 from .core.collision_engine import CollisionEngine

@@ -25,9 +25,10 @@ from dask import delayed, compute
 from ..core.entity_manager import EntityManager
 from ..core.position_solver import PositionSolver
 from ..core.rotation_solver import RotationSolver
-from ..core.landmark_solver import LandmarkSolver
-from ..core.collision_solver import CollisionSolver
+from ..core.vertex_solver import VertexSolver
+from ..core.normal_solver import NormalSolver
 from ..core.flight_path import FlightPath
+from ..core.distance_solver import DistanceSolver
 
 @dataclass
 class CollisionEngine:
@@ -35,29 +36,42 @@ class CollisionEngine:
     obj_done: List[int] = field(default_factory=list)
 
     def __post_init__(self):
-        self.cs = CollisionSolver(self.entity_manager)
         self.ps = PositionSolver(self.entity_manager)
         self.rs = RotationSolver(self.entity_manager)
-        self.ls = LandmarkSolver(self.entity_manager)
-#        self.fp = FlightPath(self.entity_manager)
+        self.vs = VertexSolver(self.entity_manager)
+        self.ns = NormalSolver(self.entity_manager)
+        self.fp = FlightPath(self.entity_manager)
+        self.ds = DistanceSolver(self.entity_manager)
 
     def compute(self):
         config = self.entity_manager.get('config')
-        obj_pairs = []
+        obj_statics, obj_done, obj_pairs = ([] for _ in range(3))
+        for config_obj in config.objects:
+            if not config_obj.static and not config_obj.idx in obj_done:
+                obj_done.append(config_obj.idx)
+            if config_obj.static and not config_obj.idx in obj_statics:
+                obj_statics.append(config_obj.idx)
         for i in range(len(config.objects)):
             for j in range(i + 1, len(config.objects)):
                 obj_pairs.append([config.objects[i].idx, config.objects[j].idx])
-        tasks = [self.prebake(objs_idx) for objs_idx in obj_pairs]
-        results = compute(*tasks)
+        tasks_static = [self.fp.compute(obj_idx) for obj_idx in obj_statics]
+        results_static = compute(*tasks_static)
+        tasks_obj = [self.prebake_object(obj_idx) for obj_idx in obj_done]
+        results_obj = compute(*tasks_obj)
+        tasks_coll = [self.prebake_collision(objs_idx) for objs_idx in obj_pairs]
+        results_coll = compute(*tasks_coll)
 
     @delayed
-    def prebake(self, objs_idx: Tuple[int, int]):
+    def prebake_object(self, obj_idx: int):
         config = self.entity_manager.get('config')
         for config_obj in config.objects:
-            if config_obj.idx == objs_idx[0] or config_obj.idx == objs_idx[1]:
-                if not config_obj.static and not config_obj.idx in self.obj_done:
-                    self.obj_done.append(config_obj.idx)
-                    self.ps.compute(config_obj.idx)
-                    self.rs.compute(config_obj.idx)
-                    self.ls.compute(config_obj.idx)
-#        self.cs.compute(objs_idx)
+            if config_obj.idx == obj_idx:
+                self.ps.compute(config_obj.idx)
+                self.rs.compute(config_obj.idx)
+                self.vs.compute(config_obj.idx)
+                self.ns.compute(config_obj.idx)
+                self.fp.compute(config_obj.idx)
+
+    @delayed
+    def prebake_collision(self, objs_idx: Tuple[int, int]):
+        self.ds.compute(objs_idx)

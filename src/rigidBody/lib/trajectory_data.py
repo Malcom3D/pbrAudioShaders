@@ -18,8 +18,10 @@
 
 import os
 import numpy as np
-from typing import List, Dict, Tuple, Optional, Any
+from typing import Union, List, Dict, Tuple, Optional, Any
 from dataclasses import dataclass, field
+from scipy.interpolate import interp1d
+from scipy.spatial.transform import Rotation, Slerp
 
 from ..lib.functions import _euler_to_rotation_matrix
 
@@ -30,9 +32,8 @@ class tmpTrajectoryData:
     frame: float
     position: np.ndarray
     rotation: np.ndarray = None
-    landmark0: np.ndarray = None
-    landmark1: np.ndarray = None
-    landmark2: np.ndarray = None
+    vertices: np.ndarray = None
+    normals: np.ndarray = None
 
     def add_data(self, component: str, data: np.ndarray):
         """Add a data component if not exist"""
@@ -44,70 +45,99 @@ class TrajectoryData:
     """Container for trajectory and orientation data."""
     obj_idx: int
     sample_rate: int
-    positions: np.ndarray   # Shape: (num_samples, 3) - world coordinates in meters
-    orientations: np.ndarray  # Shape: (num_samples, 3) - eurler rotations (x, y, z)
-    landmarks: Optional[np.ndarray] = None  # Shape: (num_samples, 3, 3) - landmarks for each sample
+    positions: Union[np.ndarray, Tuple[interp1d, interp1d, interp1d]] # static or interpolated world coordinates in meters
+    rotations: Union[np.ndarray, Slerp] # static or interpolated eurler rotations in rad (x,y,z)
+    vertices: np.ndarray # static or interpolated vertices for each sample [[vertex0_x,vertex0_y,vertex0_z],[vertex1_x,vertex1_y,vertex1_z],[vertex2_x,vertex2_y,vertex2_z]...]
+    normals: np.ndarray # static or interpolated normals for each vertex [[normal0_x,normal0_y,normal0_z],[normal1_x,normal1_y,normal1_z],[normal2_x,normal2_y,normal2_z]...]
+    faces: np.ndarray # rigid body mesh faces
     
-    def get_num_samples(self) -> int:
-        return self.positions.shape[0]
+    def get_x(self) -> np.ndarray:
+        """Get independent variables of interp1d interpolation"""
+        if not isinstance(self.positions, np.ndarray):
+            return self.positions[0].x
+        return np.array([])
 
-    def get_position(self, sample_idx: int) -> np.ndarray:
+    def get_rx(self) -> np.ndarray:
+        """Get independent variables of slerp interpolation"""
+        if not isinstance(self.positions, np.ndarray):
+            return self.rotations.times
+        return np.array([])
+
+    def get_position(self, sample_idx: float) -> np.ndarray:
         """Get interpolated position at specific sample_idx."""
-        if sample_idx < 0:
-            return self.positions[0]
-        elif sample_idx >= len(self.positions) - 1:
-            return self.positions[-1]
-        
-        return self.positions[sample_idx]
+        if isinstance(self.positions, np.ndarray):
+            # Static object: positions is a single (3,) array
+            return self.positions.copy()
+        else:
+            # Moving object: positions is a tuple of interp1d functions
+            x = self.positions[0](sample_idx)
+            y = self.positions[1](sample_idx)
+            z = self.positions[2](sample_idx)
+            return np.array([x, y, z])
 
-    def get_orientation(self, sample_idx: int) -> np.ndarray:
-        """Get interpolated orientation at specific sample_idx."""
-        if sample_idx < 0:
-            return self.orientations[0]
-        elif sample_idx >= len(self.orientations) - 1:
-            return self.orientations[-1]
-        
-        return self.orientations[sample_idx]
+    def get_rotation(self, sample_idx: float) -> np.ndarray:
+        """Get interpolated rotation at specific sample_idx."""
+        if isinstance(self.rotations, np.ndarray):
+            # Static object: rotations is a single (3,) array of Euler angles
+            return self.rotations.copy()
+        else:
+            # Moving object: rotations is a Slerp object
+            rot = self.rotations(sample_idx)
+            # Convert to Euler angles (xyz convention)
+            return rot.as_euler('xyz')
 
-    def _get_transformation(self, sample_idx: int) -> np.ndarray:
-        """Get transformation matrix for a specific sample_idx."""
-        # Get position and orientation for this sample_idx
-        position = self.positions[sample_idx]
-        quaternion = self.orientations[sample_idx]
-        
-        # Convert quaternion to rotation matrix
-        rotation_matrix = _euler_to_rotation_matrix(quaternion)
-        
-        # Create homogeneous transformation matrix
-        transformation = np.eye(4)
-        transformation[:3, :3] = rotation_matrix
-        transformation[:3, 3] = position
-        
-        return transformation
+    def get_vertices(self, sample_idx: float) -> np.ndarray:
+        """Get interpolated position of vertices at specific sample_idx."""
+        if not isinstance(self.vertices[0,0], interp1d):
+            return self.vertices.copy()
+        else:
+            vertices = np.zeros((self.vertices.shape))
+            for vertex_idx in range(len(self.vertices)):
+                for coord_idx in range(3):
+                    # Each vertices coordinate has its own interpolation function
+                    vertices[vertex_idx, coord_idx] = self.vertices[vertex_idx, coord_idx](sample_idx)
+            return vertices
 
-    def get_relative_transformation(self, from_sample: int, to_sample: int) -> np.ndarray:
-        """
-        Get relative transformation from one sample_idx to another.
-        
-        Parameters:
-        -----------
-        from_sample : int or float
-            Source sample_idx index
-        to_sample : int or float
-            Target sample_idx index
-        
-        Returns:
-        --------
-        np.ndarray
-            Relative transformation matrix T_to_from such that:
-            P_to = T_to_from @ P_from
-        """
-        # Get transformations in world coordinates
-        T_world_from = self._get_transformation(from_sample)
-        T_world_to = self._get_transformation(to_sample)
-        
-        # Compute relative transformation: T_to_from = T_world_to @ inv(T_world_from)
-        T_world_from_inv = np.linalg.inv(T_world_from)
-        T_to_from = T_world_to @ T_world_from_inv
-        
-        return T_to_from
+    def get_normals(self, sample_idx: float) -> np.ndarray:
+        """Get interpolated vertex normals at specific sample_idx."""
+        if not isinstance(self.normals[0,0], interp1d):
+            return self.normals.copy()
+        else:
+            normals = np.zeros((self.normals.shape))
+            for normal_idx in range(len(self.normals)):
+                for coord_idx in range(3):
+                    # Each vertex normals has its own interpolation function
+                    normals[normal_idx, coord_idx] = self.normals[normal_idx, coord_idx](sample_idx)
+            return normals
+
+    def get_faces(self, sample_idx: float = None) -> np.ndarray:
+        """Get faces"""
+        return self.faces
+
+#    def get_transformation(self, sample_idx: float) -> np.ndarray:
+#        """Get transformation matrix for a specific sample_idx."""
+#        # Get position and rotation at the sample
+#        position = self.get_position(sample_idx)
+#        euler_angles = self.get_rotation(sample_idx)
+#        
+#        # Convert Euler angles to rotation matrix
+#        rotation_matrix = _euler_to_rotation_matrix(euler_angles)
+#        
+#        # Create 4x4 transformation matrix
+#        transformation = np.eye(4)
+#        transformation[:3, :3] = rotation_matrix
+#        transformation[:3, 3] = position
+#        
+#        return transformation
+#
+#    def get_relative_transformation(self, from_sample: float, to_sample: float) -> np.ndarray:
+#        """Get relative rigid transformation from one sample_idx to another."""
+#        # Get transformation matrices for both samples
+#        T_from = self.get_transformation(from_sample)
+#        T_to = self.get_transformation(to_sample)
+#        
+#        # Calculate relative transformation: T_relative = T_to * inv(T_from)
+#        T_from_inv = np.linalg.inv(T_from)
+#        T_relative = T_to @ T_from_inv
+#        
+#        return T_relative

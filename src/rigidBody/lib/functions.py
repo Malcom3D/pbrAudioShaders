@@ -5,8 +5,29 @@ from typing import Any, Tuple
 def _soxel_grid_shape(grid_geometry, voxel_size):
     pass
 
-def _load_pose(config_obj: Any) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Load all pose sequence for an object including landmarks."""
+def _load_mesh(config_obj: Any, frame_idx: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Load all pose sequence for an object."""
+    if not 'ObjectConfig' in str(type(config_obj)):
+        raise ValueError(f"{config_obj} is not of ObjectConfig type.")
+
+    if config_obj.static == True:
+        for filename in os.listdir(config_obj.obj_path):
+            if filename.endswith('.npz'):
+                filename = f"{config_obj.obj_path}/{filename}"
+    elif config_obj.static == False:
+        items = os.listdir(config_obj.obj_path)
+        filenames = sorted(items, key=lambda x: int(''.join(filter(str.isdigit, x))))
+        filename = os.path.join(config_obj.obj_path, filenames[frame_idx])
+    if not os.path.exists(filename):
+        raise FileNotFoundError(f"OBJ file not found for {obj_name}: {filename}")
+    data = np.load(filename)
+    vertices = data[data.files[0]]
+    normals = data[data.files[1]]
+    faces = data[data.files[2]]
+    return vertices, normals, faces
+
+def _load_pose(config_obj: Any) -> Tuple[np.ndarray, np.ndarray]:
+    """Load all pose sequence for an object."""
     if not 'ObjectConfig' in str(type(config_obj)):
         raise ValueError(f"{config_obj} is not of ObjectConfig type.")
 
@@ -21,9 +42,8 @@ def _load_pose(config_obj: Any) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     pose = np.load(npz_file)
     positions = pose[pose.files[0]]
     rotations = pose[pose.files[1]]
-    landmarks_vertices = pose[pose.files[2]]
 
-    return positions, rotations, landmarks_vertices
+    return positions, rotations
 
 def _euler_to_rotation_matrix(q: np.ndarray, degrees=False):
     """

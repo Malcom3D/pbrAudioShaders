@@ -40,7 +40,7 @@ class PositionSolver:
 
         for config_obj in config.objects:
             if config_obj.idx == obj_idx:
-                positions, rotations, landmarks_vertices = _load_pose(config_obj)
+                positions, rotations = _load_pose(config_obj)
 
         position_intersection = self._intersection(sequence_array=positions, sfps=sfps)
 
