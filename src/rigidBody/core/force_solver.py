@@ -65,8 +65,8 @@ class ForceSolver:
                     for c_idx in range(len(active_collisions)):
                         if (active_collisions[c_idx].frame <= frame <= active_collisions[c_idx].frame + active_collisions[c_idx].frame_range):
                             collisions.append(active_collisions[c_idx])
-                            other_obj_indices.append(collisions.obj1_idx if not collisions.obj1_idx == obj_idx else collisions.obj2_idx)
-                            for t_idx in range(len(trajectories)):
+                            other_obj_indices.append(active_collisions[c_idx].obj1_idx if not active_collisions[c_idx].obj1_idx == obj_idx else active_collisions[c_idx].obj2_idx)
+                            for t_idx in trajectories.keys():
                                 if 'TrajectoryData' in str(type(trajectories[t_idx])):
                                     if trajectories[t_idx].obj_idx in other_obj_indices:
                                         other_trajectories.append(trajectories[t_idx])
@@ -250,7 +250,7 @@ class ForceSolver:
             tangential_velocity = relative_velocity - normal_velocity
         
             # Get material properties
-            restitution = abs(linear_velocity_after)/abs(linear_velocity_before)
+            restitution = abs(np.linalg.norm(other_linear_velocity_after) - np.linalg.norm(linear_velocity_after))/abs(np.linalg.norm(linear_velocity_before) - np.linalg.norm(other_linear_velocity_before))
             if hasattr(config_obj.acoustic_shader, 'restitution'):
                 restitution = config_obj.acoustic_shader.restitution
         
@@ -306,7 +306,7 @@ class ForceSolver:
             angular_velocity = (delta_rot_before + delta_rot_after) / (2 * dt)
         
             # Angular acceleration
-            angular_acceleration = (delta_rot_afterafter - delta_rot_before) / (dt ** 2)
+            angular_acceleration = (delta_rot_after - delta_rot_before) / (dt ** 2)
         
             # Magnitudes
             normal_force_magnitude = np.linalg.norm(normal_force)
@@ -342,7 +342,6 @@ class ForceSolver:
         Based on the stochastic physically-based model from the referenced paper.
         """
         # Extract material properties
-        print('config_obj.acoustic_shader: ', config_obj.acoustic_shader.young_modulus, config_obj.acoustic_shader.roughness)
         youngs_modulus = config_obj.acoustic_shader.young_modulus
         poissons_ratio = config_obj.acoustic_shader.poisson_ratio
         density = config_obj.acoustic_shader.density
