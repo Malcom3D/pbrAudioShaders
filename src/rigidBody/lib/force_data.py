@@ -18,12 +18,24 @@
 
 import os
 import numpy as np
-from typing import List, Dict, Tuple, Optional, Any, Set
+from typing import Tuple, List, Optional
 from dataclasses import dataclass, field
 
 @dataclass
-class CollisionArea:
-    """Represents a collision area for a objects."""
-    obj_idx: int
-    points: np.ndarray  # Shape: (n_points, 3) - collision points in world space
-    vertices: np.ndarray  # Shape: (n_vertex_id, 2) - spatially weighted collision vertices by id from obj index - shape of collision area
+class ForceData:
+    """Container for force event data."""
+    frame: float # interpolated frame number
+    obj1_idx: int
+    obj2_idx: int
+    linear_velocity: np.ndarray  # [vx, vy, vz]
+    angular_velocity: np.ndarray  # [ωx, ωy, ωz]
+    linear_acceleration: np.ndarray  # [ax, ay, az]
+    angular_acceleration: np.ndarray  # [αx, αy, αz]
+    relative_velocity: np.ndarray
+    normal_velocity: np.ndarray
+    normal_force: np.ndarray
+    tangential_force: np.ndarray
+    normal_force_magnitude: np.ndarray
+    tangential_force_magnitude: np.ndarray
+    stochastic_normal_force: Optional[np.ndarray] = None       
+    stochastic_tangential_force: Optional[np.ndarray] = None

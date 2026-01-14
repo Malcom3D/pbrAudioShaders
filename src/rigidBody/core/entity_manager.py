@@ -42,6 +42,7 @@ class EntityManager:
                 self._layer_managers = {}
                 self._trajectories = {}
                 self._collisions = {}
+                self._forces = {}
                 self._singleton = {}
                 self._initialized = True
 
@@ -57,7 +58,8 @@ class EntityManager:
                     'outputs': ['AmbisonicOutput', 'OmnidirectionalOutput', 'Figure8Output', 'CardioidOutput', 'HypercardioidOutput'],
                     'wave_propagators': 'WavePropagator',
                     'trajectories': ['TrajectoryData', 'tmpTrajectoryData'],
-                    'collisions': [ 'CollisionData', 'tmpCollisionData']
+                    'collisions': [ 'CollisionData', 'tmpCollisionData'],
+                    'forces': 'ForceData',
                 }
 
                 config = Config(config)
@@ -82,7 +84,7 @@ class EntityManager:
     def get(self, entity: str = None, idx: int = None) -> dict[str, Any]:
         """Get all objects"""
         if entity == None:
-            return self._singleton, self._sources, self._objects, self._outputs, self._wave_propagators, self._trajectories, self._collisions
+            return self._singleton, self._sources, self._objects, self._outputs, self._wave_propagators, self._trajectories, self._collisions, self._forces
         for key in self.sigleton_map.keys():
             if entity in key:
                 return self._singleton[entity]

@@ -44,28 +44,29 @@ class tmpTrajectoryData:
 class TrajectoryData:
     """Container for trajectory and orientation data."""
     obj_idx: int
+    static: bool
     sample_rate: int
     positions: Union[np.ndarray, Tuple[interp1d, interp1d, interp1d]] # static or interpolated world coordinates in meters
     rotations: Union[np.ndarray, Slerp] # static or interpolated eurler rotations in rad (x,y,z)
     vertices: np.ndarray # static or interpolated vertices for each sample [[vertex0_x,vertex0_y,vertex0_z],[vertex1_x,vertex1_y,vertex1_z],[vertex2_x,vertex2_y,vertex2_z]...]
     normals: np.ndarray # static or interpolated normals for each vertex [[normal0_x,normal0_y,normal0_z],[normal1_x,normal1_y,normal1_z],[normal2_x,normal2_y,normal2_z]...]
     faces: np.ndarray # rigid body mesh faces
-    
+
     def get_x(self) -> np.ndarray:
         """Get independent variables of interp1d interpolation"""
-        if not isinstance(self.positions, np.ndarray):
+        if not self.static:
             return self.positions[0].x
         return np.array([])
 
     def get_rx(self) -> np.ndarray:
         """Get independent variables of slerp interpolation"""
-        if not isinstance(self.positions, np.ndarray):
+        if not self.static:
             return self.rotations.times
         return np.array([])
 
     def get_position(self, sample_idx: float) -> np.ndarray:
         """Get interpolated position at specific sample_idx."""
-        if isinstance(self.positions, np.ndarray):
+        if self.static:
             # Static object: positions is a single (3,) array
             return self.positions.copy()
         else:
@@ -77,7 +78,7 @@ class TrajectoryData:
 
     def get_rotation(self, sample_idx: float) -> np.ndarray:
         """Get interpolated rotation at specific sample_idx."""
-        if isinstance(self.rotations, np.ndarray):
+        if self.static:
             # Static object: rotations is a single (3,) array of Euler angles
             return self.rotations.copy()
         else:
@@ -88,7 +89,7 @@ class TrajectoryData:
 
     def get_vertices(self, sample_idx: float) -> np.ndarray:
         """Get interpolated position of vertices at specific sample_idx."""
-        if not isinstance(self.vertices[0,0], interp1d):
+        if self.static:
             return self.vertices.copy()
         else:
             vertices = np.zeros((self.vertices.shape))
@@ -100,7 +101,7 @@ class TrajectoryData:
 
     def get_normals(self, sample_idx: float) -> np.ndarray:
         """Get interpolated vertex normals at specific sample_idx."""
-        if not isinstance(self.normals[0,0], interp1d):
+        if self.static:
             return self.normals.copy()
         else:
             normals = np.zeros((self.normals.shape))
@@ -113,6 +114,33 @@ class TrajectoryData:
     def get_faces(self, sample_idx: float = None) -> np.ndarray:
         """Get faces"""
         return self.faces
+
+    def get_relative_transformation(self, from_sample: float, to_sample: float) -> np.ndarray:
+        """Get relative rigid transformation from one sample_idx to another."""
+        if not self.static:
+            if from_sample < 0:
+               from_sample = 0
+            vertices1 = self.get_vertices(from_sample)
+            vertices2 = self.get_vertices(to_sample)
+            centroid1 = np.mean(vertices1, axis=0)
+            centroid2 = np.mean(vertices2, axis=0)
+            centered1 = vertices1 - centroid1
+            centered2 = vertices2 - centroid2
+            # Compute rotation using Kabsch algorithm
+            H = centered1.T @ centered2
+            U, S, Vt = np.linalg.svd(H)
+            # Ensure right-handed coordinate system
+            d = np.linalg.det(Vt.T @ U.T)
+            if d < 0:
+                Vt[-1, :] *= -1
+            R_vertices = Vt.T @ U.T
+            t_vertices = centroid2 - R_vertices @ centroid1
+            # Create 4x4 transformation matrix from vertices
+            T_from_vertices = np.eye(4, dtype=np.float32) 
+            T_from_vertices[:3, :3] = R_vertices
+            T_from_vertices[:3, 3] = t_vertices
+            return T_from_vertices
+        return np.eye(4, dtype=np.float32) 
 
 #    def get_transformation(self, sample_idx: float) -> np.ndarray:
 #        """Get transformation matrix for a specific sample_idx."""
