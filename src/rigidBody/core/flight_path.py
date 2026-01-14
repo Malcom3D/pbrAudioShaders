@@ -88,7 +88,7 @@ class FlightPath:
         # Load mesh data for static object
         vertices, normals, faces = _load_mesh(config_obj, 0)
         
-        return TrajectoryData(obj_idx=config_obj.idx, sample_rate=sample_rate, positions=positions, rotations=rotations, vertices=vertices, normals=normals, faces=faces)
+        return TrajectoryData(obj_idx=config_obj.idx, static=True, sample_rate=sample_rate, positions=positions, rotations=rotations, vertices=vertices, normals=normals, faces=faces)
 
     def _dynamic_trajectory_original(self, config_obj, positions: np.ndarray, rotations: np.ndarray, sfps: float, sample_rate: int) -> TrajectoryData:
         """Create trajectory data for dynamic object using original frames."""
@@ -125,7 +125,7 @@ class FlightPath:
         # Get faces (assume constant topology)
         _, _, faces = _load_mesh(config_obj, 1)
         
-        return TrajectoryData(obj_idx=config_obj.idx, sample_rate=sample_rate,positions=(pos_interp_x, pos_interp_y, pos_interp_z), rotations=rot_interp, vertices=vertices_interp, normals=normals_interp, faces=faces)
+        return TrajectoryData(obj_idx=config_obj.idx, static=False, sample_rate=sample_rate,positions=(pos_interp_x, pos_interp_y, pos_interp_z), rotations=rot_interp, vertices=vertices_interp, normals=normals_interp, faces=faces)
 
     def _dynamic_trajectory_with_solved(self, config_obj, positions: np.ndarray, rotations: np.ndarray, solved_frames: List[Tuple[float, np.ndarray, np.ndarray, np.ndarray, np.ndarray]], sfps: float, sample_rate: int) -> TrajectoryData:
         """Create trajectory data for dynamic object with solved collision frames."""
@@ -186,7 +186,7 @@ class FlightPath:
         # Get faces
         _, _, faces = _load_mesh(config_obj, 1)
         
-        return TrajectoryData(obj_idx=config_obj.idx, sample_rate=sample_rate, positions=(pos_interp_x, pos_interp_y, pos_interp_z), rotations=rot_interp, vertices=vertices_interp, normals=normals_interp, faces=faces)
+        return TrajectoryData(obj_idx=config_obj.idx, static=False, sample_rate=sample_rate, positions=(pos_interp_x, pos_interp_y, pos_interp_z), rotations=rot_interp, vertices=vertices_interp, normals=normals_interp, faces=faces)
 
     def _create_mesh_interpolators(self, config_obj, all_vertices: np.ndarray, all_normals: np.ndarray, frame_times: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """

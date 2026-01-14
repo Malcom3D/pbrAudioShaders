@@ -18,25 +18,42 @@
 
 import os
 import numpy as np
-from typing import Tuple
+from enum import Enum
+from typing import Tuple, List, Union
 from dataclasses import dataclass, field
 
-from ..lib.collision_area import CollisionArea
+class CollisionType(Enum):
+    """Enum for different Type of collisions"""
+    IMPACT = "impact"
+    CONTACT = "contact"
+
+@dataclass
+class CollisionArea:
+    """Represents a collision area for a objects."""
+    obj_idx: int
+    faces_idx: np.ndarray # Shape: (n_id, 3) - colliding faces
 
 @dataclass
 class CollisionData:
     """Container for collision event data."""
-    frame: int # interpolated frame number
-    obj_idx1: int
-    obj_idx2: int
-    distance: float
-    collision_area: Tuple[CollisionArea, CollisionArea] = None
+    type: CollisionType
+    obj1_idx: int
+    obj2_idx: int
+    frame: float # interpolated frame number
+    frame_range: int = 1
+    distances: Union[float, np.ndarray] = None
+    collision_area: List[Tuple[int, Tuple[CollisionArea, CollisionArea]]] = None # List[samples, [obj1_triangles_idx, obj2_trangles_idx]]
+
+    def add_area(self, component: str, data: List[Tuple[int, Tuple[CollisionArea, CollisionArea]]]):
+        """Add a data component if not exist"""
+        if getattr(self, component) is None:
+            setattr(self, component, data)
 
 @dataclass
 class tmpCollisionData:
     """Temporary container for solved collision event data."""
-    obj_idx1: int
-    obj_idx2: int
+    obj1_idx: int
+    obj1_idx: int
     restitution: float = None
     distances: np.ndarray = None
     consec_idx: np.ndarray = None

@@ -16,7 +16,7 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-__version__ = "0.2.8"
+__version__ = "0.2.12"
 __author__ = "Malcom3D"
 __description__ = "Physically plausible impact sound for rigid body simulation"
 
