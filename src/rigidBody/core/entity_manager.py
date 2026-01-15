@@ -59,7 +59,7 @@ class EntityManager:
                     'wave_propagators': 'WavePropagator',
                     'trajectories': ['TrajectoryData', 'tmpTrajectoryData'],
                     'collisions': [ 'CollisionData', 'tmpCollisionData'],
-                    'forces': 'ForceData',
+                    'forces': [ 'ForceData', 'ForceDataSequence']
                 }
 
                 config = Config(config)

@@ -20,6 +20,7 @@ import os
 import numpy as np
 from typing import Tuple, List, Optional
 from dataclasses import dataclass, field
+from scipy.interpolate import CubicSpline
 
 @dataclass
 class ForceData:
@@ -27,10 +28,6 @@ class ForceData:
     frame: float # interpolated frame number
     obj1_idx: int
     obj2_idx: int
-    linear_velocity: np.ndarray  # [vx, vy, vz]
-    angular_velocity: np.ndarray  # [ωx, ωy, ωz]
-    linear_acceleration: np.ndarray  # [ax, ay, az]
-    angular_acceleration: np.ndarray  # [αx, αy, αz]
     relative_velocity: np.ndarray
     normal_velocity: np.ndarray
     normal_force: np.ndarray
@@ -39,3 +36,18 @@ class ForceData:
     tangential_force_magnitude: np.ndarray
     stochastic_normal_force: Optional[np.ndarray] = None       
     stochastic_tangential_force: Optional[np.ndarray] = None
+
+@dataclass
+class ForceDataSequence:
+    """Container for forces sequences data."""
+    frames: np.ndarray  # interpolated frame number
+    obj1_idx: int
+    other_obj_idx: np.ndarray
+    relative_velocity: Tuple[CubicSpline, CubicSpline, CubicSpline]
+    normal_velocity: Tuple[CubicSpline, CubicSpline, CubicSpline]
+    normal_force: Tuple[CubicSpline, CubicSpline, CubicSpline]
+    tangential_force: Tuple[CubicSpline, CubicSpline, CubicSpline]
+    normal_force_magnitude: CubicSpline
+    tangential_force_magnitude: CubicSpline
+    stochastic_normal_force: Optional[Tuple[CubicSpline, CubicSpline, CubicSpline]] = None       
+    stochastic_tangential_force: Optional[Tuple[CubicSpline, CubicSpline, CubicSpline]] = None

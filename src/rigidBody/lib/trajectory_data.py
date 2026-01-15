@@ -21,6 +21,7 @@ import numpy as np
 from typing import Union, List, Dict, Tuple, Optional, Any
 from dataclasses import dataclass, field
 from scipy.interpolate import interp1d
+from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation, Slerp
 
 from ..lib.functions import _euler_to_rotation_matrix
@@ -46,8 +47,8 @@ class TrajectoryData:
     obj_idx: int
     static: bool
     sample_rate: int
-    positions: Union[np.ndarray, Tuple[interp1d, interp1d, interp1d]] # static or interpolated world coordinates in meters
-    rotations: Union[np.ndarray, Slerp] # static or interpolated eurler rotations in rad (x,y,z)
+    positions: Union[np.ndarray, Tuple[CubicSpline, CubicSpline, CubicSpline]] # static or interpolated world coordinates in meters
+    rotations: Union[np.ndarray, CubicSpline] # static or interpolated eurler rotations in rad (x,y,z)
     vertices: np.ndarray # static or interpolated vertices for each sample [[vertex0_x,vertex0_y,vertex0_z],[vertex1_x,vertex1_y,vertex1_z],[vertex2_x,vertex2_y,vertex2_z]...]
     normals: np.ndarray # static or interpolated normals for each vertex [[normal0_x,normal0_y,normal0_z],[normal1_x,normal1_y,normal1_z],[normal2_x,normal2_y,normal2_z]...]
     faces: np.ndarray # rigid body mesh faces
@@ -76,16 +77,63 @@ class TrajectoryData:
             z = self.positions[2](sample_idx)
             return np.array([x, y, z])
 
+    def get_velocity(self, sample_idx: float) -> np.ndarray:
+        if self.static:
+            # Static object: positions is a single (3,) array
+            return np.array([0,0,0])
+        else:
+            # Moving object: positions is a tuple of CubicSpline functions
+            x = self.positions[0].derivative()(sample_idx)
+            y = self.positions[1].derivative()(sample_idx)
+            z = self.positions[2].derivative()(sample_idx)
+            return np.array([x, y, z])
+
+    def get_acceleration(self, sample_idx: float) -> np.ndarray:
+        if self.static:
+            # Static object: positions is a single (3,) array
+            return np.array([0,0,0])
+        else:
+            # Moving object: positions is a tuple of CubicSpline functions
+            x = self.positions[0].derivative(2)(sample_idx)
+            y = self.positions[1].derivative(2)(sample_idx)
+            z = self.positions[2].derivative(2)(sample_idx)
+            return np.array([x, y, z])
+
     def get_rotation(self, sample_idx: float) -> np.ndarray:
         """Get interpolated rotation at specific sample_idx."""
         if self.static:
             # Static object: rotations is a single (3,) array of Euler angles
             return self.rotations.copy()
         else:
-            # Moving object: rotations is a Slerp object
-            rot = self.rotations(sample_idx)
-            # Convert to Euler angles (xyz convention)
-            return rot.as_euler('xyz')
+            # Moving object: rotations is a tuple of CubicSpline functions
+            x = self.rotations[0](sample_idx)
+            y = self.rotations[1](sample_idx)
+            z = self.rotations[2](sample_idx)
+            return np.array([x, y, z])
+
+    def get_angular_velocity(self, sample_idx: float) -> np.ndarray:
+        """Get interpolated angular velocity at specific sample_idx."""
+        if self.static:
+            # Static object: rotations is a single (3,) array of Euler angles
+            return np.array([0,0,0])
+        else:
+            # Moving object: rotations is a tuple of CubicSpline functions
+            x = self.rotations[0].derivative()(sample_idx)
+            y = self.rotations[1].derivative()(sample_idx)
+            z = self.rotations[2].derivative()(sample_idx)
+            return np.array([x, y, z])
+
+    def get_angular_acceleration(self, sample_idx: float) -> np.ndarray:
+        """Get interpolated angular acceleration at specific sample_idx."""
+        if self.static:
+            # Static object: rotations is a single (3,) array of Euler angles
+            return np.array([0,0,0])
+        else:
+            # Moving object: rotations is a tuple of CubicSpline functions
+            x = self.rotations[0].derivative(2)(sample_idx)
+            y = self.rotations[1].derivative(2)(sample_idx)
+            z = self.rotations[2].derivative(2)(sample_idx)
+            return np.array([x, y, z])
 
     def get_vertices(self, sample_idx: float) -> np.ndarray:
         """Get interpolated position of vertices at specific sample_idx."""
