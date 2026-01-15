@@ -19,8 +19,7 @@
 
 import os
 import numpy as np
-from scipy.spatial.transform import Rotation, Slerp
-from scipy.interpolate import interp1d
+from scipy.interpolate import CubicSpline
 from typing import List, Tuple, Dict, Optional
 from dataclasses import dataclass, field
 
@@ -97,14 +96,9 @@ class FlightPath:
         # Create time points for original frames
         frame_times = sample_rate * ( 1 + np.arange(n_frames)) / sfps
         
-        # Interpolate positions (cubic spline for smooth motion)
-        pos_interp_x = interp1d(frame_times, positions[:, 0], kind='cubic', fill_value='extrapolate')
-        pos_interp_y = interp1d(frame_times, positions[:, 1], kind='cubic', fill_value='extrapolate')
-        pos_interp_z = interp1d(frame_times, positions[:, 2], kind='cubic', fill_value='extrapolate')
-        
-        # Interpolate rotations using Slerp
-        rots = Rotation.from_euler('XYZ', rotations)
-        rot_interp = Slerp(frame_times, rots)
+        # Interpolate positions and rotations using CubicSpline
+        pos_interp = [CubicSpline(frame_times, positions[:, i], extrapolate=1) for i in range(positions.shape[1])]
+        rot_interp = [CubicSpline(frame_times, rotations[:, i], extrapolate=1) for i in range(positions.shape[1])]
         
         # Load mesh data for all frames and create interpolators
         all_vertices = []
@@ -125,7 +119,7 @@ class FlightPath:
         # Get faces (assume constant topology)
         _, _, faces = _load_mesh(config_obj, 1)
         
-        return TrajectoryData(obj_idx=config_obj.idx, static=False, sample_rate=sample_rate,positions=(pos_interp_x, pos_interp_y, pos_interp_z), rotations=rot_interp, vertices=vertices_interp, normals=normals_interp, faces=faces)
+        return TrajectoryData(obj_idx=config_obj.idx, static=False, sample_rate=sample_rate, positions=pos_interp, rotations=rot_interp, vertices=vertices_interp, normals=normals_interp, faces=faces)
 
     def _dynamic_trajectory_with_solved(self, config_obj, positions: np.ndarray, rotations: np.ndarray, solved_frames: List[Tuple[float, np.ndarray, np.ndarray, np.ndarray, np.ndarray]], sfps: float, sample_rate: int) -> TrajectoryData:
         """Create trajectory data for dynamic object with solved collision frames."""
@@ -172,13 +166,9 @@ class FlightPath:
         all_vertices = np.array(all_vertices)  # Shape: (n_frames, n_vertices, 3)
         all_normals = np.array(all_normals)    # Shape: (n_frames, n_vertices, 3)
         
-        # Create interpolators for the combined trajectory
-        pos_interp_x = interp1d(all_frame_times, all_positions[:, 0], kind='cubic', fill_value='extrapolate')
-        pos_interp_y = interp1d(all_frame_times, all_positions[:, 1], kind='cubic', fill_value='extrapolate')
-        pos_interp_z = interp1d(all_frame_times, all_positions[:, 2], kind='cubic', fill_value='extrapolate')
-        
-        rots = Rotation.from_euler('XYZ', all_rotations)
-        rot_interp = Slerp(all_frame_times, rots)
+        # Interpolate positions and rotations using CubicSpline
+        pos_interp = [CubicSpline(all_frame_times, all_positions[:, i], extrapolate=1) for i in range(all_positions.shape[1])]
+        rot_interp = [CubicSpline(all_frame_times, all_rotations[:, i], extrapolate=1) for i in range(all_positions.shape[1])]
         
         # Create mesh interpolators using the combined frame times
         vertices_interp, normals_interp = self._create_mesh_interpolators(config_obj, all_vertices, all_normals, all_frame_times)
@@ -186,7 +176,7 @@ class FlightPath:
         # Get faces
         _, _, faces = _load_mesh(config_obj, 1)
         
-        return TrajectoryData(obj_idx=config_obj.idx, static=False, sample_rate=sample_rate, positions=(pos_interp_x, pos_interp_y, pos_interp_z), rotations=rot_interp, vertices=vertices_interp, normals=normals_interp, faces=faces)
+        return TrajectoryData(obj_idx=config_obj.idx, static=False, sample_rate=sample_rate, positions=pos_interp, rotations=rot_interp, vertices=vertices_interp, normals=normals_interp, faces=faces)
 
     def _create_mesh_interpolators(self, config_obj, all_vertices: np.ndarray, all_normals: np.ndarray, frame_times: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -206,11 +196,11 @@ class FlightPath:
             for coord_idx in range(3):
                 # Interpolate vertex coordinates
                 vertex_coords = all_vertices[:, v_idx, coord_idx]
-                vertices_interp[v_idx, coord_idx] = interp1d(frame_times, vertex_coords, kind='linear', fill_value='extrapolate')
+                vertices_interp[v_idx, coord_idx] = CubicSpline(frame_times, vertex_coords, extrapolate=1)
                 
                 # Interpolate normal coordinates
                 normal_coords = all_normals[:, v_idx, coord_idx]
-                normals_interp[v_idx, coord_idx] = interp1d(frame_times, normal_coords, kind='linear', fill_value='extrapolate')
+                normals_interp[v_idx, coord_idx] = CubicSpline(frame_times, normal_coords, extrapolate=1)
         
         return vertices_interp, normals_interp
 

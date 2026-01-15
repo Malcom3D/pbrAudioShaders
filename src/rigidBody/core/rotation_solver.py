@@ -73,7 +73,7 @@ class RotationSolver:
         Rotation object representing estimated rotation at impact
         """
 
-        def objective_function(rot_params: np.ndarray, use_post_impact: bool = False) -> float:
+        def objective_function(frame_before: float, frame: float, frame_after: float, rot_params: np.ndarray, use_post_impact: bool = False) -> float:
             """
             Objective function for optimization.
             Minimizes the difference between predicted and actual post-impact state.
@@ -100,7 +100,7 @@ class RotationSolver:
                 lin_vel_impact = np.zeros(3)
         
             # Compute angular velocity change due to collision
-            _, delta_ang_vel = self._compute_collision_response(rot_impact, impact_pos, pre_impact_ang_vel, lin_vel_impact)
+            _, delta_ang_vel = self._compute_collision_response(rot_impact, pre_impact_pos, impact_pos, post_impact_pos, frame_before, frame, frame_after, sfps, pre_impact_ang_vel, lin_vel_impact)
         
             ang_vel_post_impact = pre_impact_ang_vel + delta_ang_vel
         
@@ -178,7 +178,7 @@ class RotationSolver:
         
             # Optimize
             result = minimize(
-                lambda x: objective_function(x, use_post_impact=True),
+                lambda x: objective_function(frame_before, frame, frame_after, x, use_post_impact=True),
                 initial_guess,
                 method='L-BFGS-B',
                 bounds=[(-np.pi, np.pi)] * 3,  # Bound rotation vector components
@@ -201,7 +201,7 @@ class RotationSolver:
                 lin_vel = (post_impact_pos - pre_impact_pos) / dt
             
                 # Compute collision response
-                _, delta_ang_vel = self._compute_collision_response(optimal_rot, impact_pos, pre_impact_ang_vel, lin_vel)
+                _, delta_ang_vel = self._compute_collision_response(optimal_rot, pre_impact_pos, impact_pos, post_impact_pos, frame_before, frame, frame_after, sfps, pre_impact_ang_vel, lin_vel)
             
                 # Adjust rotation slightly based on collision
                 # This is heuristic - adjust the weight based on your needs
@@ -212,7 +212,32 @@ class RotationSolver:
     
         return optimal_rot.as_euler('xyz')
 
-    def _compute_contact_geometry(self, rot: Rotation, pos: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def _estimate_impact_plane(self, pre_pos: np.ndarray, pos: np.ndarray, post_pos: np.ndarray, frame_before: float, frame: float, frame_after: float, sfps: int) -> np.ndarray:
+        """
+        Estimate the impact plane normal based on velocity change
+        """
+        v_b = (pos - pre_pos) / ((frame - frame_before) / sfps)  # Approximate velocity before collision
+        v_a = (post_pos - pos) / ((frame_after - frame) / sfps)# Approximate velocity after collision
+
+        velocity_change = v_a - v_b
+
+        if np.linalg.norm(velocity_change) > 1e-10:
+            # Normalize the velocity change to get impact direction
+            impact_direction = velocity_change / np.linalg.norm(velocity_change)
+            
+            # Find a perpendicular vector for the plane normal
+            # (simplified - in reality, you'd know the collision surface)
+            if abs(impact_direction[0]) < 0.9:
+                plane_normal = np.cross(impact_direction, np.array([1, 0, 0]))
+            else:
+                plane_normal = np.cross(impact_direction, np.array([0, 1, 0]))
+            
+            plane_normal = plane_normal / np.linalg.norm(plane_normal)
+            return plane_normal
+        else:
+            return np.array([0, 0, 1])  # Default vertical plane
+
+    def _compute_contact_geometry(self, rot: Rotation, pre_pos: np.ndarray, pos: np.ndarray, post_pos: np.ndarray, frame_before: float, frame: float, frame_after: float, sfps: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Estimate contact point and normal based on object geometry and position.
         This assumes the object is colliding with a static surface (e.g., floor).
@@ -226,23 +251,13 @@ class RotationSolver:
         # Transform vertices to world coordinates
         R = rot.as_matrix()
         vertices_world = (R @ self.vertices_local.T).T + pos
-        
-        # Find lowest point (assuming collision with horizontal surface)
-        # You can modify this based on your specific collision scenario
-        lowest_idx = np.argmin(vertices_world[:, 1])  # Assuming y is up/down
-        contact_point = vertices_world[lowest_idx]
-        
-        # Estimate contact normal from vertex normal or geometry
-        # For simplicity, use vertical normal (adjust based on your scene)
-        contact_normal = np.array([0.0, 1.0, 0.0])  # Assuming floor collision
-        
-        # Estimate penetration (assuming object is slightly below surface)
-        ground_height = 0.0  # Adjust based on your scene
-        penetration_depth = max(0.0, ground_height - contact_point[1])
-        
-        return contact_point, contact_normal, penetration_depth
+
+        # Estimate impact plane normal or contact_normal
+        contact_normal = self._estimate_impact_plane(pre_pos, pos, post_pos, frame_before, frame, frame_after, sfps)
+
+        return contact_normal
     
-    def _compute_collision_response(self, rot: Rotation, pos: np.ndarray, ang_vel: np.ndarray, lin_vel: np.ndarray = None) -> Tuple[np.ndarray, np.ndarray]:
+    def _compute_collision_response(self, rot: Rotation, pre_pos: np.ndarray, pos: np.ndarray, post_pos: np.ndarray, frame_before: float, frame: float, frame_after: float, sfps: int, ang_vel: np.ndarray, lin_vel: np.ndarray = None) -> Tuple[np.ndarray, np.ndarray]:
         """
         Compute collision response using impulse-based method.
         
@@ -255,15 +270,12 @@ class RotationSolver:
             lin_vel = np.zeros(3)
         
         # Estimate contact geometry
-        contact_point, contact_normal, penetration = self._compute_contact_geometry(rot, pos)
-        
-        if penetration <= 0:
-            # No collision
-            return np.zeros(3), np.zeros(3)
+        contact_normal = self._compute_contact_geometry(rot, pre_pos, pos, post_pos, frame_before, frame, frame_after, sfps)
         
         # Contact point relative to center of mass in world coordinates
         R = rot.as_matrix()
-        r = contact_point - pos
+        # Estimate average radius of object
+        r = np.mean(self.vertices_local, axis=0) / 2
         
         # Pre-collision velocity at contact point
         v_contact = lin_vel + np.cross(ang_vel, r)

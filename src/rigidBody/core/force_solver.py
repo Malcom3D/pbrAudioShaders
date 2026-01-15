@@ -21,13 +21,15 @@ import numpy as np
 import trimesh
 from scipy.spatial import KDTree
 from scipy.integrate import solve_ivp
+from scipy.interpolate import CubicSpline
 from dataclasses import dataclass
 from typing import List, Dict, Tuple, Optional, Any
 import math
 
 from ..core.entity_manager import EntityManager
-from ..lib.force_data import ForceData
+from ..lib.force_data import ForceData, ForceDataSequence
 from ..lib.collision_data import CollisionData, CollisionType
+from ..lib.contact_geometry import ContactGeometry
 
 @dataclass
 class ForceSolver:
@@ -59,6 +61,7 @@ class ForceSolver:
                     if collisions_data[c_idx].obj1_idx  == config_obj.idx or collisions_data[c_idx].obj2_idx == config_obj.idx:
                         active_collisions.append(collisions_data[c_idx])
 
+                forces_frames, other_obj_idx, relative_velocity, normal_velocity, normal_force, tangential_force, normal_force_magnitude, tangential_force_magnitude, stochastic_normal_force, stochastic_tangential_force = ([] for _ in range(10))
                 for idx in range(len(frames)):
                     collisions, other_obj_indices, other_trajectories, other_config_objs = ([] for _ in range(4))
                     frame = frames[idx]            
@@ -74,14 +77,50 @@ class ForceSolver:
                                         if other_config.idx in other_obj_indices:
                                             other_config_objs.append(other_config)
                     if collisions == []: 
-                        force_data = self._calculate_forces(frame=frame, obj_idx=obj_idx, config_obj=config_obj, trajectory=trajectory, sfps=sfps, sample_rate=sample_rate)
+                        forces_data = self._calculate_forces(frame=frame, obj_idx=obj_idx, config_obj=config_obj, trajectory=trajectory, sfps=sfps, sample_rate=sample_rate)
                     else:
-                        force_data = self._calculate_collision_forces(frame=frame, obj_idx=obj_idx, other_obj_indices=other_obj_indices, config_obj=config_obj, other_config_objs=other_config_objs, trajectory=trajectory, other_trajectories=other_trajectories, collisions=collisions, sfps=sfps, sample_rate=sample_rate)
+                        forces_data = self._calculate_collision_forces(frame=frame, obj_idx=obj_idx, other_obj_indices=other_obj_indices, config_obj=config_obj, other_config_objs=other_config_objs, trajectory=trajectory, other_trajectories=other_trajectories, collisions=collisions, sfps=sfps, sample_rate=sample_rate)
 
-                    if not force_data == None:
-                        for index in range(len(force_data)):
-                            force_idx = len(self.entity_manager.get('forces')) + 1
-                            self.entity_manager.register('forces', force_data[index], force_idx)
+                    if not forces_data == None:
+                        for index in range(len(forces_data)):
+                            force_data = forces_data[index]
+                            forces_frames.append(force_data.frame)
+                            if not force_data.obj2_idx == -1:
+                                other_obj_idx.append(force_data.obj2_idx if not force_data.obj2_idx == obj_idx else force_data.obj1_idx)
+                            relative_velocity.append(force_data.relative_velocity)
+                            normal_velocity.append(force_data.normal_velocity)
+                            normal_force.append(force_data.normal_force)
+                            tangential_force.append(force_data.tangential_force)
+                            normal_force_magnitude.append(force_data.normal_force_magnitude)
+                            tangential_force_magnitude.append(force_data.tangential_force_magnitude)
+                            stochastic_normal_force.append(force_data.stochastic_normal_force)
+                            stochastic_tangential_force.append(force_data.stochastic_tangential_force)
+
+                forces_frames = np.unique(np.sort(np.array(forces_frames)))
+                other_obj_idx = np.unique(np.sort(np.array(other_obj_idx)))
+
+                relative_velocity = np.array(relative_velocity)
+                normal_velocity = np.array(normal_velocity)
+                normal_force = np.array(normal_force)
+                tangential_force = np.array(tangential_force)
+                normal_force_magnitude = np.array(normal_force_magnitude)
+                tangential_force_magnitude = np.array(tangential_force_magnitude)
+                stochastic_normal_force = np.array(stochastic_normal_force)
+                stochastic_tangential_force = np.array(stochastic_tangential_force)
+
+                # create interpolator
+                relative_velocity = [CubicSpline(forces_frames, relative_velocity[:, i], extrapolate=1) for i in range(relative_velocity.shape[1])]
+                normal_velocity = [CubicSpline(forces_frames, normal_velocity[:, i], extrapolate=1) for i in range(normal_velocity.shape[1])]
+                normal_force = [CubicSpline(forces_frames, normal_force[:, i], extrapolate=1) for i in range(normal_force.shape[1])]
+                tangential_force = [CubicSpline(forces_frames, tangential_force[:, i], extrapolate=1) for i in range(tangential_force.shape[1])]
+                normal_force_magnitude = CubicSpline(forces_frames, normal_force_magnitude, extrapolate=1)
+                tangential_force_magnitude = CubicSpline(forces_frames, tangential_force_magnitude, extrapolate=1)
+                stochastic_normal_force = [CubicSpline(forces_frames, stochastic_normal_force[:, i], extrapolate=1) for i in range(stochastic_normal_force.shape[1])]
+                stochastic_tangential_force = [CubicSpline(forces_frames, stochastic_tangential_force[:, i], extrapolate=1) for i in range(stochastic_tangential_force.shape[1])]
+
+                force_data_sequence = ForceDataSequence(frames=forces_frames, obj1_idx=obj_idx, other_obj_idx=other_obj_idx, relative_velocity=relative_velocity, normal_velocity=normal_velocity, normal_force=normal_force, tangential_force=tangential_force, normal_force_magnitude=normal_force_magnitude, tangential_force_magnitude=tangential_force_magnitude, stochastic_normal_force=stochastic_normal_force, stochastic_tangential_force=stochastic_tangential_force)
+                force_idx = len(self.entity_manager.get('forces')) + 1
+                self.entity_manager.register('forces', force_data_sequence, force_idx)
 
     def _calculate_forces(self, frame: float, obj_idx: int, config_obj: Any, trajectory: Any, sfps: int, sample_rate: int) -> Optional[List[ForceData]]:
         """
@@ -99,36 +138,11 @@ class ForceSolver:
         # Time step
         dt = 1 / sfps
         
-        # Get positions at current, previous, and next frames
-        pos_current = trajectory.get_position(frame)
-        pos_prev = trajectory.get_position(frames[frame_idx - 1])
-        pos_next = trajectory.get_position(frames[frame_idx + 1])
+        # Get linear velocity
+        linear_velocity = trajectory.get_velocity(frames[frame_idx])
         
-        # Get rotations
-        rot_current = trajectory.get_rotation(frame)
-        rot_prev = trajectory.get_rotation(frames[frame_idx - 1])
-        rot_next = trajectory.get_rotation(frames[frame_idx + 1])
-        
-        # Convert Euler angles to rotation matrices
-        from scipy.spatial.transform import Rotation
-        R_current = Rotation.from_euler('xyz', rot_current).as_matrix()
-        R_prev = Rotation.from_euler('xyz', rot_prev).as_matrix()
-        R_next = Rotation.from_euler('xyz', rot_next).as_matrix()
-        
-        # Compute linear velocity (central difference)
-        linear_velocity = (pos_next - pos_prev) / (2 * dt)
-        
-        # Compute linear acceleration (second order central difference)
-        linear_acceleration = (pos_next - 2 * pos_current + pos_prev) / (dt ** 2)
-        
-        # Compute angular velocity
-        # Using rotation vector approach
-        delta_rot_prev = Rotation.from_matrix(R_prev.T @ R_current).as_rotvec()
-        delta_rot_next = Rotation.from_matrix(R_current.T @ R_next).as_rotvec()
-        angular_velocity = (delta_rot_prev + delta_rot_next) / (2 * dt)
-        
-        # Compute angular acceleration
-        angular_acceleration = (delta_rot_next - delta_rot_prev) / (dt ** 2)
+        # Get linear acceleration
+        linear_acceleration = trajectory.get_acceleration(frames[frame_idx])
         
         # For non-collision frames, normal and tangential forces are zero
         # but we compute relative velocity for potential future collisions
@@ -166,10 +180,6 @@ class ForceSolver:
             frame=frame,
             obj1_idx=obj_idx,
             obj2_idx=-1,  # No second object for non-collision
-            linear_velocity=linear_velocity,
-            angular_velocity=angular_velocity,
-            linear_acceleration=linear_acceleration,
-            angular_acceleration=angular_acceleration,
             relative_velocity=relative_velocity,
             normal_velocity=normal_velocity,
             normal_force=normal_force,
@@ -199,7 +209,6 @@ class ForceSolver:
             other_trajectory = other_trajectories[idx]
             other_config_obj = other_config_objs[idx]
         
-        
             # Get positions and velocities before and after collision
             frames = trajectory.get_x()
             frame_idx = np.searchsorted(frames, frame)
@@ -214,31 +223,33 @@ class ForceSolver:
         
             # Post-collision (just after impact)
             frame_after = frames[frame_idx + 1]
-            pos_after = trajectory.get_position(frame_after)
-            rot_after = trajectory.get_rotation(frame_after)
         
             # Current frame (at impact)
             pos_current = trajectory.get_position(frame)
-            rot_current = trajectory.get_rotation(frame)
+            verts_current = trajectory.get_vertices(frame)
+            faces_current = trajectory.get_faces()
         
             # Other object states
-            other_pos_before = other_trajectory.get_position(frame_before)
-            other_pos_after = other_trajectory.get_position(frame_after)
             other_pos_current = other_trajectory.get_position(frame)
+            other_verts_current = other_trajectory.get_vertices(frame)
+            other_faces_current = other_trajectory.get_faces()
         
             # Compute velocities using central difference
-            linear_velocity_before = (pos_current - pos_before) / dt
-            linear_velocity_after = (pos_after - pos_current) / dt
+            linear_velocity_before = trajectory.get_velocity(frame_before)
+            linear_velocity_after = trajectory.get_velocity(frame_after)
         
-            other_linear_velocity_before = (other_pos_current - other_pos_before) / dt
-            other_linear_velocity_after = (other_pos_after - other_pos_current) / dt
+            other_linear_velocity_before = other_trajectory.get_velocity(frame_before)
+            other_linear_velocity_after = other_trajectory.get_velocity(frame_after)
         
             # Relative velocity at impact
             relative_velocity = linear_velocity_before - other_linear_velocity_before
         
-            # Estimate contact normal (simplified - using direction between centers)
-            # In a real implementation, this would use the collision_area data
-            contact_normal = (other_pos_current - pos_current)
+            # Estimate contact normal using approximated collision_area from ContactGeometry class
+            # Create collision detector
+            detector = ContactGeometry(verts_current, faces_current, pos_current, other_verts_current, other_faces_current, other_pos_current)
+#            collision_info = detector.detect_collision()
+#            contact_normal = collision_info['contact_normal']
+            contact_normal = detector.get_contact_normal()
             contact_normal_mag = np.linalg.norm(contact_normal)
             if contact_normal_mag > 0:
                 contact_normal = contact_normal / contact_normal_mag
@@ -292,21 +303,7 @@ class ForceSolver:
             normal_force = normal_impulse / dt * contact_normal
 
             # Compute accelerations from velocity change
-            linear_acceleration = (linear_velocity_after - linear_velocity_before) / dt
-        
-            # Compute angular quantities (simplified)
-            from scipy.spatial.transform import Rotation
-            R_before = Rotation.from_euler('xyz', rot_before).as_matrix()
-            R_after = Rotation.from_euler('xyz', rot_after).as_matrix()
-            R_current = Rotation.from_euler('xyz', rot_current).as_matrix()
-        
-            # Angular velocity
-            delta_rot_before = Rotation.from_matrix(R_before.T @ R_current).as_rotvec()
-            delta_rot_after = Rotation.from_matrix(R_current.T @ R_after).as_rotvec()
-            angular_velocity = (delta_rot_before + delta_rot_after) / (2 * dt)
-        
-            # Angular acceleration
-            angular_acceleration = (delta_rot_after - delta_rot_before) / (dt ** 2)
+            linear_acceleration = trajectory.get_acceleration(frame)
         
             # Magnitudes
             normal_force_magnitude = np.linalg.norm(normal_force)
@@ -319,10 +316,6 @@ class ForceSolver:
                 frame=frame,
                 obj1_idx=obj_idx,
                 obj2_idx=other_obj_idx,
-                linear_velocity=linear_velocity_before,  # Velocity at impact
-                angular_velocity=angular_velocity,
-                linear_acceleration=linear_acceleration,
-                angular_acceleration=angular_acceleration,
                 relative_velocity=relative_velocity,
                 normal_velocity=normal_velocity,
                 normal_force=normal_force,
