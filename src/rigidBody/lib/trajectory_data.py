@@ -22,7 +22,7 @@ from typing import Union, List, Dict, Tuple, Optional, Any
 from dataclasses import dataclass, field
 from scipy.interpolate import interp1d
 from scipy.interpolate import CubicSpline
-from scipy.spatial.transform import Rotation, Slerp
+from scipy.spatial.transform import Rotation, RotationSpline
 
 from ..lib.functions import _euler_to_rotation_matrix
 
@@ -30,6 +30,7 @@ from ..lib.functions import _euler_to_rotation_matrix
 class tmpTrajectoryData:
     """Temporary container for solved trajectory data."""
     obj_idx: int
+    sfps: float
     frame: float
     position: np.ndarray
     rotation: np.ndarray = None
@@ -46,9 +47,10 @@ class TrajectoryData:
     """Container for trajectory and orientation data."""
     obj_idx: int
     static: bool
+    sfps: float
     sample_rate: int
     positions: Union[np.ndarray, Tuple[CubicSpline, CubicSpline, CubicSpline]] # static or interpolated world coordinates in meters
-    rotations: Union[np.ndarray, CubicSpline] # static or interpolated eurler rotations in rad (x,y,z)
+    rotations: Union[np.ndarray, RotationSpline] # static or interpolated eurler rotations in rad (x,y,z)
     vertices: np.ndarray # static or interpolated vertices for each sample [[vertex0_x,vertex0_y,vertex0_z],[vertex1_x,vertex1_y,vertex1_z],[vertex2_x,vertex2_y,vertex2_z]...]
     normals: np.ndarray # static or interpolated normals for each vertex [[normal0_x,normal0_y,normal0_z],[normal1_x,normal1_y,normal1_z],[normal2_x,normal2_y,normal2_z]...]
     faces: np.ndarray # rigid body mesh faces
@@ -83,10 +85,13 @@ class TrajectoryData:
             return np.array([0,0,0])
         else:
             # Moving object: positions is a tuple of CubicSpline functions
-            x = self.positions[0].derivative()(sample_idx)
-            y = self.positions[1].derivative()(sample_idx)
-            z = self.positions[2].derivative()(sample_idx)
-            return np.array([x, y, z])
+            frames = self.get_x()
+            if not sample_idx == frames[0]:
+                sample_before = min([x for x in frames if x < sample_idx], key=lambda x: abs(x - sample_idx))
+                delta_t = ( sample_idx - sample_before ) / self.sample_rate
+                return (self.get_position(sample_idx) - self.get_position(sample_before)) / delta_t
+            else:
+                return np.array([0,0,0])
 
     def get_acceleration(self, sample_idx: float) -> np.ndarray:
         if self.static:
@@ -94,10 +99,13 @@ class TrajectoryData:
             return np.array([0,0,0])
         else:
             # Moving object: positions is a tuple of CubicSpline functions
-            x = self.positions[0].derivative(2)(sample_idx)
-            y = self.positions[1].derivative(2)(sample_idx)
-            z = self.positions[2].derivative(2)(sample_idx)
-            return np.array([x, y, z])
+            frames = self.get_x()
+            if not sample_idx == frames[0]:
+                sample_before = min([x for x in frames if x < sample_idx], key=lambda x: abs(x - sample_idx))
+                delta_t = ( sample_idx - sample_before ) / self.sample_rate
+                return (self.get_velocity(sample_idx) - self.get_velocity(sample_before)) / delta_t
+            else:
+                return np.array([0,0,0])
 
     def get_rotation(self, sample_idx: float) -> np.ndarray:
         """Get interpolated rotation at specific sample_idx."""
@@ -106,10 +114,11 @@ class TrajectoryData:
             return self.rotations.copy()
         else:
             # Moving object: rotations is a tuple of CubicSpline functions
-            x = self.rotations[0](sample_idx)
-            y = self.rotations[1](sample_idx)
-            z = self.rotations[2](sample_idx)
-            return np.array([x, y, z])
+#            x = self.rotations[0](sample_idx)
+#            y = self.rotations[1](sample_idx)
+#            z = self.rotations[2](sample_idx)
+#            return np.array([x, y, z])
+           return self.rotations(sample_idx)
 
     def get_angular_velocity(self, sample_idx: float) -> np.ndarray:
         """Get interpolated angular velocity at specific sample_idx."""
@@ -118,10 +127,15 @@ class TrajectoryData:
             return np.array([0,0,0])
         else:
             # Moving object: rotations is a tuple of CubicSpline functions
-            x = self.rotations[0].derivative()(sample_idx)
-            y = self.rotations[1].derivative()(sample_idx)
-            z = self.rotations[2].derivative()(sample_idx)
-            return np.array([x, y, z])
+            return self.rotations(sample_idx, 1)
+#            frames = self.get_x()
+#            if not sample_idx == frames[0]:
+#                sample_before = min([x for x in frames if x < sample_idx], key=lambda x: abs(x - sample_idx))
+#                delta_t = ( sample_idx - sample_before ) / self.sample_rate
+#                delta_rot = Rotation.from_euler('XYZ', self.get_rotation(sample_idx)) * Rotation.from_euler('XYZ', self.get_rotation(sample_before)).inv()
+#                return delta_rot.as_rotvec() / 2 * delta_t
+#            else:
+#                return np.array([0,0,0])
 
     def get_angular_acceleration(self, sample_idx: float) -> np.ndarray:
         """Get interpolated angular acceleration at specific sample_idx."""
@@ -130,10 +144,14 @@ class TrajectoryData:
             return np.array([0,0,0])
         else:
             # Moving object: rotations is a tuple of CubicSpline functions
-            x = self.rotations[0].derivative(2)(sample_idx)
-            y = self.rotations[1].derivative(2)(sample_idx)
-            z = self.rotations[2].derivative(2)(sample_idx)
-            return np.array([x, y, z])
+            return self.rotations(sample_idx, 2)
+#            frames = self.get_x()
+#            if not sample_idx == frames[0]:
+#                sample_before = min([x for x in frames if x < sample_idx], key=lambda x: abs(x - sample_idx))
+#                delta_t = ( sample_idx - sample_before ) / self.sample_rate
+#                return (self.get_angular_velocity(sample_idx) - self.get_angular_velocity(sample_before)) / 2 * delta_t
+#            else:
+#                return np.array([0,0,0])
 
     def get_vertices(self, sample_idx: float) -> np.ndarray:
         """Get interpolated position of vertices at specific sample_idx."""
@@ -162,58 +180,3 @@ class TrajectoryData:
     def get_faces(self, sample_idx: float = None) -> np.ndarray:
         """Get faces"""
         return self.faces
-
-    def get_relative_transformation(self, from_sample: float, to_sample: float) -> np.ndarray:
-        """Get relative rigid transformation from one sample_idx to another."""
-        if not self.static:
-            if from_sample < 0:
-               from_sample = 0
-            vertices1 = self.get_vertices(from_sample)
-            vertices2 = self.get_vertices(to_sample)
-            centroid1 = np.mean(vertices1, axis=0)
-            centroid2 = np.mean(vertices2, axis=0)
-            centered1 = vertices1 - centroid1
-            centered2 = vertices2 - centroid2
-            # Compute rotation using Kabsch algorithm
-            H = centered1.T @ centered2
-            U, S, Vt = np.linalg.svd(H)
-            # Ensure right-handed coordinate system
-            d = np.linalg.det(Vt.T @ U.T)
-            if d < 0:
-                Vt[-1, :] *= -1
-            R_vertices = Vt.T @ U.T
-            t_vertices = centroid2 - R_vertices @ centroid1
-            # Create 4x4 transformation matrix from vertices
-            T_from_vertices = np.eye(4, dtype=np.float32) 
-            T_from_vertices[:3, :3] = R_vertices
-            T_from_vertices[:3, 3] = t_vertices
-            return T_from_vertices
-        return np.eye(4, dtype=np.float32) 
-
-#    def get_transformation(self, sample_idx: float) -> np.ndarray:
-#        """Get transformation matrix for a specific sample_idx."""
-#        # Get position and rotation at the sample
-#        position = self.get_position(sample_idx)
-#        euler_angles = self.get_rotation(sample_idx)
-#        
-#        # Convert Euler angles to rotation matrix
-#        rotation_matrix = _euler_to_rotation_matrix(euler_angles)
-#        
-#        # Create 4x4 transformation matrix
-#        transformation = np.eye(4)
-#        transformation[:3, :3] = rotation_matrix
-#        transformation[:3, 3] = position
-#        
-#        return transformation
-#
-#    def get_relative_transformation(self, from_sample: float, to_sample: float) -> np.ndarray:
-#        """Get relative rigid transformation from one sample_idx to another."""
-#        # Get transformation matrices for both samples
-#        T_from = self.get_transformation(from_sample)
-#        T_to = self.get_transformation(to_sample)
-#        
-#        # Calculate relative transformation: T_relative = T_to * inv(T_from)
-#        T_from_inv = np.linalg.inv(T_from)
-#        T_relative = T_to @ T_from_inv
-#        
-#        return T_relative

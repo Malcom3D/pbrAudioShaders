@@ -25,12 +25,6 @@ from dataclasses import dataclass
 class FaustRender:
     faust_render: str = "render_faust_snd"
     duration: float = 3.0
-    """
-        Input parameters
-
-        - dsp_file: file with Faust code
-        - output_file: RAW PCM FLOAT32 audio file
-    """
 
     def __post_init__(self):
         bin_dir = f"{os.path.dirname(os.path.abspath(sys.modules[FaustRender.__module__].__file__))}/../bin"
@@ -38,6 +32,12 @@ class FaustRender:
         self.faust_render = f"{bin_dir}/{self.faust_render}"
 
     def compute(self, dsp_file: str, output_file: str, duration: float = None):
+        """
+        Input parameters
+
+        - dsp_file: file with Faust code
+        - output_file: RAW PCM FLOAT32 audio file
+        """
         self.duration = duration if duration != None else self.duration
         cmd = f"{self.faust_render} {dsp_file} {output_file} {self.duration}"
         print(cmd)

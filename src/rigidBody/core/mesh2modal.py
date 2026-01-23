@@ -29,11 +29,9 @@ class Mesh2Modal:
     entity_manager: EntityManager
     
     def __post_init__(self):
-        print('Mesh2Modal.post_init')
         self.py_m2f = Pym2f(self.entity_manager)
 
     def compute(self, obj_idx: int) -> None:
-        print('Mesh2Modal.compute')
         config = self.entity_manager.get('config')
         
         self.py_m2f.compute(obj_idx)

@@ -76,6 +76,70 @@ class CollisionSolver:
                     collision_area = self._facing_face(config_objs=config_objs, trajectory1=trajectory1, trajectory2=trajectory2, frame=frame, samples=samples, collision_margin=collision_margin)
                     collisions[collision_idx].add_area('collision_area', collision_area)
 
+    def get_facing_face(self, objs_idx: Tuple[int, int], sample_idx: int):
+        config = self.entity_manager.get('config')
+        collision_margin = config.system.collision_margin
+        fps = config.system.fps
+        fps_base = config.system.fps_base
+        subframes = config.system.subframes
+        sample_rate = config.system.sample_rate
+        sfps = ( fps / fps_base ) * subframes # subframes per seconds
+
+        trajectory, collisions, frames  = ([] for _ in range(3))
+        config_objs = [config.objects[objs_idx[0]], config.objects[objs_idx[1]]]
+        if config_objs[0].static and config_objs[1].static:
+            # exit: objs_idx[0] and objs_idx[1] are static
+            return
+        elif not config_objs[0].static or not config_objs[1].static:
+            collisions_data = self.entity_manager.get('collisions')
+            trajectories = self.entity_manager.get('trajectories')
+            for t_idx in trajectories.keys():
+                if 'TrajectoryData' in str(type(trajectories[t_idx])):
+                    if trajectories[t_idx].obj_idx [config_objs[0].idx, config_objs[1].idx]:
+                        trajectory.append(trajectories[t_idx])
+                        frames.append(trajectories[t_idx].get_x())
+            for c_idx in collisions_data.keys():
+                if collisions_data[c_idx].obj1_idx in [config_objs[0].idx, config_objs[1].idx] and collisions_data[c_idx].obj2_idx in [config_objs[0].idx, config_objs[1].idx]:
+                    collisions.append(collisions_data[c_idx])
+
+        frames = np.unique(np.sort(np.concatenate((frames[0], frames[1]))))
+
+        # assign trajectory
+        trajectory1 = trajectory[0] if trajectory[0].obj_idx == config_objs[0].idx else trajectory[1]
+        trajectory2 = trajectory[1] if trajectory[1].obj_idx == config_objs[1].idx else trajectory[0]
+
+        for collision_idx in range(len(collisions)):
+            if collisions[collision_idx].frame == frame_idx:
+                mesh1_vertices = trajectory1.get_vertices(sample_idx)
+                mesh1_faces = trajectory1.get_faces(sample_idx)
+                mesh1_normals = trajectory1.get_normals(sample_idx)
+                face1_normals = []
+                for face_idx in range(len(mesh1_faces)):
+                    face = mesh1_faces[face_idx]
+                    vertex_normals = mesh1_normals[face]
+                    face_normal = self._face_normal_from_vertex_normals(vertex_normals)
+                    face1_normals.append(face_normal)
+                face1_normals = np.array(face1_normals)
+                mesh2_vertices = trajectory2.get_vertices(sample_idx)
+                mesh2_faces = trajectory2.get_faces(sample_idx)
+                mesh2_normals = trajectory2.get_normals(sample_idx)
+                face2_normals = []
+                for face_idx in range(len(mesh2_faces)):
+                    face = mesh2_faces[face_idx]
+                    vertex_normals = mesh2_normals[face]
+                    face_normal = self._face_normal_from_vertex_normals(vertex_normals)
+                    face2_normals.append(face_normal)
+                face2_normals = np.array(face2_normals)
+
+                mesh1_faces_idx, mesh2_faces_idx = self._find_mutual_facing_faces(mesh1_vertices=mesh1_vertices, mesh1_faces=mesh1_faces, mesh1_normals=face1_normals, mesh2_vertices=mesh2_vertices, mesh2_faces=mesh2_faces, mesh2_normals=face2_normals, threshold_angle=90, distance_threshold=collision_margin)
+                if not len(mesh1_faces_idx) == 0 or not len(mesh2_faces_idx) == 0:
+                    print(f"facing faces between {config_objs[0].name} and {config_objs[1].name} at frame {sample_idx}: {len(mesh1_faces_idx)} {len(mesh2_faces_idx)}")
+                    collision_area1 = CollisionArea(obj_idx=trajectory1.obj_idx, faces_idx=mesh1_faces_idx)
+                    collision_area2 = CollisionArea(obj_idx=trajectory2.obj_idx, faces_idx=mesh2_faces_idx)
+                    collision_area.append([sample_idx, [collision_area1, collision_area2]])
+
+        return collision_area
+
     def _facing_face(self, config_objs: Any, trajectory1: Any, trajectory2: Any, frame: int, samples: int, collision_margin: float) -> List[Tuple[int, Tuple[CollisionArea, CollisionArea]]]:
         collision_area = []
         for sample_idx in range(frame, frame + samples):

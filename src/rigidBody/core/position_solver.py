@@ -46,7 +46,7 @@ class PositionSolver:
 
         for index in range(len(position_intersection)):
             frame, point = position_intersection[index]
-            tmp_trajectory_data = tmpTrajectoryData(obj_idx=obj_idx, frame=frame, position=point)
+            tmp_trajectory_data = tmpTrajectoryData(obj_idx=obj_idx, sfps=sfps, frame=frame, position=point)
             trajectory_idx = len(self.entity_manager.get('trajectories')) + 1
             self.entity_manager.register('trajectories', tmp_trajectory_data, trajectory_idx)
 

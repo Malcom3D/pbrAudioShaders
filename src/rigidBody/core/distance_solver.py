@@ -138,7 +138,8 @@ class DistanceSolver:
             else:
                 # Continuous contact - create collision data at the start
                 contact_start_time = region_times[0]
-                contact_range_time = len(region_times)
+                contact_range_time = region_times[-1] - region_times[0]
+#                contact_range_time = len(region_times) * sample_rate / sfps
                 contact_start_distance = region_distances[0]
                 
                 print(f"Continuous contact between {config_objs[0].name} and {config_objs[1].name} "
@@ -377,8 +378,6 @@ class DistanceSolver:
             closest_point1 = mesh1.vertices[mask1][min_dist_idx]
             closest_point2 = nearby_vertices2[indices[min_dist_idx]]
         
-#            return min_distance, (closest_point1, closest_point2)
-    
         closest_points = {
             'method': method,
             'mesh1_point': closest_point1,

@@ -23,6 +23,7 @@ from typing import List, Tuple
 from dataclasses import dataclass
 
 from ..core.entity_manager import EntityManager
+from ..lib.functions import _load_mesh, _mesh_to_obj
 
 @dataclass
 class Pym2f:
@@ -34,6 +35,9 @@ class Pym2f:
         bin_dir = f"{os.path.dirname(os.path.abspath(sys.modules[Pym2f.__module__].__file__))}/../bin"
         os.environ['LD_LIBRARY_PATH'] = bin_dir
         self.mesh2faust = f"{bin_dir}/{self.mesh2faust}"
+        self.cache_path = f"{self.config.system.cache_path}"
+        os.makedirs(f"{self.cache_path}/obj", exist_ok=True)
+        os.makedirs(f"{self.cache_path}/dsp", exist_ok=True)
 
     def compute(self, obj_idx: int, expos: List[int] = None) -> None:
         """
@@ -51,10 +55,21 @@ class Pym2f:
         """
         for config_obj in self.config.objects:
             if config_obj.idx == obj_idx:
-
-                for filename in os.listdir(config_obj.obj_path):
+                fixed_obj_path = f"{config_obj.obj_path}/fixed_obj"
+                if os.path.isdir(fixed_obj_path):
+                    items = os.listdir(fixed_obj_path)
+                    filenames = sorted(items)
+                    filename = filenames[0]
                     if filename.endswith('.obj'):
-                        obj_file = f"{config_obj.obj_path}/{filename}"
+                        obj_file = f"{fixed_obj_path}/{filename}"
+                else: 
+                    vertices, normals, faces = _load_mesh(config_obj, 0)
+                    items = os.listdir(config_obj.obj_path)
+                    filenames = sorted(items)
+                    filename = filenames[0]
+                    if filename.endswith('.npz'):
+                        obj_file = f"{self.cache_path}/obj/{filename.removesuffix('npz') + 'obj'}"
+                    mesh_obj = _mesh_to_obj(vertices, normals, faces, obj_file)
 
                 young_modulus = config_obj.acoustic_shader.young_modulus
                 poisson_ratio = config_obj.acoustic_shader.poisson_ratio
@@ -85,13 +100,13 @@ class Pym2f:
             cmd += f"--expos {verts} "
         if not output_name == None:
             cmd += f"--name {output_name} "
+        if config_obj.connected:
+            cmd += f"--freqcontrol "
 
-        cmd += f"--showfreqs --freqcontrol"
+        cmd += f"--showfreqs"
         exit_code = os.system(cmd)
         if not exit_code == 0:
             raise ValueError(f'Error: {cmd}')
-        cache_path = f"{self.config.system.cache_path}/dsp"
-        os.makedirs(cache_path, exist_ok=True)
         file_name = f"{output_name}.lib"
 
         # remove import(stdfaust.lib)
@@ -101,7 +116,7 @@ class Pym2f:
         with open(file_name, 'w') as file:
             file.write(data)
 
-        dest_path = f"{cache_path}/{output_name}.lib"
+        dest_path = f"{self.cache_path}/dsp/{output_name}.lib"
         shutil.move(file_name, dest_path)
 
     def _compute_rayleigh_damping(self, f1: float, f2: float, xi1: float, xi2: float = None) -> Tuple[float, float]:

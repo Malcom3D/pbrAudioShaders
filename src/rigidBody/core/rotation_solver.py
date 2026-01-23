@@ -147,8 +147,9 @@ class RotationSolver:
         mesh = trimesh.Trimesh(vertices=self.vertices_local, faces=faces)
         volume = mesh.volume
         center_of_mass = mesh.center_mass
+        mesh.density = config_obj.acoustic_shader.density
         self.inertia_tensor = mesh.moment_inertia
-        self.mass = config_obj.acoustic_shader.density * volume
+        self.mass = mesh.mass
 
         # Material properties
         self.coefficient_of_restitution = abs(post_impact_vel)/abs(pre_impact_vel)
