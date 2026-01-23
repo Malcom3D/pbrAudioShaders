@@ -30,7 +30,9 @@ from ..core.normal_solver import NormalSolver
 from ..core.flight_path import FlightPath
 from ..core.distance_solver import DistanceSolver
 from ..core.force_solver import ForceSolver
-from ..core.collision_solver import CollisionSolver
+from ..core.force_synth import ForceSynth
+from ..core.mesh2modal import Mesh2Modal
+#from ..core.collision_solver import CollisionSolver
 
 @dataclass
 class CollisionEngine:
@@ -45,7 +47,9 @@ class CollisionEngine:
         self.fp = FlightPath(self.entity_manager)
         self.ds = DistanceSolver(self.entity_manager)
         self.fs = ForceSolver(self.entity_manager)
-        self.cs = CollisionSolver(self.entity_manager)
+        self.force_synth = ForceSynth(self.entity_manager)
+        self.mm = Mesh2Modal(self.entity_manager)
+#        self.cs = CollisionSolver(self.entity_manager)
 
     def compute(self):
         config = self.entity_manager.get('config')
@@ -66,6 +70,8 @@ class CollisionEngine:
         results_coll = compute(*tasks_coll)
         tasks_force = [self.prebake_force(obj_idx) for obj_idx in obj_dyn]
         results_force = compute(*tasks_force)
+        tasks_modal = [self.prebake_modal(obj_idx) for obj_idx in obj_dyn + obj_statics]
+        results_modal = compute(*tasks_modal)
 
     @delayed
     def prebake_object(self, obj_idx: int):
@@ -85,7 +91,12 @@ class CollisionEngine:
     @delayed
     def prebake_force(self, obj_idx: int):
         self.fs.compute(obj_idx)
+        self.force_synth.compute(obj_idx)
 
     @delayed
-    def render(self, objs_idx: Tuple[int, int]):
-        self.cs.compute(objs_idx)
+    def prebake_modal(self, obj_idx: int):
+        self.mm.compute(obj_idx)
+
+#    @delayed
+#    def render(self, objs_idx: Tuple[int, int]):
+#        self.cs.compute(objs_idx)

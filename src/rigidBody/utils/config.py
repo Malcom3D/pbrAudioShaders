@@ -41,6 +41,7 @@ class ObjectConfig:
     obj_path: str
     pose_path: str
     static: bool
+    connected: bool
     tiny_edge: float = None
     acoustic_shader: Optional[AcousticShader] = None
 

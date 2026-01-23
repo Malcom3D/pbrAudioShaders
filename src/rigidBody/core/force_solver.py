@@ -61,7 +61,7 @@ class ForceSolver:
                     if collisions_data[c_idx].obj1_idx  == config_obj.idx or collisions_data[c_idx].obj2_idx == config_obj.idx:
                         active_collisions.append(collisions_data[c_idx])
 
-                forces_frames, other_obj_idx, relative_velocity, normal_velocity, normal_force, tangential_force, normal_force_magnitude, tangential_force_magnitude, stochastic_normal_force, stochastic_tangential_force = ([] for _ in range(10))
+                forces_frames, other_obj_idx, relative_velocity, normal_velocity, normal_force, tangential_force, tangential_velocity, normal_force_magnitude, tangential_force_magnitude, stochastic_normal_force, stochastic_tangential_force = ([] for _ in range(11))
                 for idx in range(len(frames)):
                     collisions, other_obj_indices, other_trajectories, other_config_objs = ([] for _ in range(4))
                     frame = frames[idx]            
@@ -91,6 +91,7 @@ class ForceSolver:
                             normal_velocity.append(force_data.normal_velocity)
                             normal_force.append(force_data.normal_force)
                             tangential_force.append(force_data.tangential_force)
+                            tangential_velocity.append(force_data.tangential_velocity)
                             normal_force_magnitude.append(force_data.normal_force_magnitude)
                             tangential_force_magnitude.append(force_data.tangential_force_magnitude)
                             stochastic_normal_force.append(force_data.stochastic_normal_force)
@@ -103,6 +104,7 @@ class ForceSolver:
                 normal_velocity = np.array(normal_velocity)
                 normal_force = np.array(normal_force)
                 tangential_force = np.array(tangential_force)
+                tangential_velocity = np.array(tangential_velocity)
                 normal_force_magnitude = np.array(normal_force_magnitude)
                 tangential_force_magnitude = np.array(tangential_force_magnitude)
                 stochastic_normal_force = np.array(stochastic_normal_force)
@@ -113,12 +115,13 @@ class ForceSolver:
                 normal_velocity = [CubicSpline(forces_frames, normal_velocity[:, i], extrapolate=1) for i in range(normal_velocity.shape[1])]
                 normal_force = [CubicSpline(forces_frames, normal_force[:, i], extrapolate=1) for i in range(normal_force.shape[1])]
                 tangential_force = [CubicSpline(forces_frames, tangential_force[:, i], extrapolate=1) for i in range(tangential_force.shape[1])]
+                tangential_velocity = [CubicSpline(forces_frames, tangential_velocity[:, i], extrapolate=1) for i in range(tangential_velocity.shape[1])]
                 normal_force_magnitude = CubicSpline(forces_frames, normal_force_magnitude, extrapolate=1)
                 tangential_force_magnitude = CubicSpline(forces_frames, tangential_force_magnitude, extrapolate=1)
                 stochastic_normal_force = [CubicSpline(forces_frames, stochastic_normal_force[:, i], extrapolate=1) for i in range(stochastic_normal_force.shape[1])]
                 stochastic_tangential_force = [CubicSpline(forces_frames, stochastic_tangential_force[:, i], extrapolate=1) for i in range(stochastic_tangential_force.shape[1])]
 
-                force_data_sequence = ForceDataSequence(frames=forces_frames, obj1_idx=obj_idx, other_obj_idx=other_obj_idx, relative_velocity=relative_velocity, normal_velocity=normal_velocity, normal_force=normal_force, tangential_force=tangential_force, normal_force_magnitude=normal_force_magnitude, tangential_force_magnitude=tangential_force_magnitude, stochastic_normal_force=stochastic_normal_force, stochastic_tangential_force=stochastic_tangential_force)
+                force_data_sequence = ForceDataSequence(frames=forces_frames, obj_idx=obj_idx, other_obj_idx=other_obj_idx, relative_velocity=relative_velocity, normal_velocity=normal_velocity, normal_force=normal_force, tangential_force=tangential_force, tangential_velocity=tangential_velocity, normal_force_magnitude=normal_force_magnitude, tangential_force_magnitude=tangential_force_magnitude, stochastic_normal_force=stochastic_normal_force, stochastic_tangential_force=stochastic_tangential_force)
                 force_idx = len(self.entity_manager.get('forces')) + 1
                 self.entity_manager.register('forces', force_data_sequence, force_idx)
 
@@ -148,6 +151,7 @@ class ForceSolver:
         # but we compute relative velocity for potential future collisions
         relative_velocity = linear_velocity.copy()
         normal_velocity = np.zeros(3)
+        tangential_velocity = np.zeros(3)
         
         # Estimate forces based on acceleration (F = ma)
         # Get object mass from acoustic shader density and volume
@@ -184,6 +188,7 @@ class ForceSolver:
             normal_velocity=normal_velocity,
             normal_force=normal_force,
             tangential_force=tangential_force,
+            tangential_velocity=tangential_velocity,
             normal_force_magnitude=normal_force_magnitude,
             tangential_force_magnitude=tangential_force_magnitude,
             stochastic_normal_force=stochastic_normal_force,
@@ -247,8 +252,6 @@ class ForceSolver:
             # Estimate contact normal using approximated collision_area from ContactGeometry class
             # Create collision detector
             detector = ContactGeometry(verts_current, faces_current, pos_current, other_verts_current, other_faces_current, other_pos_current)
-#            collision_info = detector.detect_collision()
-#            contact_normal = collision_info['contact_normal']
             contact_normal = detector.get_contact_normal()
             contact_normal_mag = np.linalg.norm(contact_normal)
             if contact_normal_mag > 0:
@@ -273,14 +276,18 @@ class ForceSolver:
             vertices = trajectory.get_vertices(frame)
             faces = trajectory.get_faces()
             mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
-            volume = mesh.volume
-            mass = config_obj.acoustic_shader.density * volume
+            mesh.density = config_obj.acoustic_shader.density
+            mass = mesh.mass
+#            volume = mesh.volume
+#            mass = config_obj.acoustic_shader.density * volume
         
             other_vertices = other_trajectory.get_vertices(frame)
             other_faces = other_trajectory.get_faces()
             other_mesh = trimesh.Trimesh(vertices=other_vertices, faces=other_faces)
-            other_volume = other_mesh.volume
-            other_mass = other_config_obj.acoustic_shader.density * other_volume
+            other_mesh.density = other_config_obj.acoustic_shader.density
+            other_mass = other_mesh.mass
+#            other_volume = other_mesh.volume
+#            other_mass = other_config_obj.acoustic_shader.density * other_volume
         
             # Reduced mass for collision
             reduced_mass = (mass * other_mass) / (mass + other_mass)
@@ -320,6 +327,7 @@ class ForceSolver:
                 normal_velocity=normal_velocity,
                 normal_force=normal_force,
                 tangential_force=tangential_force,
+                tangential_velocity=tangential_velocity,
                 normal_force_magnitude=normal_force_magnitude,
                 tangential_force_magnitude=tangential_force_magnitude,
                 stochastic_normal_force=stochastic_normal_force,
@@ -335,9 +343,6 @@ class ForceSolver:
         Based on the stochastic physically-based model from the referenced paper.
         """
         # Extract material properties
-        youngs_modulus = config_obj.acoustic_shader.young_modulus
-        poissons_ratio = config_obj.acoustic_shader.poisson_ratio
-        density = config_obj.acoustic_shader.density
         roughness = config_obj.acoustic_shader.roughness
         
         # Stochastic variation factors
