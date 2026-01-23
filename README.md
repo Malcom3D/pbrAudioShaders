@@ -11,6 +11,7 @@ Physically based rendered audio shaders.
 ### Physically plausible impact sound for rigid body simulation.
 
 References:
+- https://www.cs.ubc.ca/labs/lci/papers/docs2001/van-foleyautomatic.pdf
 - https://github.com/grame-cncm/faust/tree/master-dev/tools/physicalModeling to generate audio physical modal model from 3D mesh
 
 ### Physically plausible acceleration noise for rigid body world simulation.
