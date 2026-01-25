@@ -18,7 +18,7 @@
 
 import json
 import numpy as np
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Union
 from dataclasses import dataclass, field
 
 from ..lib.acoustic_shader import AcousticShader, AcousticProperties, AcousticCoefficients
@@ -41,7 +41,7 @@ class ObjectConfig:
     obj_path: str
     pose_path: str
     static: bool
-    connected: bool
+    connected: Union[bool, np.ndarray] = False # for static coupled systems
     tiny_edge: float = None
     acoustic_shader: Optional[AcousticShader] = None
 

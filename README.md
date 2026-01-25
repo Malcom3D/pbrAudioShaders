@@ -8,18 +8,20 @@ See the [LICENSE](LICENSE) file for the full text.
 
 Physically based rendered audio shaders.
 
+
 ### Physically plausible impact sound for rigid body simulation.
 
 References:
 - https://www.cs.ubc.ca/labs/lci/papers/docs2001/van-foleyautomatic.pdf
 - https://github.com/grame-cncm/faust/tree/master-dev/tools/physicalModeling to generate audio physical modal model from 3D mesh
 
+
 ### Physically plausible acceleration noise for rigid body world simulation.
 
-References [not confirmed]:
+References:
 - https://www.cs.cornell.edu/projects/Sound/proxy/FasterAccelerationNoise_SCA2012.pdf
-- https://www.cs.cornell.edu/projects/Sound/impact/
 - https://graphics.stanford.edu/courses/cs448z-21-spring/stuff/PAN_typoFix.pdf
+
 
 ### Physically plausible fracture sound for rigid body world simulation.
 
@@ -54,6 +56,7 @@ References [not confirmed]:
 - https://www.cs.cornell.edu/projects/HarmonicFluids/harmonicfluids.pdf
  - https://github.com/ashab015/Harmonic-Fluids
 - https://gamma.cs.unc.edu/SoundingLiquids/soundingliquids.pdf
+
 
 ### Physically plausible sounds for electical discarge simulation.
 
