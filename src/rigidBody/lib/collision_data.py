@@ -41,6 +41,8 @@ class CollisionData:
     obj2_idx: int
     frame: float # interpolated frame number
     frame_range: int = 1
+    impulse_range: int = 0
+    avg_distance: float = None
     distances: Union[float, np.ndarray] = None
     collision_area: List[Tuple[int, Tuple[CollisionArea, CollisionArea]]] = None # List[samples, [obj1_triangles_idx, obj2_trangles_idx]]
 
@@ -48,6 +50,14 @@ class CollisionData:
         """Add a data component if not exist"""
         if getattr(self, component) is None:
             setattr(self, component, data)
+
+    def update_impulse_range(self, impulse_range: int):
+        setattr(self, 'impulse_range', impulse_range)
+
+    def update_frame_range(self, frame_range: int):
+        old_frame_range = getattr(self, 'frame_range')
+        new_frame_range = frame_range + old_frame_range if not old_frame_range == 1 else 0
+        setattr(self, 'frame_range', new_frame_range)
 
 @dataclass
 class tmpCollisionData:

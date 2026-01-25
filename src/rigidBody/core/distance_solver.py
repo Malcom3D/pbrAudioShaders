@@ -132,7 +132,7 @@ class DistanceSolver:
                       f"at frame {impact_time*sfps/sample_rate:.2f}, distance: {impact_distance:.6f}")
                 
                 # Create collision data for impact
-                collision_data = CollisionData(type=CollisionType.IMPACT, obj1_idx=config_objs[0].idx, obj2_idx=config_objs[1].idx, frame=impact_time, distances=impact_distance)
+                collision_data = CollisionData(type=CollisionType.IMPACT, obj1_idx=config_objs[0].idx, obj2_idx=config_objs[1].idx, frame=impact_time, avg_distance=avg_distance, distances=impact_distance)
                 collision_events.append(collision_data)
             
             else:
@@ -147,7 +147,7 @@ class DistanceSolver:
                       f"avg distance: {avg_distance:.6f}")
                 
                 # Create collision data for continuous contact (at start)
-                collision_data = CollisionData(type=CollisionType.CONTACT, obj1_idx=config_objs[0].idx, obj2_idx=config_objs[1].idx, frame=contact_start_time, frame_range=contact_range_time, distances=region_distances)
+                collision_data = CollisionData(type=CollisionType.CONTACT, obj1_idx=config_objs[0].idx, obj2_idx=config_objs[1].idx, frame=contact_start_time, frame_range=contact_range_time, avg_distance=avg_distance, distances=region_distances)
                 collision_events.append(collision_data)
         
         return collision_events

@@ -82,6 +82,8 @@ class ForceSynth:
 
         frame_samples = self._create_empty_tracks(total_samples)
         for sample_idx in frames:
+#            # Synthesize non-collision forces (air resistance, etc etc.)
+#            frame_samples = self._synthesize_non_collision(force, config_obj, sample_idx, total_samples, sample_rate)
             # Check if this frame contains a collision
             for collision in collisions:
                 if collision.frame == sample_idx:
@@ -99,10 +101,6 @@ class ForceSynth:
                         frame_samples = self._synthesize_contact(trajectory, force, collision, config_obj, other_config_obj, sample_idx, total_samples, sample_rate)
                         for key in frame_samples.keys():
                             frame_samples[key] += impact_samples[key]
-#                else:
-#                    # Synthesize non-collision forces (air resistance, etc etc.)
-#                    print('synthesize_non_collision', sample_idx)
-#                    frame_samples = self._synthesize_non_collision(force, config_obj, sample_idx, total_samples, sample_rate)
 
                 # Add to tracks
                 impact_track += frame_samples['impact']
@@ -144,6 +142,10 @@ class ForceSynth:
         t_rise = np.linspace(0, 0.5, int(rise_sample))
         t_decay = np.linspace(0.5, 1, int(decay_sample))
         t = np.concatenate((t_rise, t_decay[1:]))
+
+        # update collision.impulse_range and collision.frame_range
+        collision.update_impulse_range(rise_sample)
+        collision.update_frame_range(total_impact_sample)
         
         # Hertzian force profile: F(t) = F_max * (1 - (t/T)^(3/2))
         # Using qualitative correct form 1 − cos(2πt/τ ) for 0 ≤ t ≤ τ,
@@ -160,7 +162,8 @@ class ForceSynth:
         impact_samples = np.zeros(total_samples)
         for force_idx in range(force_envelope.shape[0]):
             idx = int(sample_idx - rise_sample) + force_idx
-            impact_samples[idx] = force_envelope[force_idx]
+            if not impact_samples.shape[0] <= idx:
+                impact_samples[idx] = force_envelope[force_idx]
         
         # Normalize signal
         impact_samples = impact_samples / np.max(np.abs(impact_samples))
@@ -185,13 +188,10 @@ class ForceSynth:
         
         # Contact type classification
         if tangential_velocity_mag < 0.001:  # Static contact
-            print('Static contact', tangential_velocity_mag)
             return self._create_empty_tracks(total_samples)
         elif round(tangential_force_mag / max(normal_force_mag, 1e-10), 2) <= 0.3:  # Rolling
-            print('Rolling', tangential_velocity_mag)
             return self._synthesize_rolling(trajectory=trajectory, force=force, collision=collision, config_obj=config_obj, other_config_obj=other_config_obj, sample_idx=sample_idx, total_samples=total_samples, sample_rate=sample_rate)
         else:  # Scraping/Sliding
-            print('Sliding', tangential_velocity_mag)
             return self._synthesize_sliding(trajectory=trajectory, force=force, collision=collision, config_obj=config_obj, other_config_obj=other_config_obj, sample_idx=sample_idx, total_samples=total_samples, sample_rate=sample_rate)
 
     def _synthesize_non_collision(self, force: Any, config_obj: Any, sample_idx: float, total_samples: int, sample_rate: int):
@@ -263,7 +263,8 @@ class ForceSynth:
             resonant_noise_fft = noise_fft * h
             resonant_noise = np.real(ifft(resonant_noise_fft))
             idx = int(sample_idx + s_idx)
-            resonant_noises[idx] = resonant_noise[s_idx]
+            if not resonant_noises.shape[0] <= idx:
+                resonant_noises[idx] = resonant_noise[s_idx]
 
         # Apply amplitude scaling
         amplitude = np.sqrt(np.abs(contact_velocities) * normal_forces)
@@ -332,7 +333,8 @@ class ForceSynth:
             amplitude = 1 + angular_velocities[i] / np.max(np.abs(angular_velocities))
             rolling_signal *= amplitude
             idx = int(sample_idx + i)
-            rolling_samples[idx] = rolling_signal[i]
+            if not rolling_samples.shape[0] <= idx:
+                rolling_samples[idx] = rolling_signal[i]
 
         # Normalize signal
         rolling_samples = rolling_samples / np.max(np.abs(rolling_samples))

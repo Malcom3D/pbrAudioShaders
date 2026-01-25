@@ -1,4 +1,5 @@
 import os
+import re
 import random
 import string
 import trimesh
@@ -111,3 +112,47 @@ def _euler_to_rotation_matrix(q: np.ndarray, degrees=False):
     ])
 
     return R
+
+
+def _parse_lib(lib_content: str):
+    """
+    Parse mesh2faust .lib file content
+
+    Args:
+        lib_content: String content of the .lib file
+
+    Returns:
+        Dictionary with modal parameters
+    """
+    freq_pattern = r'modeFreqsUnscaled.*?=.*?ba\.take.*?$$(.*?)$$'
+    t60_pattern = r'modesT60s.*?=.*?t60Scale.*?ba\.take.*?$$(.*?)$$'
+    gain_pattern = r'modesGains.*?=.*?waveform\{(.*?)\}'
+    tuple_match = r'\d+\.\d+'
+
+    with open(lib_content, 'r') as file:
+        lines = file.readlines()
+        for line in lines:
+            # Extract frequencies from modeFreqsUnscaled
+            freq_match = re.search(freq_pattern, line, re.DOTALL)
+            if not freq_match == None:
+                freq_tuple_match = re.findall(tuple_match, freq_match.group())
+                frequencies = [float(f) for f in freq_tuple_match]
+            # Extract T60 values
+            t60_match = re.search(t60_pattern, line, re.DOTALL)
+            if not t60_match == None:
+                t60_tuple_match = re.findall(tuple_match, t60_match.group())
+                t60s = [float(f) for f in t60_tuple_match]
+            # Extract gains - this is complex due to the large waveform
+            gain_match = re.search(gain_pattern, line, re.DOTALL)
+            if not gain_match == None:
+                gain_tuple_match = re.findall(gain_pattern, gain_match.group())
+                gain_tuple_match = re.sub("'", "", gain_tuple_match[0])
+                gains = [float(f) for f in gain_tuple_match.split(",")]
+
+    print('frequencies: ', len(frequencies), 'gains: ', len(gains), lib_content)
+    return {
+        'frequencies': np.array(frequencies),
+        't60s': np.array(t60s),
+        'gains': np.hsplit(np.array(gains), len(gains)/len(frequencies)),
+        'nModes': len(frequencies)
+    }

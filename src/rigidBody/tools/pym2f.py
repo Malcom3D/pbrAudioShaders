@@ -100,7 +100,7 @@ class Pym2f:
             cmd += f"--expos {verts} "
         if not output_name == None:
             cmd += f"--name {output_name} "
-        if config_obj.connected:
+        if not config_obj.connected == False:
             cmd += f"--freqcontrol "
 
         cmd += f"--showfreqs"
