@@ -127,7 +127,8 @@ def _parse_lib(lib_content: str):
     freq_pattern = r'modeFreqsUnscaled.*?=.*?ba\.take.*?$$(.*?)$$'
     t60_pattern = r'modesT60s.*?=.*?t60Scale.*?ba\.take.*?$$(.*?)$$'
     gain_pattern = r'modesGains.*?=.*?waveform\{(.*?)\}'
-    tuple_match = r'\d+\.\d+'
+    parentesis_match = r'\(([^()]+)\)'
+    tuple_match = r'\d+\.?\d+'
 
     with open(lib_content, 'r') as file:
         lines = file.readlines()
@@ -140,7 +141,8 @@ def _parse_lib(lib_content: str):
             # Extract T60 values
             t60_match = re.search(t60_pattern, line, re.DOTALL)
             if not t60_match == None:
-                t60_tuple_match = re.findall(tuple_match, t60_match.group())
+                t60_par_match = re.findall(parentesis_match, t60_match.group())
+                t60_tuple_match = re.findall(tuple_match, t60_par_match[1])
                 t60s = [float(f) for f in t60_tuple_match]
             # Extract gains - this is complex due to the large waveform
             gain_match = re.search(gain_pattern, line, re.DOTALL)
@@ -149,7 +151,7 @@ def _parse_lib(lib_content: str):
                 gain_tuple_match = re.sub("'", "", gain_tuple_match[0])
                 gains = [float(f) for f in gain_tuple_match.split(",")]
 
-    print('frequencies: ', len(frequencies), 'gains: ', len(gains), lib_content)
+    print(lib_content, 'frequencies: ', len(frequencies), 'gains: ', len(gains), 't60s: ', len(t60s))
     return {
         'frequencies': np.array(frequencies),
         't60s': np.array(t60s),

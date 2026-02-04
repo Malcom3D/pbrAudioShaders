@@ -12,7 +12,9 @@ Physically based rendered audio shaders.
 ### Physically plausible impact sound for rigid body simulation.
 
 References:
+- https://pure.tue.nl/ws/portalfiles/portal/194387031/IPO_Rapport_1226.pdf
 - https://www.cs.ubc.ca/labs/lci/papers/docs2001/van-foleyautomatic.pdf
+- https://ccrma.stanford.edu/~rmichon/publications/doc/ICMC17-mtf.pdf
 - https://github.com/grame-cncm/faust/tree/master-dev/tools/physicalModeling to generate audio physical modal model from 3D mesh
 
 
@@ -34,6 +36,11 @@ References [not confirmed]:
 References [not confirmed]:
 - https://www.cs.cornell.edu/projects/HarmonicShells/HarmonicShells09_large.pdf
 
+### Physically plausible ground-sound model sound synthesis
+
+References [not confirmed]:
+- https://graphics.stanford.edu/papers/ground/assets/GroundSound_Combined.pdf
+
 
 ### Physically plausible crumpling sounds for 3D mesh.
 
@@ -47,10 +54,18 @@ References [not confirmed]:
 - https://www.cs.cornell.edu/projects/Sound/fire/FireSound2011.pdf for fire and explosion sound
 
 
+### Physically plausible swings object, aeolian and aeroacoustic sound effects.
+
+References [not confirmed]:
+- https://pdfs.semanticscholar.org/345f/1f4b15366ad1be2dd083975d87cf579ea2b1.pdf
+- https://mdpi-res.com/d_attachment/applsci/applsci-07-01177/article_deploy/applsci-07-01177.pdf
+
 ### Physically plausible sounds for fluid simulation.
 
 References [not confirmed]:
 - https://haonancheng.cn/attaches/2019%20GMOD%20Liquid-solid%20interaction%20sound%20synthesis.pdf
+ - https://github.com/kangruix/FluidSound
+- https://graphics.stanford.edu/papers/coupledbubbles/assets/coupledbubbles.pdf
 - https://www.cs.cornell.edu/projects/Sound/bubbles/bubbles.pdf
  - https://www.cs.cornell.edu/projects/Sound/bubbles/bubbleDemo.py
 - https://www.cs.cornell.edu/projects/HarmonicFluids/harmonicfluids.pdf
@@ -105,6 +120,12 @@ References [not confirmed]:
 References [not confirmed]:
 - https://github.com/SkAT-VG/SDT
 
+
+### Physically-based auralization of railway rolling noise synthesis
+
+References [not confirmed]:
+- https://pub.dega-akustik.de/ICA2019/data/articles/000819.pdf
+- https://www.researchgate.net/profile/Reto-Pieren/publication/317341926_Auralization_of_railway_noise_Emission_synthesis_of_rolling_and_impact_noise/links/5939d68f458515320632d429/Auralization-of-railway-noise-Emission-synthesis-of-rolling-and-impact-noise.pdf
 
 ### Large scene memory footprint optimazion with eigenmode compression for modal sound model.
 

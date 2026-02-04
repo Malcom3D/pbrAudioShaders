@@ -16,7 +16,7 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-__version__ = "0.2.15"
+__version__ = "0.2.21"
 __author__ = "Malcom3D"
 __description__ = "Physically plausible impact sound for rigid body simulation"
 
@@ -27,13 +27,21 @@ decimals = 18
 np.set_printoptions(precision=decimals, floatmode='fixed', threshold=np.inf)
 
 from .core.entity_manager import EntityManager
-from .core.flight_path import FlightPath
 from .core.collision_engine import CollisionEngine
+from .lib.samples import SampleCounter
+from .lib.rigidbody_synth import ConnectedBuffer
 
 class rigidBody:
     def __init__(self, config_file: str):
         self.em = EntityManager(config_file)
+        sample_counter = SampleCounter()
+        connected_buffer = ConnectedBuffer()
+        self.em.register('sample_counter', sample_counter)
+        self.em.register('connected_buffer', connected_buffer)
         self.ce = CollisionEngine(self.em)
 
-    def compute(self):
-        self.ce.compute()
+    def prebake(self):
+        self.ce.prebake()
+
+    def bake(self):
+        self.ce.bake()
