@@ -105,6 +105,7 @@ class ForceSynth:
                 scraping_track += frame_samples['scraping']
                 rolling_track += frame_samples['rolling']
                 non_collision_track += frame_samples['non_collision']
+                coupling_strength += frame_samples['coupling_strength']
         
         # Save tracks
         tracks = {
@@ -113,6 +114,7 @@ class ForceSynth:
             'scraping': scraping_track,
             'rolling': rolling_track,
             'non_collision': non_collision_track,
+            'coupling_strength': coupling_strength
         }
         
         self._save_tracks(config_obj, tracks, total_samples, sample_rate)
@@ -160,9 +162,8 @@ class ForceSynth:
         impact_samples, coupling_strength = (np.zeros(total_samples) for _ in range(2))
         for force_idx in range(force_envelope.shape[0]):
             idx = int(sample_idx - rise_sample) + force_idx
-            if not impact_samples.shape[0] <= idx:
-                impact_samples[idx] = force_envelope[force_idx]
-                coupling_strength[idx] = force.get_coupling_strength(idx)
+            impact_samples[idx] = force_envelope[force_idx]
+            coupling_strength[idx] = force.get_coupling_strength(idx)
         
         # Normalize signal
         impact_samples = impact_samples / np.max(np.abs(impact_samples))
@@ -226,17 +227,19 @@ class ForceSynth:
         n_samples = int(collision.frame_range)
     
         # Collect force and velocity data over the contact duration
-        total_noise, coupling_strength = (np.zeros(total_samples) for _ in range(2))
-        contact_velocities, normal_forces, tangential_forces = (np.zeros(n_samples) for _ in range(3))
+        contact_velocities, normal_forces, tangential_forces, coupling_strength = (np.zeros(total_sample) for _ in range(4))
         for s_idx in range(n_samples):
             current_idx = int(sample_idx) + s_idx
             contact_velocities[s_idx] = np.linalg.norm(force.get_relative_velocity(current_idx))
             normal_forces[s_idx] = np.linalg.norm(force.get_stochastic_normal_force(current_idx))
             tangential_forces[s_idx] = np.linalg.norm(force.get_stochastic_tangential_force(current_idx))
-            coupling_strength[current_idx] = force.get_coupling_strength(current_idx)
+            coupling_strength[s_idx] = force.get_coupling_strength(current_idx)
     
         # Frequency array for FFT
         freqs = np.fft.fftfreq(n_samples, 1/sample_rate)
+    
+        # Initialize total noise
+        total_noise = np.zeros(total_samples)
     
         # Pre-calculate fractal frequency response (1/f^B noise)
         mask = freqs != 0
@@ -256,9 +259,7 @@ class ForceSynth:
         
             # Design resonant filters for scraping
             # Higher frequencies for scraping compared to sliding
-            start_idx = int(sample_idx)
-            stop_idx = start_idx + n_samples
-            f0_base = 2000 + 8000 * np.abs(contact_velocities[start_idx:stop_idx])
+            f0_base = 2000 + 8000 * np.abs(contact_velocities)
             f0 = f0_base * (1 + 0.5 * layer)  # Different center frequency for each layer
 
             f0 = np.clip(f0, 100, sample_rate/2 - 1)
@@ -268,7 +269,7 @@ class ForceSynth:
             Q = np.clip(Q, 0.5, 50.0)
         
             # Apply resonant filter to each sample
-            resonant_noise = np.zeros(n_samples)
+            resonant_noise = np.zeros(total_samples)
             for s_idx in range(n_samples):
                 current_idx = int(sample_idx) + s_idx
                 # Design and apply resonant filter
@@ -286,14 +287,14 @@ class ForceSynth:
         
             # Add amplitude modulation from surface irregularities
             irregularity_freq = 50 + 200 * roughness_rms  # Hz
-            t = np.arange(n_samples) / sample_rate
+            t = np.arange(total_samples) / sample_rate
             irregularity_mod = 1 + 0.3 * np.sin(2 * np.pi * irregularity_freq * t)
         
             # Combine amplitude factors
             total_amplitude = amplitude * irregularity_mod
         
             # Add this layer to total noise
-            total_noise[start_idx:stop_idx] += layer_weights[layer] * resonant_noise * total_amplitude
+            total_noise += layer_weights[layer] * resonant_noise * total_amplitude
     
         # Add transient spikes for scraping events (sudden catches/releases)
         if n_samples > 100:
@@ -345,16 +346,18 @@ class ForceSynth:
         B = (roughness_rms - 0.00001) / (0.99999 - 0.00001)
 
         n_samples = int(collision.frame_range)
-        total_noise, coupling_strength = (np.zeros(total_samples) for _ in range(2))
-        contact_velocities, normal_forces = (np.zeros(n_samples) for _ in range(2))
+        contact_velocities, normal_forces, coupling_strength = (np.zeros(n_samples) for _ in range(3))
         for s_idx in range(n_samples):
             current_idx = int(sample_idx) + s_idx
             contact_velocities[s_idx] = np.linalg.norm(force.get_relative_velocity(current_idx))
             normal_forces[s_idx] = np.linalg.norm(force.get_stochastic_normal_force(current_idx))
-            coupling_strength[current_idx] = force.get_coupling_strength(current_idx)
+            coupling_strength[s_idx] = force.get_coupling_strength(current_idx)
     
         # Frequency array for FFT
         freqs = np.fft.fftfreq(n_samples, 1/sample_rate)
+    
+        # Initialize total noise
+        total_noise = np.zeros(total_samples)
     
         # Pre-calculate fractal frequency response
         mask = freqs != 0
@@ -410,14 +413,13 @@ class ForceSynth:
         """Synthesize rolling sound using second-order resonant filter driven by noise."""
         # Extract parameters
         n_samples = int(collision.frame_range)
-        rolling_samples, coupling_strength = (np.zeros(total_samples) for _ in range(2))
-        normal_forces, tangential_velocities, angular_velocities = (np.zeros(n_samples) for _ in range(3))
+        normal_forces, tangential_velocities, angular_velocities, coupling_strength = (np.zeros(n_samples) for _ in range(4))
         for s_idx in range(n_samples):
             current_idx = int(sample_idx) + s_idx
             normal_forces[s_idx] = np.linalg.norm(force.get_stochastic_normal_force(current_idx))
             tangential_velocities[s_idx] = np.linalg.norm(force.get_tangential_velocity(current_idx))
             angular_velocities[s_idx] = np.linalg.norm(trajectory.get_angular_velocity(current_idx))
-            coupling_strength[current_idx] = force.get_coupling_strength(current_idx)
+            coupling_strength[s_idx] = force.get_coupling_strength(current_idx)
 
         # Generate white noise
         noise = np.random.randn(n_samples)
@@ -429,6 +431,7 @@ class ForceSynth:
         p = 50.0 + 100.0 * normal_forces * 0.001  # Hz
         d = 10.0 + 5.0 * tangential_velocities  # Damping
 
+        rolling_samples = np.zeros(total_samples)
         for s_idx in range(n_samples):
             # Create IIR filter that approximates the spectral envelope
             # Using a bandpass filter with specific Q
@@ -445,8 +448,8 @@ class ForceSynth:
             # Amplitude modulation
             amplitude = 1 + angular_velocities[s_idx] / np.max(np.abs(angular_velocities))
             rolling_signal *= amplitude
-            current_idx = int(sample_idx) + s_idx
-            rolling_samples[current_idx] = rolling_signal[s_idx]
+            idx = int(sample_idx) + s_idx
+            rolling_samples[idx] = rolling_signal[s_idx]
 
         # Normalize signal
         rolling_samples = rolling_samples / np.max(np.abs(rolling_samples))

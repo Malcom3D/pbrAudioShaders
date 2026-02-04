@@ -19,6 +19,7 @@
 import os
 import numpy as np
 import trimesh
+from numba import jit, prange
 from scipy.spatial import cKDTree
 from scipy.integrate import solve_ivp
 from typing import Any, List, Tuple, Dict, Optional
@@ -26,57 +27,13 @@ from dataclasses import dataclass, field
 from itertools import groupby
 
 from ..core.entity_manager import EntityManager
-from ..lib.collision_data import CollisionData, CollisionArea
+from ..lib.collision_data import CollisionData
 
 @dataclass
 class CollisionSolver:
     entity_manager: EntityManager
 
-    def compute(self, objs_idx: Tuple[int, int]) -> None:
-        """ 
-        Calculate normal, tangential, and total impact forces and velocities
-        based on the stochastic physically-based model.
-        """
-        config = self.entity_manager.get('config')
-        collision_margin = config.system.collision_margin
-        fps = config.system.fps
-        fps_base = config.system.fps_base
-        subframes = config.system.subframes
-        sample_rate = config.system.sample_rate
-        sfps = ( fps / fps_base ) * subframes # subframes per seconds
-
-        trajectory, collisions, frames  = ([] for _ in range(3))
-        config_objs = [config.objects[objs_idx[0]], config.objects[objs_idx[1]]]
-        if config_objs[0].static and config_objs[1].static:
-            # exit: objs_idx[0] and objs_idx[1] are static
-            return
-        elif not config_objs[0].static or not config_objs[1].static:
-            collisions_data = self.entity_manager.get('collisions')
-            trajectories = self.entity_manager.get('trajectories')
-            for t_idx in trajectories.keys():
-                if 'TrajectoryData' in str(type(trajectories[t_idx])):
-                    if trajectories[t_idx].obj_idx in [config_objs[0].idx, config_objs[1].idx]:
-                        trajectory.append(trajectories[t_idx])
-                        frames.append(trajectories[t_idx].get_x()) 
-            for c_idx in collisions_data.keys():
-                if collisions_data[c_idx].obj1_idx in [config_objs[0].idx, config_objs[1].idx] and collisions_data[c_idx].obj2_idx in [config_objs[0].idx, config_objs[1].idx]:
-                    collisions.append(collisions_data[c_idx])
-
-        frames = np.unique(np.sort(np.concatenate((frames[0], frames[1]))))
-
-        # assign trajectory
-        trajectory1 = trajectory[0] if trajectory[0].obj_idx == config_objs[0].idx else trajectory[1]
-        trajectory2 = trajectory[1] if trajectory[1].obj_idx == config_objs[1].idx else trajectory[0]
-
-        for idx in range(len(frames) -1):
-            for collision_idx in range(len(collisions)):
-                if collisions[collision_idx].frame == frames[idx]:
-                    frame = int(frames[idx] - ((frames[idx] - frames[idx -1]) / 2))
-                    samples = int(frames[idx] + ((frames[idx + 1] - frames[idx]) / 2)) - frame
-                    collision_area = self._facing_face(config_objs=config_objs, trajectory1=trajectory1, trajectory2=trajectory2, frame=frame, samples=samples, collision_margin=collision_margin)
-                    collisions[collision_idx].add_area('collision_area', collision_area)
-
-    def get_facing_face(self, objs_idx: Tuple[int, int], sample_idx: int):
+    def compute(self, collision: CollisionData) -> None:
         config = self.entity_manager.get('config')
         fps = config.system.fps
         fps_base = config.system.fps_base
@@ -84,94 +41,87 @@ class CollisionSolver:
         sample_rate = config.system.sample_rate
         sfps = ( fps / fps_base ) * subframes # subframes per seconds
 
-        collision_area, trajectory, collisions, frames  = ([] for _ in range(4))
-        config_objs = [config.objects[objs_idx[0]], config.objects[objs_idx[1]]]
-        if config_objs[0].static and config_objs[1].static:
-            # exit: objs_idx[0] and objs_idx[1] are static
-            return
-        elif not config_objs[0].static or not config_objs[1].static:
-            collisions_data = self.entity_manager.get('collisions')
-            trajectories = self.entity_manager.get('trajectories')
+        trajectories = self.entity_manager.get('trajectories')
+
+        obj1_idx = collision.obj1_idx
+        obj2_idx = collision.obj2_idx
+        for conf_obj in config.objects:
+            if conf_obj.idx == obj1_idx:
+                config_obj1 = conf_obj
+            if conf_obj.idx == obj2_idx:
+                config_obj2 = conf_obj
+        if not config_obj1.static or not config_obj2.static:
             for t_idx in trajectories.keys():
-                if 'TrajectoryData' in str(type(trajectories[t_idx])):
-                    if trajectories[t_idx].obj_idx in [config_objs[0].idx, config_objs[1].idx]:
-                        trajectory.append(trajectories[t_idx])
-                        frames.append(trajectories[t_idx].get_x())
-            for c_idx in collisions_data.keys():
-                if collisions_data[c_idx].obj1_idx in [config_objs[0].idx, config_objs[1].idx] and collisions_data[c_idx].obj2_idx in [config_objs[0].idx, config_objs[1].idx]:
-                    collisions.append(collisions_data[c_idx])
+                if trajectories[t_idx].obj_idx == obj1_idx:
+                    self.trajectory1 = trajectories[t_idx]
+                    mesh1_faces = self.trajectory1.get_faces()
+                if trajectories[t_idx].obj_idx == obj2_idx:
+                    self.trajectory2 = trajectories[t_idx]
+                    mesh2_faces = self.trajectory2.get_faces()
 
-        frames = np.unique(np.sort(np.concatenate((frames[0], frames[1]))))
+        total_samples = int(self.trajectory1.get_x()[-1])
 
-        # assign trajectory
-        trajectory1 = trajectory[0] if trajectory[0].obj_idx == config_objs[0].idx else trajectory[1]
-        trajectory2 = trajectory[1] if trajectory[1].obj_idx == config_objs[1].idx else trajectory[0]
+        collision_margin = collision.avg_distance * (1 + collision.threshold/2)
+        start_samples = int(collision.frame - collision.impulse_range / 2)
+        stop_samples = int(collision.frame + collision.impulse_range * 1.2)
 
-        for collision_idx in range(len(collisions)):
-            collision = collisions[collision_idx]
-            collision_margin = collision.avg_distance
-            mesh1_vertices = trajectory1.get_vertices(sample_idx)
-            mesh1_faces = trajectory1.get_faces(sample_idx)
-            mesh1_normals = trajectory1.get_normals(sample_idx)
-            face1_normals = []
-            for face_idx in range(len(mesh1_faces)):
-                face = mesh1_faces[face_idx]
-                vertex_normals = mesh1_normals[face]
-                face_normal = self._face_normal_from_vertex_normals(vertex_normals)
-                face1_normals.append(face_normal)
-            face1_normals = np.array(face1_normals)
-            mesh2_vertices = trajectory2.get_vertices(sample_idx)
-            mesh2_faces = trajectory2.get_faces(sample_idx)
-            mesh2_normals = trajectory2.get_normals(sample_idx)
-            face2_normals = []
-            for face_idx in range(len(mesh2_faces)):
-                face = mesh2_faces[face_idx]
-                vertex_normals = mesh2_normals[face]
-                face_normal = self._face_normal_from_vertex_normals(vertex_normals)
-                face2_normals.append(face_normal)
-            face2_normals = np.array(face2_normals)
+        if collision.type.value == 'impact':
+            stop_samples = int(collision.frame + collision.frame_range * 1.2)
+        if not stop_samples <= total_samples:
+            stop_samples = total_samples
 
-            mesh1_faces_idx, mesh2_faces_idx = self._find_mutual_facing_faces(mesh1_vertices=mesh1_vertices, mesh1_faces=mesh1_faces, mesh1_normals=face1_normals, mesh2_vertices=mesh2_vertices, mesh2_faces=mesh2_faces, mesh2_normals=face2_normals, threshold_angle=90, distance_threshold=collision_margin)
-#            if not len(mesh1_faces_idx) == 0 or not len(mesh2_faces_idx) == 0:
-            print(f"facing faces between {config_objs[0].name} and {config_objs[1].name} at frame {sample_idx}: {len(mesh1_faces_idx)} {len(mesh2_faces_idx)}")
-            collision_area1 = CollisionArea(obj_idx=trajectory1.obj_idx, faces_idx=mesh1_faces_idx)
-            collision_area2 = CollisionArea(obj_idx=trajectory2.obj_idx, faces_idx=mesh2_faces_idx)
-            collision_area.append([sample_idx, [collision_area1, collision_area2]])
+        samples_idx, collision_v_idx1, collision_v_idx2, num_v_idx1, num_v_idx2, vertex1_id_list, vertex2_id_list = ([] for _ in range(7))
+        for sample_idx in range(start_samples, stop_samples):
+            samples_idx.append(sample_idx)
+            mesh1_faces_idx, mesh2_faces_idx = self._get_facing_face(sample_idx, collision_margin)
+            print(f"facing faces between {config_obj1.name} and {config_obj2.name} at frame {sample_idx}: {mesh1_faces_idx.shape[0]} {mesh2_faces_idx.shape[0]}")
+            cvidx1 = np.unique(mesh1_faces[mesh1_faces_idx])
+            cvidx2 = np.unique(mesh2_faces[mesh2_faces_idx])
+            vertex1_id_list += cvidx1.tolist()
+            vertex2_id_list += cvidx2.tolist()
+            collision_v_idx1.append(cvidx1)
+            collision_v_idx2.append(cvidx2)
+            num_v_idx1.append(cvidx1.shape[0])
+            num_v_idx2.append(cvidx2.shape[0])
 
-        return collision_area
+        samples_idx = np.array(samples_idx, dtype=np.int32)
+        vertex1_id = np.array(vertex1_id_list)
+        vertex2_id = np.array(vertex2_id_list)
+        num_v_idx1 = np.array(num_v_idx1, dtype=np.int32)
+        num_v_idx2 = np.array(num_v_idx2, dtype=np.int32)
 
-    def _facing_face(self, config_objs: Any, trajectory1: Any, trajectory2: Any, frame: int, samples: int, collision_margin: float) -> List[Tuple[int, Tuple[CollisionArea, CollisionArea]]]:
+        max_vertex1_num = max(num_v_idx1)
+        collision_v_arr1 = []
+        for i in range(len(collision_v_idx1)):
+            delta_vertex = int(max_vertex1_num - collision_v_idx1[i].shape[0])
+            collision_v_arr1.append(np.append(collision_v_idx1[i], np.zeros(delta_vertex, dtype=np.int32)))
+        collision_v_idx1 = np.array(collision_v_arr1, dtype=np.int32)
+
+        max_vertex2_num = max(num_v_idx2)
+        collision_v_arr2 = []
+        for i in range(len(collision_v_idx2)):
+            delta_vertex = int(max_vertex2_num - collision_v_idx2[i].shape[0])
+            collision_v_arr2.append(np.append(collision_v_idx2[i], np.zeros(delta_vertex, dtype=np.int32)))
+        collision_v_idx2 = np.array(collision_v_arr2, dtype=np.int32)
+
+        collision_area = [samples_idx, collision_v_idx1, num_v_idx1, vertex1_id, collision_v_idx2, num_v_idx2, vertex2_id]
+        collision.add_area('collision_area', collision_area)
+
+    def _get_facing_face(self, sample_idx: int, collision_margin: float) -> List[Tuple[float, Tuple[np.ndarray, np.ndarray]]]:
         collision_area = []
-        for sample_idx in range(frame, frame + samples):
-            mesh1_vertices = trajectory1.get_vertices(sample_idx)
-            mesh1_faces = trajectory1.get_faces(sample_idx)
-            mesh1_normals = trajectory1.get_normals(sample_idx)
-            face1_normals = []
-            for face_idx in range(len(mesh1_faces)):
-                face = mesh1_faces[face_idx]
-                vertex_normals = mesh1_normals[face] 
-                face_normal = self._face_normal_from_vertex_normals(vertex_normals)
-                face1_normals.append(face_normal)
-            face1_normals = np.array(face1_normals)
-            mesh2_vertices = trajectory2.get_vertices(sample_idx)
-            mesh2_faces = trajectory2.get_faces(sample_idx)
-            mesh2_normals = trajectory2.get_normals(sample_idx)
-            face2_normals = []
-            for face_idx in range(len(mesh2_faces)):
-                face = mesh2_faces[face_idx] 
-                vertex_normals = mesh2_normals[face]
-                face_normal = self._face_normal_from_vertex_normals(vertex_normals)
-                face2_normals.append(face_normal)
-            face2_normals = np.array(face2_normals)
+        mesh1_vertices = self.trajectory1.get_vertices(sample_idx)
+        mesh1_faces = self.trajectory1.get_faces(sample_idx)
+        mesh1_normals = self.trajectory1.get_normals(sample_idx)
+        face1_normals = self._calculate_face_normals(mesh1_faces, mesh1_normals)
 
-            mesh1_faces_idx, mesh2_faces_idx = self._find_mutual_facing_faces(mesh1_vertices=mesh1_vertices, mesh1_faces=mesh1_faces, mesh1_normals=face1_normals, mesh2_vertices=mesh2_vertices, mesh2_faces=mesh2_faces, mesh2_normals=face2_normals, threshold_angle=90, distance_threshold=collision_margin)
-            if not len(mesh1_faces_idx) == 0 or not len(mesh2_faces_idx) == 0:
-                print(f"facing faces between {config_objs[0].name} and {config_objs[1].name} at frame {sample_idx}: {len(mesh1_faces_idx)} {len(mesh2_faces_idx)}")
-                collision_area1 = CollisionArea(obj_idx=trajectory1.obj_idx, faces_idx=mesh1_faces_idx)
-                collision_area2 = CollisionArea(obj_idx=trajectory2.obj_idx, faces_idx=mesh2_faces_idx)
-                collision_area.append([sample_idx, [collision_area1, collision_area2]])
+        mesh2_vertices = self.trajectory2.get_vertices(sample_idx)
+        mesh2_faces = self.trajectory2.get_faces(sample_idx)
+        mesh2_normals = self.trajectory2.get_normals(sample_idx)
+        face2_normals = self._calculate_face_normals(mesh2_faces, mesh2_normals)
 
-        return collision_area
+        mesh1_faces_idx, mesh2_faces_idx = self._find_mutual_facing_faces(mesh1_vertices=mesh1_vertices, mesh1_faces=mesh1_faces, mesh1_normals=face1_normals, mesh2_vertices=mesh2_vertices, mesh2_faces=mesh2_faces, mesh2_normals=face2_normals, threshold_angle=90, distance_threshold=collision_margin)
+
+        return mesh1_faces_idx, mesh2_faces_idx
 
     def _find_facing_faces(self, mesh1_vertices, mesh1_faces, mesh1_normals, mesh2_vertices, mesh2_faces, mesh2_normals, threshold_angle=90.0, distance_threshold=None) -> np.ndarray:
         """
@@ -185,18 +135,18 @@ class CollisionSolver:
             Face indices for mesh1 (triangles)
         mesh1_normals : numpy array of shape (m1, 3)
             Face normals for mesh1 (normalized)
-    
+   
         mesh2_vertices : numpy array of shape (n2, 3)
             Vertex positions of mesh2 in world coordinates
         mesh2_faces : numpy array of shape (m2, 3)
             Face indices for mesh2 (triangles)
         mesh2_normals : numpy array of shape (m2, 3)
             Face normals for mesh2 (normalized)
-    
+
         threshold_angle : float, optional
             Maximum angle (in degrees) between face normal and direction vector
             to consider as "facing" (default: 90°)
-    
+
         distance_threshold : float, optional
             Maximum distance between face centers to consider (default: None = all distances)
     
@@ -205,7 +155,7 @@ class CollisionSolver:
         facing_indices : numpy array
             Indices of faces in mesh1 that are facing mesh2
         """
-    
+
         # Convert threshold angle to radians and compute cosine threshold
         cos_threshold = np.cos(np.radians(threshold_angle))
     
@@ -217,8 +167,8 @@ class CollisionSolver:
         tree = cKDTree(mesh2_centers)
     
         # For each face in mesh1, find the nearest face center in mesh2
-        distances, nearest_indices = tree.query(mesh1_centers)
-    
+        distances, nearest_indices = tree.query(mesh1_centers, workers=-1)
+
         # Filter by distance threshold if specified
         if distance_threshold is not None:
             valid_mask = distances <= distance_threshold
@@ -265,7 +215,7 @@ class CollisionSolver:
         mesh2_facing_indices : numpy array
             Corresponding indices of faces in mesh2 that are facing mesh1
         """
-    
+
         # Find mesh1 faces facing mesh2
         mesh1_facing = self._find_facing_faces(mesh1_vertices, mesh1_faces, mesh1_normals, mesh2_vertices, mesh2_faces, mesh2_normals, threshold_angle, distance_threshold)
     
@@ -282,7 +232,7 @@ class CollisionSolver:
     
         # For each facing face in mesh1, check if the nearest mesh2 face is also facing mesh1
         if len(mesh1_facing) > 0:
-            distances, nearest_mesh2 = tree2.query(mesh1_centers[mesh1_facing])
+            distances, nearest_mesh2 = tree2.query(mesh1_centers[mesh1_facing], workers=-1)
             # Check if these nearest mesh2 faces are in mesh2_facing
             mutual_mask = np.isin(nearest_mesh2, mesh2_facing)
             mutual_mesh1 = mesh1_facing[mutual_mask]
@@ -293,27 +243,27 @@ class CollisionSolver:
     
         return mutual_mesh1, mutual_mesh2
 
-    def _face_normal_from_vertex_normals(self, vertex_normals):
-        """
-        Calculate face normal by averaging vertex normals.
-    
-        Args:
-            vertex_normals: List of 3 vertex normals as numpy arrays or lists
-    
-        Returns:
-            face_normal: Normalized average of vertex normals
-        """
-        # Convert to numpy arrays
-        n0 = np.array(vertex_normals[0])
-        n1 = np.array(vertex_normals[1])
-        n2 = np.array(vertex_normals[2])
-    
-        # Average the vertex normals
-        face_normal = (n0 + n1 + n2) / 3.0
-    
-        # Normalize
-        norm = np.linalg.norm(face_normal)
-        if norm > 0:
-            face_normal = face_normal / norm
-    
-        return face_normal
+    @staticmethod
+    @jit(nopython=True, parallel=True)
+    def _calculate_face_normals(faces: np.ndarray, vertex_normals: np.ndarray) -> np.ndarray:
+        """Calculate face normals from from vertex normals in batch (Numba optimized)."""
+        n_faces = len(faces)
+        face_normals = np.empty((n_faces, 3), dtype=np.float64)
+        
+        for i in prange(n_faces):
+            face = faces[i]
+            # Get vertex normals for this face
+            n0 = vertex_normals[face[0]]
+            n1 = vertex_normals[face[1]]
+            n2 = vertex_normals[face[2]]
+            
+            # Average and normalize
+            avg = (n0 + n1 + n2) / 3.0
+            norm = np.sqrt(avg[0]*avg[0] + avg[1]*avg[1] + avg[2]*avg[2])
+            
+            if norm > 0:
+                face_normals[i] = avg / norm
+            else:
+                face_normals[i] = avg
+        
+        return face_normals

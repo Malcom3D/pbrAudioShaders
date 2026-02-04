@@ -20,16 +20,16 @@ import os
 import numpy as np
 import trimesh
 from scipy.spatial import KDTree
-from scipy.integrate import solve_ivp
 from scipy.interpolate import CubicSpline
 from dataclasses import dataclass
 from typing import List, Dict, Tuple, Optional, Any
 import math
 
 from ..core.entity_manager import EntityManager
-from ..lib.force_data import ForceData, ForceDataSequence
-from ..lib.collision_data import CollisionData, CollisionType
+from ..lib.force_data import ContactType, ForceData, ForceDataSequence
 from ..lib.contact_geometry import ContactGeometry
+from ..lib.hertzian_contact import HertzianContact
+from ..lib.cubicspline_with_nan import CubicSplineWithNaN
 
 @dataclass
 class ForceSolver:
@@ -61,7 +61,8 @@ class ForceSolver:
                     if collisions_data[c_idx].obj1_idx  == config_obj.idx or collisions_data[c_idx].obj2_idx == config_obj.idx:
                         active_collisions.append(collisions_data[c_idx])
 
-                forces_frames, other_obj_idx, relative_velocity, normal_velocity, normal_force, tangential_force, tangential_velocity, normal_force_magnitude, tangential_force_magnitude, stochastic_normal_force, stochastic_tangential_force = ([] for _ in range(11))
+                forces_frames, other_obj_idx, restitution, relative_velocity, normal_velocity, normal_force, tangential_force, tangential_velocity, normal_force_magnitude, tangential_force_magnitude, stochastic_normal_force, stochastic_tangential_force, contact_type, contact_point, contact_radius, rolling_radius, impact_duration, contact_pressure, penetration_depth, coupling_strength = ([] for _ in range(20))
+
                 for idx in range(len(frames)):
                     collisions, other_obj_indices, other_trajectories, other_config_objs = ([] for _ in range(4))
                     frame = frames[idx]            
@@ -87,6 +88,7 @@ class ForceSolver:
                             forces_frames.append(force_data.frame)
                             if not force_data.obj2_idx == -1:
                                 other_obj_idx.append(force_data.obj2_idx if not force_data.obj2_idx == obj_idx else force_data.obj1_idx)
+                            restitution.append(force_data.restitution)
                             relative_velocity.append(force_data.relative_velocity)
                             normal_velocity.append(force_data.normal_velocity)
                             normal_force.append(force_data.normal_force)
@@ -96,10 +98,27 @@ class ForceSolver:
                             tangential_force_magnitude.append(force_data.tangential_force_magnitude)
                             stochastic_normal_force.append(force_data.stochastic_normal_force)
                             stochastic_tangential_force.append(force_data.stochastic_tangential_force)
+                            print('force_data.contact_type: ', force_data.contact_type)
+                            contact_type.append(force_data.contact_type if not force_data.contact_type == None else 0)
+                            print('force_data.contact_point: ', force_data.contact_point)
+                            contact_point.append([force_data.contact_point if isinstance(force_data.contact_point, np.ndarray) else np.array([float('nan'),float('nan'),float('nan')])])
+                            print('force_data.contact_radius: ', force_data.contact_radius)
+                            contact_radius.append(force_data.contact_radius if not force_data.contact_radius == None else float('nan'))
+                            print('force_data.rolling_radius: ', force_data.rolling_radius)
+                            rolling_radius.append(force_data.rolling_radius if not force_data.rolling_radius == None else float('nan'))
+                            print('force_data.impact_duration: ', force_data.impact_duration)
+                            impact_duration.append(force_data.impact_duration if not force_data.impact_duration == None else float('nan'))
+                            print('force_data.contact_pressure: ', force_data.contact_pressure)
+                            contact_pressure.append(force_data.contact_pressure if not force_data.contact_pressure == None else float('nan'))
+                            print('force_data.penetration_depth: ', force_data.penetration_depth)
+                            penetration_depth.append(force_data.penetration_depth if not force_data.penetration_depth == None else float('nan'))
+                            print('force_data.coupling_strength: ', force_data.coupling_strength)
+                            coupling_strength.append(force_data.coupling_strength if not force_data.coupling_strength == None else 0.0)
 
                 forces_frames = np.unique(np.sort(np.array(forces_frames)))
                 other_obj_idx = np.unique(np.sort(np.array(other_obj_idx)))
 
+                restitution = np.array(restitution)
                 relative_velocity = np.array(relative_velocity)
                 normal_velocity = np.array(normal_velocity)
                 normal_force = np.array(normal_force)
@@ -109,8 +128,17 @@ class ForceSolver:
                 tangential_force_magnitude = np.array(tangential_force_magnitude)
                 stochastic_normal_force = np.array(stochastic_normal_force)
                 stochastic_tangential_force = np.array(stochastic_tangential_force)
+                contact_type = np.array(contact_type)
+                contact_point = np.array(contact_point)
+                contact_radius = np.array(contact_radius)
+                rolling_radius = np.array(rolling_radius)
+                impact_duration = np.array(impact_duration)
+                contact_pressure = np.array(contact_pressure)
+                penetration_depth = np.array(penetration_depth)
+                coupling_strength = np.array(coupling_strength)
 
                 # create interpolator
+                restitution = CubicSpline(forces_frames, restitution, extrapolate=1)
                 relative_velocity = [CubicSpline(forces_frames, relative_velocity[:, i], extrapolate=1) for i in range(relative_velocity.shape[1])]
                 normal_velocity = [CubicSpline(forces_frames, normal_velocity[:, i], extrapolate=1) for i in range(normal_velocity.shape[1])]
                 normal_force = [CubicSpline(forces_frames, normal_force[:, i], extrapolate=1) for i in range(normal_force.shape[1])]
@@ -120,8 +148,15 @@ class ForceSolver:
                 tangential_force_magnitude = CubicSpline(forces_frames, tangential_force_magnitude, extrapolate=1)
                 stochastic_normal_force = [CubicSpline(forces_frames, stochastic_normal_force[:, i], extrapolate=1) for i in range(stochastic_normal_force.shape[1])]
                 stochastic_tangential_force = [CubicSpline(forces_frames, stochastic_tangential_force[:, i], extrapolate=1) for i in range(stochastic_tangential_force.shape[1])]
+                contact_point = [CubicSplineWithNaN(forces_frames, contact_point[:, i], extrapolate=1) for i in range(contact_point.shape[1])]
+                contact_radius = CubicSplineWithNaN(forces_frames, contact_radius, extrapolate=1)
+                rolling_radius = CubicSplineWithNaN(forces_frames, rolling_radius, extrapolate=1)
+                contact_pressure = CubicSplineWithNaN(forces_frames, contact_pressure, extrapolate=1)
+                penetration_depth = CubicSplineWithNaN(forces_frames, penetration_depth, extrapolate=1)
+                coupling_strength = CubicSpline(forces_frames, coupling_strength, extrapolate=1)
 
-                force_data_sequence = ForceDataSequence(frames=forces_frames, obj_idx=obj_idx, other_obj_idx=other_obj_idx, relative_velocity=relative_velocity, normal_velocity=normal_velocity, normal_force=normal_force, tangential_force=tangential_force, tangential_velocity=tangential_velocity, normal_force_magnitude=normal_force_magnitude, tangential_force_magnitude=tangential_force_magnitude, stochastic_normal_force=stochastic_normal_force, stochastic_tangential_force=stochastic_tangential_force)
+                force_data_sequence = ForceDataSequence(frames=forces_frames, obj_idx=obj_idx, other_obj_idx=other_obj_idx, restitution=restitution, relative_velocity=relative_velocity, normal_velocity=normal_velocity, normal_force=normal_force, tangential_force=tangential_force, tangential_velocity=tangential_velocity, normal_force_magnitude=normal_force_magnitude, tangential_force_magnitude=tangential_force_magnitude, stochastic_normal_force=stochastic_normal_force, stochastic_tangential_force=stochastic_tangential_force, contact_type=contact_type, contact_point=contact_point, contact_radius=contact_radius, rolling_radius=rolling_radius, impact_duration=impact_duration, contact_pressure=contact_pressure, penetration_depth=penetration_depth, coupling_strength=coupling_strength)
+
                 force_idx = len(self.entity_manager.get('forces')) + 1
                 self.entity_manager.register('forces', force_data_sequence, force_idx)
 
@@ -184,6 +219,7 @@ class ForceSolver:
             frame=frame,
             obj1_idx=obj_idx,
             obj2_idx=-1,  # No second object for non-collision
+            restitution=0,
             relative_velocity=relative_velocity,
             normal_velocity=normal_velocity,
             normal_force=normal_force,
@@ -199,9 +235,9 @@ class ForceSolver:
 
     def _calculate_collision_forces(self, frame: float, obj_idx: int, other_obj_indices: List[int], config_obj: Any, other_config_objs: List[Any], trajectory: Any, other_trajectories: List[Any], collisions: List[Any], sfps: float, sample_rate: int) -> Optional[List[ForceData]]:
         """
-        Calculate forces and velocities for a specific collision event or multiple simultaneous collision event.
+        Calculate forces and velocities for a specific collision event or multiple simultaneous collision events.
         
-        Implements the stochastic physically-based model for impact sound synthesis.
+        Implements the stochastic physically-based model for collisions sound synthesis.
         """
         force_data_list = []
 
@@ -213,7 +249,7 @@ class ForceSolver:
             other_obj_idx = other_obj_indices[idx]
             other_trajectory = other_trajectories[idx]
             other_config_obj = other_config_objs[idx]
-        
+
             # Get positions and velocities before and after collision
             frames = trajectory.get_x()
             frame_idx = np.searchsorted(frames, frame)
@@ -319,10 +355,12 @@ class ForceSolver:
             # Apply stochastic variations to forces based on material properties
             stochastic_normal_force, stochastic_tangential_force = self._stochastic_force_model(normal_force=normal_force, tangential_force=tangential_force, config_obj=config_obj)
 
+            # Init the ForceData class
             force_data = ForceData(
                 frame=frame,
                 obj1_idx=obj_idx,
                 obj2_idx=other_obj_idx,
+                restitution=restitution,
                 relative_velocity=relative_velocity,
                 normal_velocity=normal_velocity,
                 normal_force=normal_force,
@@ -333,6 +371,72 @@ class ForceSolver:
                 stochastic_normal_force=stochastic_normal_force,
                 stochastic_tangential_force=stochastic_tangential_force
             )
+
+            # Analyzes collision between two rigidbody meshes using Hertzian contact theory.
+            hertzian_contact = HertzianContact(self.entity_manager)
+            hertz_impact_data, hertz_continuous_data = (None for _ in range(2))
+            frame_range = collision.frame_range
+            if collision.type.value == 'impact':
+                hertz_impact_data = hertzian_contact.compute_impact(obj_idx, other_obj_idx, frame)
+            elif collision.type.value == 'contact' and collision.frame == frame: 
+                hertz_impact_data = hertzian_contact.compute_impact(obj_idx, other_obj_idx, frame)
+                hertz_continuous_data = hertzian_contact.compute_continuous_contact(force_data, obj_idx, other_obj_idx, frame, frame_range)
+            else:
+                hertz_continuous_data = hertzian_contact.compute_continuous_contact(force_data, obj_idx, other_obj_idx, frame, frame_range)
+
+            if not hertz_impact_data == None and hertz_continuous_data == None:
+                contact_type = hertz_impact_data['contact_type'].value
+                contact_point = hertz_impact_data['contact_point']
+                contact_radius = hertz_impact_data['contact_radius']
+                rolling_radius = float('nan')
+                impact_duration = hertz_impact_data['duration']
+                contact_pressure = hertz_impact_data['contact_pressure']
+                penetration_depth = hertz_impact_data['penetration_depth']
+                coupling_strength = hertz_impact_data['coupling_strength']
+            elif not hertz_impact_data == None and not hertz_continuous_data == None:
+                contact_type = hertz_continuous_data['contact_type'].value
+                contact_point = (hertz_impact_data['contact_point'] + hertz_continuous_data['contact_point']) / 2
+                contact_radius = (hertz_impact_data['contact_radius'] + hertz_continuous_data['contact_radius']) / 2
+                rolling_radius = hertz_continuous_data['rolling_radius']
+                impact_duration = hertz_impact_data['duration']
+                contact_pressure = (hertz_impact_data['contact_pressure'] + hertz_continuous_data['contact_pressure']) / 2
+                penetration_depth = (hertz_impact_data['penetration_depth'] + hertz_continuous_data['penetration_depth']) / 2
+                coupling_strength = (hertz_impact_data['coupling_strength'] + hertz_continuous_data['coupling_strength']) / 2
+            elif hertz_impact_data == None and not hertz_continuous_data == None:
+                contact_type = hertz_continuous_data['contact_type'].value
+                contact_point = hertz_continuous_data['contact_point']
+                contact_radius = hertz_continuous_data['contact_radius']
+                rolling_radius = hertz_continuous_data['rolling_radius']
+                impact_duration = float('nan')
+                contact_pressure = hertz_continuous_data['contact_pressure']
+                penetration_depth = hertz_continuous_data['penetration_depth']
+                coupling_strength = hertz_continuous_data['coupling_strength']
+
+            # Rewrite complete ForceData class
+            force_data = ForceData(
+                frame=frame,
+                obj1_idx=obj_idx,
+                obj2_idx=other_obj_idx,
+                restitution=restitution,
+                relative_velocity=relative_velocity,
+                normal_velocity=normal_velocity,
+                normal_force=normal_force,
+                tangential_force=tangential_force,
+                tangential_velocity=tangential_velocity,
+                normal_force_magnitude=normal_force_magnitude,
+                tangential_force_magnitude=tangential_force_magnitude,
+                stochastic_normal_force=stochastic_normal_force,
+                stochastic_tangential_force=stochastic_tangential_force,
+                contact_type=contact_type,
+                contact_point=contact_point,
+                contact_radius=contact_radius,
+                rolling_radius=rolling_radius,
+                impact_duration=impact_duration,
+                contact_pressure=contact_pressure,
+                penetration_depth=penetration_depth,
+                coupling_strength=coupling_strength
+            )
+
             force_data_list.append(force_data)
 
         return force_data_list

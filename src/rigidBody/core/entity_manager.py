@@ -43,12 +43,15 @@ class EntityManager:
                 self._trajectories = {}
                 self._collisions = {}
                 self._forces = {}
+                self._rigidbody_synth = {}
                 self._singleton = {}
                 self._initialized = True
 
                 self.sigleton_map = {
                     'config': 'Config',
                     'frames': 'FrameCounter',
+                    'sample_counter': 'SampleCounter',
+                    'connected_buffer': 'ConnectedBuffer',
                     'frequency_bands': 'FrequencyBands',
                     'soxel_grid': 'SoxelGrid'
                 }
@@ -59,7 +62,8 @@ class EntityManager:
                     'wave_propagators': 'WavePropagator',
                     'trajectories': ['TrajectoryData', 'tmpTrajectoryData'],
                     'collisions': [ 'CollisionData', 'tmpCollisionData'],
-                    'forces': [ 'ForceData', 'ForceDataSequence']
+                    'forces': [ 'ForceData', 'ForceDataSequence'],
+                    'rigidbody_synth': 'RigidBodySynth'
                 }
 
                 config = Config(config)
@@ -84,7 +88,7 @@ class EntityManager:
     def get(self, entity: str = None, idx: int = None) -> dict[str, Any]:
         """Get all objects"""
         if entity == None:
-            return self._singleton, self._sources, self._objects, self._outputs, self._wave_propagators, self._trajectories, self._collisions, self._forces
+            return self._singleton, self._sources, self._objects, self._outputs, self._wave_propagators, self._trajectories, self._collisions, self._forces, self._rigidbody_synth
         for key in self.sigleton_map.keys():
             if entity in key:
                 return self._singleton[entity]

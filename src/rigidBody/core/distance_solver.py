@@ -48,6 +48,7 @@ class DistanceSolver:
         config_objs = [config.objects[objs_idx[0]], config.objects[objs_idx[1]]]
         if config_objs[0].static and config_objs[1].static:
             # exit: objs_idx[0] and objs_idx[1] are static
+            # TODO: create CollisionData for connected objects for the CollisionArea
             return
         elif not config_objs[0].static or not config_objs[1].static:
             trajectories = self.entity_manager.get('trajectories')
@@ -132,7 +133,7 @@ class DistanceSolver:
                       f"at frame {impact_time*sfps/sample_rate:.2f}, distance: {impact_distance:.6f}")
                 
                 # Create collision data for impact
-                collision_data = CollisionData(type=CollisionType.IMPACT, obj1_idx=config_objs[0].idx, obj2_idx=config_objs[1].idx, frame=impact_time, avg_distance=avg_distance, distances=impact_distance)
+                collision_data = CollisionData(type=CollisionType.IMPACT, obj1_idx=config_objs[0].idx, obj2_idx=config_objs[1].idx, frame=impact_time, avg_distance=avg_distance, threshold=threshold, distances=impact_distance)
                 collision_events.append(collision_data)
             
             else:
@@ -147,7 +148,7 @@ class DistanceSolver:
                       f"avg distance: {avg_distance:.6f}")
                 
                 # Create collision data for continuous contact (at start)
-                collision_data = CollisionData(type=CollisionType.CONTACT, obj1_idx=config_objs[0].idx, obj2_idx=config_objs[1].idx, frame=contact_start_time, frame_range=contact_range_time, avg_distance=avg_distance, distances=region_distances)
+                collision_data = CollisionData(type=CollisionType.CONTACT, obj1_idx=config_objs[0].idx, obj2_idx=config_objs[1].idx, frame=contact_start_time, frame_range=contact_range_time, avg_distance=avg_distance, threshold=threshold, distances=region_distances)
                 collision_events.append(collision_data)
         
         return collision_events
@@ -283,7 +284,7 @@ class DistanceSolver:
         
         return is_impact
 
-    def _distance(self, config_objs: Tuple[Any, Any], trajectory1: Any, trajectory2: Any, frame: float, sfps: int, sample_rate: int, collision_margin: float) -> Tuple[float, Dict[str, Any]]:
+    def _distance(self, config_objs: List[Any], trajectory1: Any, trajectory2: Any, frame: float, sfps: int, sample_rate: int, collision_margin: float) -> Tuple[float, Dict[str, Any]]:
         """
         Calculate minimum distance between transformed meshes.
     

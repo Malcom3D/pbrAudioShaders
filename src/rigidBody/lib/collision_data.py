@@ -17,8 +17,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import os
-import numpy as np
 from enum import Enum
+import numpy as np
 from typing import Tuple, List, Union
 from dataclasses import dataclass, field
 
@@ -26,12 +26,6 @@ class CollisionType(Enum):
     """Enum for different Type of collisions"""
     IMPACT = "impact"
     CONTACT = "contact"
-
-@dataclass
-class CollisionArea:
-    """Represents a collision area for a objects."""
-    obj_idx: int
-    faces_idx: np.ndarray # Shape: (n_id, 3) - colliding faces
 
 @dataclass
 class CollisionData:
@@ -43,21 +37,23 @@ class CollisionData:
     frame_range: int = 1
     impulse_range: int = 0
     avg_distance: float = None
+    threshold: float = None
     distances: Union[float, np.ndarray] = None
-    collision_area: List[Tuple[int, Tuple[CollisionArea, CollisionArea]]] = None # List[samples, [obj1_triangles_idx, obj2_trangles_idx]]
+    collision_area: Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray] = None # Tuple[samples, obj1_triangles_idx, obj1_triangles_num, obj1_vertex_list, obj2_trangles_idx, obj2_triangles_num, obj2_vertex_list]
 
-    def add_area(self, component: str, data: List[Tuple[int, Tuple[CollisionArea, CollisionArea]]]):
+    def add_area(self, component: str, data: List[Tuple[int, Tuple[np.ndarray, np.ndarray]]]):
         """Add a data component if not exist"""
         if getattr(self, component) is None:
             setattr(self, component, data)
 
+    def update_type(self, collision_type: CollisionType):
+        setattr(self, 'type', collision_type)
+  
     def update_impulse_range(self, impulse_range: int):
         setattr(self, 'impulse_range', impulse_range)
 
     def update_frame_range(self, frame_range: int):
-        old_frame_range = getattr(self, 'frame_range')
-        new_frame_range = frame_range + old_frame_range if not old_frame_range == 1 else 0
-        setattr(self, 'frame_range', new_frame_range)
+        setattr(self, 'frame_range', frame_range)
 
 @dataclass
 class tmpCollisionData:
