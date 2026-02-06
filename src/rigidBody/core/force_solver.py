@@ -100,18 +100,18 @@ class ForceSolver:
                             stochastic_tangential_force.append(force_data.stochastic_tangential_force)
                             print('force_data.contact_type: ', force_data.contact_type)
                             contact_type.append(force_data.contact_type if not force_data.contact_type == None else 0)
-                            print('force_data.contact_point: ', force_data.contact_point)
-                            contact_point.append([force_data.contact_point if isinstance(force_data.contact_point, np.ndarray) else np.array([float('nan'),float('nan'),float('nan')])])
+                            print('force_data.contact_point: ', type(force_data.contact_point), force_data.contact_point)
+                            contact_point.append(force_data.contact_point if isinstance(force_data.contact_point, np.ndarray) else np.array([np.nan,np.nan,np.nan]))
                             print('force_data.contact_radius: ', force_data.contact_radius)
-                            contact_radius.append(force_data.contact_radius if not force_data.contact_radius == None else float('nan'))
+                            contact_radius.append(force_data.contact_radius if not force_data.contact_radius == None else np.nan)
                             print('force_data.rolling_radius: ', force_data.rolling_radius)
-                            rolling_radius.append(force_data.rolling_radius if not force_data.rolling_radius == None else float('nan'))
+                            rolling_radius.append(force_data.rolling_radius if not force_data.rolling_radius == None else np.nan)
                             print('force_data.impact_duration: ', force_data.impact_duration)
-                            impact_duration.append(force_data.impact_duration if not force_data.impact_duration == None else float('nan'))
+                            impact_duration.append(force_data.impact_duration if not force_data.impact_duration == None else np.nan)
                             print('force_data.contact_pressure: ', force_data.contact_pressure)
-                            contact_pressure.append(force_data.contact_pressure if not force_data.contact_pressure == None else float('nan'))
+                            contact_pressure.append(force_data.contact_pressure if not force_data.contact_pressure == None else np.nan)
                             print('force_data.penetration_depth: ', force_data.penetration_depth)
-                            penetration_depth.append(force_data.penetration_depth if not force_data.penetration_depth == None else float('nan'))
+                            penetration_depth.append(force_data.penetration_depth if not force_data.penetration_depth == None else np.nan)
                             print('force_data.coupling_strength: ', force_data.coupling_strength)
                             coupling_strength.append(force_data.coupling_strength if not force_data.coupling_strength == None else 0.0)
 
@@ -148,6 +148,7 @@ class ForceSolver:
                 tangential_force_magnitude = CubicSpline(forces_frames, tangential_force_magnitude, extrapolate=1)
                 stochastic_normal_force = [CubicSpline(forces_frames, stochastic_normal_force[:, i], extrapolate=1) for i in range(stochastic_normal_force.shape[1])]
                 stochastic_tangential_force = [CubicSpline(forces_frames, stochastic_tangential_force[:, i], extrapolate=1) for i in range(stochastic_tangential_force.shape[1])]
+                print(contact_point)
                 contact_point = [CubicSplineWithNaN(forces_frames, contact_point[:, i], extrapolate=1) for i in range(contact_point.shape[1])]
                 contact_radius = CubicSplineWithNaN(forces_frames, contact_radius, extrapolate=1)
                 rolling_radius = CubicSplineWithNaN(forces_frames, rolling_radius, extrapolate=1)
@@ -314,16 +315,12 @@ class ForceSolver:
             mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
             mesh.density = config_obj.acoustic_shader.density
             mass = mesh.mass
-#            volume = mesh.volume
-#            mass = config_obj.acoustic_shader.density * volume
         
             other_vertices = other_trajectory.get_vertices(frame)
             other_faces = other_trajectory.get_faces()
             other_mesh = trimesh.Trimesh(vertices=other_vertices, faces=other_faces)
             other_mesh.density = other_config_obj.acoustic_shader.density
             other_mass = other_mesh.mass
-#            other_volume = other_mesh.volume
-#            other_mass = other_config_obj.acoustic_shader.density * other_volume
         
             # Reduced mass for collision
             reduced_mass = (mass * other_mass) / (mass + other_mass)
@@ -388,7 +385,7 @@ class ForceSolver:
                 contact_type = hertz_impact_data['contact_type'].value
                 contact_point = hertz_impact_data['contact_point']
                 contact_radius = hertz_impact_data['contact_radius']
-                rolling_radius = float('nan')
+                rolling_radius = np.nan
                 impact_duration = hertz_impact_data['duration']
                 contact_pressure = hertz_impact_data['contact_pressure']
                 penetration_depth = hertz_impact_data['penetration_depth']
@@ -407,7 +404,7 @@ class ForceSolver:
                 contact_point = hertz_continuous_data['contact_point']
                 contact_radius = hertz_continuous_data['contact_radius']
                 rolling_radius = hertz_continuous_data['rolling_radius']
-                impact_duration = float('nan')
+                impact_duration = np.nan
                 contact_pressure = hertz_continuous_data['contact_pressure']
                 penetration_depth = hertz_continuous_data['penetration_depth']
                 coupling_strength = hertz_continuous_data['coupling_strength']

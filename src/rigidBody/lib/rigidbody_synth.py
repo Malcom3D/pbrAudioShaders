@@ -31,7 +31,7 @@ class ConnectedBuffer:
 
     def set_total_samples(self, total_samples: int):
         self.total_samples = total_samples
-        if not self.objs_buffer == None:
+        if isinstance(self.objs_buffer, np.ndarray):
             if not np.all(self.objs_buffer):
                 buffer_list = [np.zeros(self.total_samples, dtype=np.float32) for _ in range(self.objs_buffer.shape[0])]
                 self.objs_buffer = np.array(buffer_list)
@@ -55,7 +55,7 @@ class ConnectedBuffer:
                     objs_buffer += [obj_buffer.tolist()]
                     self.objs_buffer = np.array(objs_buffer)
 
-    def read_for_obj(self, obj_idx: int, samples_idx: int):
+    def read_for_obj(self, obj_idx: int, sample_idx: int):
         return self.objs_buffer[obj_idx][sample_idx]
 
     def write_to_obj(self, obj_idx: int, sample_value: float, sample_idx: int):
