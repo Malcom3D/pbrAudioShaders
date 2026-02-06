@@ -18,7 +18,6 @@
 
 import os
 import numpy as np
-import trimesh
 from numba import jit, prange
 from scipy.spatial import cKDTree
 from scipy.integrate import solve_ivp
@@ -28,6 +27,7 @@ from itertools import groupby
 
 from ..core.entity_manager import EntityManager
 from ..lib.collision_data import CollisionData
+from ..lib.functions import _parse_lib
 
 @dataclass
 class CollisionSolver:
@@ -42,6 +42,7 @@ class CollisionSolver:
         sfps = ( fps / fps_base ) * subframes # subframes per seconds
 
         trajectories = self.entity_manager.get('trajectories')
+        forces = self.entity_manager.get('forces')
 
         obj1_idx = collision.obj1_idx
         obj2_idx = collision.obj2_idx
@@ -58,15 +59,19 @@ class CollisionSolver:
                 if trajectories[t_idx].obj_idx == obj2_idx:
                     self.trajectory2 = trajectories[t_idx]
                     mesh2_faces = self.trajectory2.get_faces()
+                for f_idx in forces.keys():
+                    if forces[f_idx].obj_idx == obj1_idx and obj2_idx in forces[f_idx].other_obj_idx:
+                        force = forces[f_idx]
 
         total_samples = int(self.trajectory1.get_x()[-1])
 
         collision_margin = collision.avg_distance * (1 + collision.threshold/2)
-        start_samples = int(collision.frame - collision.impulse_range / 2)
-        stop_samples = int(collision.frame + collision.impulse_range * 1.2)
 
-        if collision.type.value == 'impact':
-            stop_samples = int(collision.frame + collision.frame_range * 1.2)
+        start_samples = int(collision.frame - collision.impulse_range / 2)
+        stop_samples = int(collision.frame + collision.impulse_range)
+
+        if collision.type.value == 'contact':
+            stop_samples = int(collision.frame + collision.frame_range + collision.impulse_range)
         if not stop_samples <= total_samples:
             stop_samples = total_samples
 
@@ -85,8 +90,8 @@ class CollisionSolver:
             num_v_idx2.append(cvidx2.shape[0])
 
         samples_idx = np.array(samples_idx, dtype=np.int32)
-        vertex1_id = np.array(vertex1_id_list)
-        vertex2_id = np.array(vertex2_id_list)
+        vertex1_id = np.array(vertex1_id_list, dtype=np.int32)
+        vertex2_id = np.array(vertex2_id_list, dtype=np.int32)
         num_v_idx1 = np.array(num_v_idx1, dtype=np.int32)
         num_v_idx2 = np.array(num_v_idx2, dtype=np.int32)
 

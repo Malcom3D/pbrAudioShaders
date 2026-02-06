@@ -24,6 +24,7 @@ from typing import Any, List, Tuple, Dict, Optional
 from dataclasses import dataclass, field
 
 from ..core.entity_manager import EntityManager
+from ..lib.functions import _parse_lib
 
 @dataclass
 class ModalPlayer:
@@ -40,10 +41,30 @@ class ModalPlayer:
         self.output_dir = f"{config.system.cache_path}/modal_player"
         os.makedirs(self.output_dir, exist_ok=True)
 
+        fps = config.system.fps
+        fps_base = config.system.fps_base
+        subframes = config.system.subframes
+        sample_rate = config.system.sample_rate
+        sfps = ( fps / fps_base ) * subframes # subframes per seconds
+        spsf = sample_rate / sfps # samples per subframe
+
+        # Generate unique player ID if not provided
+        if self.player_id is None:
+            self.player_id = id(self)
+        
+        # Register with sample counter
+        self.sample_counter.register_player(self.player_id)
+
         self.synth_track = np.zeros(self.sample_counter.total_samples)
         for conf_obj in config.objects:
             if conf_obj.idx == self.obj_idx:
                 config_obj = conf_obj
+                # Get modal model T60 times for both objects
+                t60_obj = self._get_modal_t60(config_obj)
+                # Calculate samples based on T60 (reverberation time)
+                # We want to capture the full decay of the modal response
+                t60_samples = int(t60_obj * spsf)
+
                 self.rigidbody_synth = self.entity_manager.get('rigidbody_synth')[self.obj_idx]
                 items = os.listdir(self.score_path)
                 items = [x for x in items if x.startswith(f"{config_obj.name}") and x.endswith('.npz')]
@@ -58,14 +79,18 @@ class ModalPlayer:
                     score_data.allow_pickle = True
                     score = score_data[score_data.files[0]]
                     self.score.append([start_idx, stop_idx, score])
+                self.end_idx = self.end_idx + t60_samples
 
     def compute(self) -> None:
+
         sample_idx = self.sample_counter.get_current()
         while sample_idx != self.end_idx:
             active_score = []
             for score_idx in range(len(self.score)):
                 if self.score[score_idx][0] <= sample_idx <= self.score[score_idx][1]:
                    active_score.append([self.score[score_idx][2][sample_idx]])
+                elif self.score[score_idx][1] <= sample_idx <= self.score[score_idx][1] + t60_samples:
+                   active_score.append([np.array([]), 0, self.score[score_idx][2][self.score[score_idx][1]][2]])
 
             banks_output = 0
             if len(active_score) > 1:
@@ -86,7 +111,42 @@ class ModalPlayer:
 
             self.synth_track[sample_idx] += banks_output
             print(sample_idx, self.obj_idx, 'banks_output: ', banks_output)
+
+            # Signal that we're done with this sample
+            self.sample_counter.wait_for_all_players()
+            
+            # Get next sample (waits for all players to be ready)
             sample_idx = self.sample_counter.next()
+        
+        # Unregister when done
+        self.sample_counter.unregister_player(self.player_id)
+        print(f""Player {self.player_id} finished processing")
+
+    def _get_modal_t60(self, config_obj: Any) -> float:
+        """
+        Get the modal model T60 (reverberation time) for an object.
+
+        Parameters:
+        -----------
+        config_obj : ObjectConfig
+            Object configuration
+
+        Returns:
+        --------
+        float : Maximum T60 value from the modal model (in seconds)
+        """
+        # Get the path to the .lib file
+        cache_path = self.entity_manager.get('config').system.cache_path
+        lib_file = f"{cache_path}/dsp/{config_obj.name}.lib"
+
+        # Parse the .lib file to get modal data
+        modal_data = _parse_lib(lib_file)
+
+        # Get T60 values array
+        t60s = modal_data['t60s']
+
+        # Return the maximum T60 (longest decay time)
+        return float(np.max(t60s))
 
     def save_synth_track(self):
         """

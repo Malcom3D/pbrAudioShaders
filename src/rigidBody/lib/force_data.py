@@ -99,7 +99,7 @@ class ForceDataSequence:
         ])
 
     def get_contact_radius(self, frame_idx: float):
-        return self.contact_point(frame_idx)
+        return self.contact_radius(frame_idx)
 
     def get_coupling_strength(self, frame_idx: float):
         return self.coupling_strength(frame_idx)
