@@ -9,7 +9,13 @@ See the [LICENSE](LICENSE) file for the full text.
 Physically based rendered audio shaders.
 
 
-### Physically plausible impact sound for rigid body simulation.
+### Physically plausible collisions sound for rigid body simulation.
+
+- **Physically-based reverse engeniering of rigidbody animation**: Uses Hertzian contact theory for accurate collisions modeling
+- **Multi-object, multi-collision support**: Handles complex scenes with multiple interacting objects
+- **Multiple collision type support**: Handles impact, scraping, sliding and rotation.
+- **Material-aware synthesis**: Considers material properties (Young's modulus, density, damping, etc.)
+- **Modal synthesis**: Generates audio from object vibration modes
 
 References:
 - https://pure.tue.nl/ws/portalfiles/portal/194387031/IPO_Rapport_1226.pdf
@@ -31,10 +37,11 @@ References [not confirmed]:
 - https://www.cs.cornell.edu/projects/FractureSound/files/fractureSound.pdf
 
 
-### Physically plausible impact sound for nonlinear thin-shell simulation.
+### Physically plausible collisions sound for nonlinear thin-shell simulation.
 
 References [not confirmed]:
 - https://www.cs.cornell.edu/projects/HarmonicShells/HarmonicShells09_large.pdf
+
 
 ### Physically plausible ground-sound model sound synthesis
 

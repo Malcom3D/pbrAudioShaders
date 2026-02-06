@@ -96,7 +96,7 @@ class SampleCounter:
                 # Notify all waiting players
                 self.condition.notify_all()
     
-    def reset(self(self) -> None:
+    def reset(self) -> None:
         """Reset the sample counter."""
         with self.lock:
             self.current_sample = 0

@@ -107,6 +107,7 @@ class ModalPlayer:
                     self.rigidbody_synth.set_banks_state(old_banks_state)
                 self.rigidbody_synth.set_banks_state(new_banks_state)
             elif len(active_score) == 1:
+                print('obj_idx: ', self.obj_idx, 'dample_idx: ', sample_idx,'force: ', active_score[1])
                 banks_output = self.rigidbody_synth.process(sample_idx, active_score[0], active_score[1], active_score[2])
 
             self.synth_track[sample_idx] += banks_output
@@ -120,7 +121,7 @@ class ModalPlayer:
         
         # Unregister when done
         self.sample_counter.unregister_player(self.player_id)
-        print(f""Player {self.player_id} finished processing")
+        print(f"Player {self.player_id} finished processing")
 
     def _get_modal_t60(self, config_obj: Any) -> float:
         """
