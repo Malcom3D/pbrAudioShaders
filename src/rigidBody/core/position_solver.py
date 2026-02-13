@@ -158,8 +158,8 @@ class PositionSolver:
     
         # Check if direction vectors are parallel
         cross_product = np.cross(d1, d2)
-        if np.linalg.norm(cross_product) < tolerance:
-            raise ValueError("Lines are parallel or coincident, no unique intersection point")
+#        if np.linalg.norm(cross_product) < tolerance:
+#            raise ValueError("Lines are parallel or coincident, no unique intersection point")
     
         # Parametric equations:
         # Line 1: P = P2 + t * d1, where t is a scalar parameter

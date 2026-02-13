@@ -119,8 +119,13 @@ class RotationSolver:
         # Time information
         dt = 1.0/sfps
     
-        # Pre-impact data
+        # Impact frame
         frame_before = math.floor(frame)
+        frame_after = math.ceil(frame)
+        if frame_after == frame and frame_before == frame:
+            return Rotation.from_euler('XYZ', rotations[int(frame)]).as_euler('xyz')
+
+        # Pre-impact data
         pre_impact_pos = positions[frame_before]
         pre_impact_rot = Rotation.from_euler('XYZ', rotations[frame_before])
 
@@ -128,7 +133,6 @@ class RotationSolver:
         pre_impact_ang_vel = self._angular_velocity(Rotation.from_euler('XYZ', rotations[frame_before -1]), pre_impact_rot, dt)
     
         # Post-impact data (if available)
-        frame_after = math.ceil(frame)
         post_impact_pos = positions[frame_after]
         post_impact_rot = Rotation.from_euler('XYZ', rotations[frame_before])
 

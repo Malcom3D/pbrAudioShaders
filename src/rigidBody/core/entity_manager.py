@@ -17,6 +17,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import threading
+import numpy as np
 from typing import List, Tuple, Any
 from ..utils.config import Config
 from ..lib.functions import _soxel_grid_shape
@@ -43,6 +44,8 @@ class EntityManager:
                 self._trajectories = {}
                 self._collisions = {}
                 self._forces = {}
+                self._modal_vertices = {}
+                self._score_tracks = {}
                 self._rigidbody_synth = {}
                 self._singleton = {}
                 self._initialized = True
@@ -61,8 +64,10 @@ class EntityManager:
                     'outputs': ['AmbisonicOutput', 'OmnidirectionalOutput', 'Figure8Output', 'CardioidOutput', 'HypercardioidOutput'],
                     'wave_propagators': 'WavePropagator',
                     'trajectories': ['TrajectoryData', 'tmpTrajectoryData'],
-                    'collisions': [ 'CollisionData', 'tmpCollisionData'],
+                    'collisions': [ 'CollisionData'],
                     'forces': [ 'ForceData', 'ForceDataSequence'],
+                    'modal_vertices': 'ModalVertices',
+                    'score_tracks': 'ScoreTrack',
                     'rigidbody_synth': 'RigidBodySynth'
                 }
 
@@ -88,7 +93,7 @@ class EntityManager:
     def get(self, entity: str = None, idx: int = None) -> dict[str, Any]:
         """Get all objects"""
         if entity == None:
-            return self._singleton, self._sources, self._objects, self._outputs, self._wave_propagators, self._trajectories, self._collisions, self._forces, self._rigidbody_synth
+            return self._singleton, self._sources, self._objects, self._outputs, self._wave_propagators, self._trajectories, self._collisions, self._forces, self._modal_vertices, self._score_tracks, self._rigidbody_synth
         for key in self.sigleton_map.keys():
             if entity in key:
                 return self._singleton[entity]

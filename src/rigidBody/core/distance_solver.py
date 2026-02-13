@@ -35,6 +35,11 @@ from ..lib.functions import _load_pose, _load_mesh
 class DistanceSolver:
     entity_manager: EntityManager
 
+    def __post_init__(self):
+        config = self.entity_manager.get('config')
+        self.output_dir = f"{config.system.cache_path}/distances"
+        os.makedirs(self.output_dir, exist_ok=True)
+
     def compute(self, objs_idx: Tuple[int, int]) -> List[Tuple[int, float]]:
         config = self.entity_manager.get('config')
         collision_margin = config.system.collision_margin
@@ -46,36 +51,53 @@ class DistanceSolver:
  
         trajectory, frames  = ([] for _ in range(2))
         config_objs = [config.objects[objs_idx[0]], config.objects[objs_idx[1]]]
-        if config_objs[0].static and config_objs[1].static:
-            # exit: objs_idx[0] and objs_idx[1] are static
-            # TODO: create CollisionData for connected objects for the CollisionArea
-            return
-        elif not config_objs[0].static or not config_objs[1].static:
-            trajectories = self.entity_manager.get('trajectories')
-            for idx in trajectories.keys():
-                if 'TrajectoryData' in str(type(trajectories[idx])):
-                    if trajectories[idx].obj_idx == config_objs[0].idx or trajectories[idx].obj_idx == config_objs[1].idx:
-                        trajectory.append(trajectories[idx])
-                        frames.append(trajectories[idx].get_x())
-        frames = np.unique(np.sort(np.concatenate((frames[0], frames[1]))))
+        trajectories = self.entity_manager.get('trajectories')
+        for idx in trajectories.keys():
+            if 'TrajectoryData' in str(type(trajectories[idx])):
+                if trajectories[idx].obj_idx == config_objs[0].idx or trajectories[idx].obj_idx == config_objs[1].idx:
+                    trajectory.append(trajectories[idx])
+                    frames.append(trajectories[idx].get_x())
 
         # assign trajectory
         trajectory1 = trajectory[0] if trajectory[0].obj_idx == config_objs[0].idx else trajectory[1]
         trajectory2 = trajectory[1] if trajectory[1].obj_idx == config_objs[1].idx else trajectory[0]
 
-        distances = []
-    
-        for idx in range(len(frames)):
-            distance, closest_points = self._distance(config_objs=config_objs, trajectory1=trajectory1, trajectory2=trajectory2, frame=frames[idx], sfps=sfps, sample_rate=sample_rate, collision_margin=collision_margin)
-            distances.append(distance)
-        distances = np.array(distances)
+        frames = np.unique(np.sort(np.concatenate((frames[0], frames[1]))))
 
-        # Analyze distances to detect collisions and contacts
-        collision_events = self._analyze_distances(distances=distances, times=frames, config_objs=config_objs, collision_margin=collision_margin, sfps=sfps, sample_rate=sample_rate)
+        if config_objs[0].static and config_objs[1].static:
+            frame = sample_rate / sfps
+            distance, closest_points = self._distance(config_objs=config_objs, trajectory1=trajectory1, trajectory2=trajectory2, frame=frame, sfps=sfps, sample_rate=sample_rate, collision_margin=collision_margin)
+            distances = np.array(distance)
+            closest_point1 = np.array(closest_points['mesh1_point'])
+            closest_point2 = np.array(closest_points['mesh2_point'])
+            filename = f"{self.output_dir}/{objs_idx[0]}_{objs_idx[1]}.npz"
+            np.savez_compressed(filename, distances, closest_point1, closest_point2)
 
-        for collision_data in collision_events:
+            collision_type = CollisionType.CONNECTED
+            collision_data = CollisionData(type=collision_type, obj1_idx=objs_idx[0], obj2_idx=objs_idx[1], frame=float('inf'))
             collision_idx = len(self.entity_manager.get('collisions')) + 1
             self.entity_manager.register('collisions', collision_data, collision_idx)
+
+        elif not config_objs[0].static or not config_objs[1].static:
+            distances, closest_point1, closest_point2 = ([] for _ in range(3))
+            for idx in range(len(frames)):
+                distance, closest_points = self._distance(config_objs=config_objs, trajectory1=trajectory1, trajectory2=trajectory2, frame=frames[idx], sfps=sfps, sample_rate=sample_rate, collision_margin=collision_margin)
+                distances.append(distance)
+                closest_point1.append(closest_points['mesh1_point'])
+                closest_point2.append(closest_points['mesh2_point'])
+
+            distances = np.array(distances)
+            closest_point1 = np.array(closest_point1)
+            closest_point2 = np.array(closest_point2)
+            filename = f"{self.output_dir}/{objs_idx[0]}_{objs_idx[1]}.npz"
+            np.savez_compressed(filename, distances, closest_point1, closest_point2)
+
+            # Analyze distances to detect collisions and contacts
+            collision_events = self._analyze_distances(distances=distances, times=frames, config_objs=config_objs, collision_margin=collision_margin, sfps=sfps, sample_rate=sample_rate)
+
+            for collision_data in collision_events:
+                collision_idx = len(self.entity_manager.get('collisions')) + 1
+                self.entity_manager.register('collisions', collision_data, collision_idx)
 
     def _analyze_distances(self, distances: np.ndarray, times: np.ndarray, config_objs: List[Any], collision_margin: float, sfps: float, sample_rate: int) -> List[CollisionData]:
         """
@@ -102,7 +124,7 @@ class DistanceSolver:
         # Step 1: Compute adaptive threshold
         threshold = self._compute_adaptive_threshold(distances, collision_margin)
         
-        print(f"Adaptive threshold for {config_objs[0].name} and {config_objs[1].name}: {threshold}")
+        #print(f"Adaptive threshold for {config_objs[0].name} and {config_objs[1].name}: {threshold}")
         
         # Step 2: Identify contact regions (where distance <= threshold)
         contact_mask = distances <= threshold

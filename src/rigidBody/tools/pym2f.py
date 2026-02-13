@@ -55,21 +55,13 @@ class Pym2f:
         """
         for config_obj in self.config.objects:
             if config_obj.idx == obj_idx:
-                fixed_obj_path = f"{config_obj.obj_path}/fixed_obj"
-                if os.path.isdir(fixed_obj_path):
-                    items = os.listdir(fixed_obj_path)
-                    filenames = sorted(items)
-                    filename = filenames[0]
-                    if filename.endswith('.obj'):
-                        obj_file = f"{fixed_obj_path}/{filename}"
-                else: 
-                    vertices, normals, faces = _load_mesh(config_obj, 0)
-                    items = os.listdir(config_obj.obj_path)
-                    filenames = sorted(items)
-                    filename = filenames[0]
-                    if filename.endswith('.npz'):
-                        obj_file = f"{self.cache_path}/obj/{filename.removesuffix('npz') + 'obj'}"
-                    mesh_obj = _mesh_to_obj(vertices, normals, faces, obj_file)
+                vertices, normals, faces = _load_mesh(config_obj, 0)
+                items = os.listdir(config_obj.obj_path)
+                filenames = sorted(items)
+                filename = filenames[0]
+                if filename.endswith('.npz'):
+                    obj_file = f"{self.cache_path}/obj/{filename.removesuffix('npz') + 'obj'}"
+                mesh_obj = _mesh_to_obj(vertices, normals, faces, obj_file)
 
                 young_modulus = config_obj.acoustic_shader.young_modulus
                 poisson_ratio = config_obj.acoustic_shader.poisson_ratio

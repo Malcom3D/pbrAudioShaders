@@ -18,6 +18,7 @@
 
 
 import os
+import pickle
 import numpy as np
 from typing import List, Tuple, Dict, Optional
 from dataclasses import dataclass, field
@@ -31,6 +32,11 @@ from ..lib.functions import _load_mesh, _load_pose
 @dataclass
 class FlightPath:
     entity_manager: EntityManager
+
+    def __post_init__(self):
+        config = self.entity_manager.get('config')
+        self.output_dir = f"{config.system.cache_path}/trajectories"
+        os.makedirs(self.output_dir, exist_ok=True)
 
     def compute(self, obj_idx: int) -> None:
         """Compute flight path for an object and create TrajectoryData."""
@@ -84,6 +90,9 @@ class FlightPath:
         trajectory_idx = len(self.entity_manager.get('trajectories')) + 1
         self.entity_manager.register('trajectories', trajectory_data, trajectory_idx)
         
+        # Save the trajectory data
+        trajectory_data.save(f"{self.output_dir}/{config_obj.name}.pkl")  # Pickle format
+
         # Remove temporary trajectory data for this object
         self._cleanup_tmp_trajectories(obj_idx)
 

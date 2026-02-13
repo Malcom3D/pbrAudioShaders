@@ -25,18 +25,23 @@ from dataclasses import dataclass, field
 
 from ..core.entity_manager import EntityManager
 from ..lib.functions import _parse_lib
+from ..lib.filter import LinkwitzRileyFilter
 
 @dataclass
 class ModalPlayer:
     entity_manager: EntityManager
     obj_idx: int
+    begin_idx: int = 0
     end_idx: int = 0
+    player_id: int = None
     score: List = field(default_factory=list)
 
     def __post_init__(self):
         config = self.entity_manager.get('config')
         self.sample_counter = self.entity_manager.get('sample_counter')
         self.connected_buffer = self.entity_manager.get('connected_buffer')
+        self.connected_buffer.set_total_samples(self.sample_counter.total_samples)
+        self.begin_idx = self.sample_counter.total_samples
         self.score_path = f"{config.system.cache_path}/score"
         self.output_dir = f"{config.system.cache_path}/modal_player"
         os.makedirs(self.output_dir, exist_ok=True)
@@ -63,65 +68,88 @@ class ModalPlayer:
                 t60_obj = self._get_modal_t60(config_obj)
                 # Calculate samples based on T60 (reverberation time)
                 # We want to capture the full decay of the modal response
-                t60_samples = int(t60_obj * spsf)
+                self.t60_samples = int(t60_obj * spsf)
 
+                sample_indices = []
                 self.rigidbody_synth = self.entity_manager.get('rigidbody_synth')[self.obj_idx]
-                items = os.listdir(self.score_path)
-                items = [x for x in items if x.startswith(f"{config_obj.name}") and x.endswith('.npz')]
-                filenames = sorted(items, key=lambda x: int(''.join(filter(str.isdigit, x))))
-
-                for idx in range(len(filenames)):
-                    filename = filenames[idx].strip('.npz').split('_')
-                    start_idx = int(filename[-2])
-                    stop_idx = int(filename[-1])
-                    self.end_idx = stop_idx if self.end_idx < stop_idx else self.end_idx
-                    score_data = np.load(f"{self.score_path}/{filenames[idx]}")
-                    score_data.allow_pickle = True
-                    score = score_data[score_data.files[0]]
-                    self.score.append([start_idx, stop_idx, score])
-                self.end_idx = self.end_idx + t60_samples
+                score_tracks = self.entity_manager.get('score_tracks')
+                for idx in score_tracks.keys():
+                    if score_tracks[idx].obj_idx == self.obj_idx:
+                        self.score.append(score_tracks[idx])
+                        for event in score_tracks[idx].events:
+                            sample_indices.append(event.sample_idx)
+                self.begin_idx = min(sample_indices)
+                end_idx = max(sample_indices) + self.t60_samples
+                self.end_idx = end_idx if end_idx < self.sample_counter.total_samples else self.sample_counter.total_samples
 
     def compute(self) -> None:
-
         sample_idx = self.sample_counter.get_current()
-        while sample_idx != self.end_idx:
-            active_score = []
-            for score_idx in range(len(self.score)):
-                if self.score[score_idx][0] <= sample_idx <= self.score[score_idx][1]:
-                   active_score.append([self.score[score_idx][2][sample_idx]])
-                elif self.score[score_idx][1] <= sample_idx <= self.score[score_idx][1] + t60_samples:
-                   active_score.append([np.array([]), 0, self.score[score_idx][2][self.score[score_idx][1]][2]])
-
+        while not sample_idx == self.end_idx - 1:
             banks_output = 0
-            if len(active_score) > 1:
-                old_banks_state = self.rigidbody_synth.get_banks_state()
-                new_banks_state = [[np.array([])] for i in range(len(old_banks_state))]
-                for idx in range(len(active_score)):
-                    banks_output += self.rigidbody_synth.process(sample_idx, active_score[idx][0], active_score[idx][1], active_score[idx][2])
-                    banks_state = self.rigidbody_synth.get_banks_state()
-                    for banks_idx in range(len(banks_state)):
-                        new_banks_state[banks_idx][0] = (new_banks_state[banks_idx][0] + banks_state[banks_idx][0]) # ToBe halfed?
-                        new_banks_state[banks_idx][1] = (new_banks_state[banks_idx][1] + banks_state[banks_idx][1])
-                        new_banks_state[banks_idx][2] = (new_banks_state[banks_idx][2] + banks_state[banks_idx][2])
-                        new_banks_state[banks_idx][3] = (new_banks_state[banks_idx][3] + banks_state[banks_idx][3])
-                    self.rigidbody_synth.set_banks_state(old_banks_state)
-                self.rigidbody_synth.set_banks_state(new_banks_state)
-            elif len(active_score) == 1:
-                print('obj_idx: ', self.obj_idx, 'dample_idx: ', sample_idx,'force: ', active_score[1])
-                banks_output = self.rigidbody_synth.process(sample_idx, active_score[0], active_score[1], active_score[2])
+            if self.begin_idx <= sample_idx:
+                events = []
+                for score_idx in range(len(self.score)):
+                    events += self.score[score_idx].get_events_at_sample(sample_idx)
 
-            self.synth_track[sample_idx] += banks_output
-            print(sample_idx, self.obj_idx, 'banks_output: ', banks_output)
+                if len(events) > 1:
+                    old_banks_state = self.rigidbody_synth.get_banks_state()
+                    new_banks_state = []
+                    for i in range(len(old_banks_state)):
+                        new_state = 0
+                        if not isinstance(old_banks_state[i], int):
+                            new_state = []
+                            for l in range(len(old_banks_state[i])):
+                                new_state += [np.zeros_like(old_banks_state[i][l])]
+                        new_banks_state += [new_state]
+                    for idx in range(len(events)):
+                        event = events[idx].to_dict()
+                        banks_output += self.rigidbody_synth.process(event['sample_idx'], event['vertex_ids'], event['force'], event['coupling_data'])
+                        print(sample_idx, self.obj_idx, 'MULTI: ', 'force: ', event['force'], 'banks_output: ', banks_output)
+#                        banks_state = self.rigidbody_synth.get_banks_state()
+#                        for banks_idx in range(len(banks_state)):
+#                            if not isinstance(banks_state[banks_idx], int):
+#                                if np.max(banks_state[banks_idx][0]) > 300000 or np.max(banks_state[banks_idx][1]) > 300000 or np.max(banks_state[banks_idx][2]) > 300000 or np.max(banks_state[banks_idx][3]) > 300000 or np.max(banks_state[banks_idx][4]) > 300000:
+#                                    print('obj_idx: ', self.obj_idx, 'event: ', event)
+#                                    print('obj_idx: ', self.obj_idx, 'banks_idx: ', banks_idx, 'banks_state: ', banks_state)
+#                                    print('obj_idx: ', self.obj_idx, 'banks_idx: ', banks_idx, 'old_banks_state: ', old_banks_state)
+#                                    return
+#                                print(new_banks_state[banks_idx][0], banks_state[banks_idx][0])
+#                                new_banks_state[banks_idx][0] = (new_banks_state[banks_idx][0] + banks_state[banks_idx][0]) / 2 # ToBe halfed?
+#                                new_banks_state[banks_idx][1] = (new_banks_state[banks_idx][1] + banks_state[banks_idx][1]) / 2
+#                                new_banks_state[banks_idx][2] = (new_banks_state[banks_idx][2] + banks_state[banks_idx][2])
+#                                new_banks_state[banks_idx][3] = (new_banks_state[banks_idx][3] + banks_state[banks_idx][3])
+#                                new_banks_state[banks_idx][4] = (new_banks_state[banks_idx][4] + banks_state[banks_idx][4])
+#                        self.rigidbody_synth.set_banks_state(old_banks_state)
+#                    self.rigidbody_synth.set_banks_state(new_banks_state)
+#                    self.rigidbody_synth.set_banks_state(banks_state)
+#                    print(sample_idx, self.obj_idx, 'MULTI: ', 'set_banks_state')
+                elif len(events) == 1:
+                    event = events[0].to_dict()
+                    banks_output = self.rigidbody_synth.process(event['sample_idx'], event['vertex_ids'], event['force'], event['coupling_data'])
+#                    print(sample_idx, 'SINGLE: ', 'force: ', event['force'], 'coupling_data: ', event['coupling_data'], 'banks_output: ', banks_output)
 
-            # Signal that we're done with this sample
-            self.sample_counter.wait_for_all_players()
+#            print('obj_idx: ', self.obj_idx, 'banks_output: ', type(banks_output), banks_output)
+            self.synth_track[sample_idx] = banks_output if not np.isnan(banks_output) else 0
             
             # Get next sample (waits for all players to be ready)
-            sample_idx = self.sample_counter.next()
-        
+            sample_idx = self.sample_counter.next(self.player_id)
+
+#        # Normalize audio
+#        self.synth_track = self.synth_track / np.max(self.synth_track)
+
         # Unregister when done
         self.sample_counter.unregister_player(self.player_id)
         print(f"Player {self.player_id} finished processing")
+
+#        # Apply Linkwitz Riley BandPass Filter
+#        config = self.entity_manager.get('config')
+#        sample_rate = config.system.sample_rate
+#        for conf_obj in config.objects:
+#            if conf_obj.idx == self.obj_idx:
+#                config_obj = conf_obj
+#                low_freq = config_obj.acoustic_shader.low_frequency
+#                high_freq = config_obj.acoustic_shader.high_frequency
+#                self.synth_track, sample_rate = LinkwitzRileyFilter.linkwitz_riley_bandpass_filter(audio_data, sample_rate, low_freq, high_freq)
 
     def _get_modal_t60(self, config_obj: Any) -> float:
         """

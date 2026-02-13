@@ -17,15 +17,17 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import os
+import json
 from enum import Enum
 import numpy as np
-from typing import Tuple, List, Union
-from dataclasses import dataclass, field
+from typing import Tuple, List, Union, Dict, Any
+from dataclasses import dataclass, field, asdict
 
 class CollisionType(Enum):
     """Enum for different Type of collisions"""
     IMPACT = "impact"
     CONTACT = "contact"
+    CONNECTED = "connected"
 
 @dataclass
 class CollisionData:
@@ -33,18 +35,13 @@ class CollisionData:
     type: CollisionType
     obj1_idx: int
     obj2_idx: int
-    frame: float # interpolated frame number
+    frame: float = None # interpolated frame number
     frame_range: int = 1
     impulse_range: int = 0
     avg_distance: float = None
     threshold: float = None
     distances: Union[float, np.ndarray] = None
-    collision_area: Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray] = None # Tuple[samples, obj1_triangles_idx, obj1_triangles_num, obj1_vertex_list, obj2_trangles_idx, obj2_triangles_num, obj2_vertex_list]
-
-    def add_area(self, component: str, data: List[Tuple[int, Tuple[np.ndarray, np.ndarray]]]):
-        """Add a data component if not exist"""
-        if getattr(self, component) is None:
-            setattr(self, component, data)
+    samples: np.ndarray = None
 
     def update_type(self, collision_type: CollisionType):
         setattr(self, 'type', collision_type)
@@ -54,12 +51,67 @@ class CollisionData:
 
     def update_frame_range(self, frame_range: int):
         setattr(self, 'frame_range', frame_range)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Convert CollisionData to a serializable dictionary.
+        
+        Returns:
+            Dictionary representation of the collision data.
+        """
+        data_dict = asdict(self)
+        
+        # Handle Enum serialization
+        data_dict['type'] = self.type.value
+        
+        # Handle numpy array serialization
+        if isinstance(self.distances, np.ndarray):
+            data_dict['distances'] = self.distances.tolist()
+        elif isinstance(self.distances, (int, float)):
+            data_dict['distances'] = float(self.distances)
+        
+        # Handle other numpy types
+        for key, value in data_dict.items():
+            if isinstance(value, np.generic):
+                data_dict[key] = value.item()
+        
+        return data_dict
+    
+    def save(self, filepath: str, indent: int = 2) -> None:
+        """
+        Save collision data to a JSON file.
+        
+        Args:
+            filepath: Path to save the JSON file
+            indent: JSON indentation level
+        """
+        data_dict = self.to_dict()
+        
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
+        
+        with open(filepath, 'w') as f:
+            json.dump(data_dict, f, indent=indent)
 
-@dataclass
-class tmpCollisionData:
-    """Temporary container for solved collision event data."""
-    obj1_idx: int
-    obj1_idx: int
-    restitution: float = None
-    distances: np.ndarray = None
-    consec_idx: np.ndarray = None
+    @classmethod
+    def load(cls, filepath: str) -> 'CollisionData':
+        """
+        Load collision data from a JSON file.
+        
+        Args:
+            filepath: Path to the JSON file
+            
+        Returns:
+            CollisionData instance
+        """
+        with open(filepath, 'r') as f:
+            data_dict = json.load(f)
+        
+        # Convert string back to Enum
+        data_dict['type'] = CollisionType(data_dict['type'])
+        
+        # Convert list back to numpy array if it was a distances array
+        if 'distances' in data_dict and isinstance(data_dict['distances'], list):
+            data_dict['distances'] = np.array(data_dict['distances'])
+        
+        return cls(**data_dict)

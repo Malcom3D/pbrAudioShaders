@@ -28,7 +28,7 @@ np.set_printoptions(precision=decimals, floatmode='fixed', threshold=np.inf)
 
 from .core.entity_manager import EntityManager
 from .core.collision_engine import CollisionEngine
-from .lib.samples import SampleCounter
+from .lib.sample_counter import SampleCounter
 from .lib.rigidbody_synth import ConnectedBuffer
 
 class rigidBody:
@@ -45,3 +45,6 @@ class rigidBody:
 
     def bake(self):
         self.ce.bake()
+
+    def render(self):
+        self.ce.render()

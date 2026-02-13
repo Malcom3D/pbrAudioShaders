@@ -4,12 +4,24 @@ This project is licensed under the **GNU General Public License v3.0 or later**.
 
 See the [LICENSE](LICENSE) file for the full text.
 
+If you use this software in your research, please cite:
+
+ 
+@software{pbrAudio,
+  author = {Malcom3D},
+  title = {pbrAudio: Physically Audio Synthesis},
+  year = {2025},
+  url = {https://github.com/malcom3d/pbrAudio}
+}
+
 ## pbrAudioShaders
 
 Physically based rendered audio shaders.
 
 
 ### Physically plausible collisions sound for rigid body simulation.
+
+#### Features
 
 - **Physically-based reverse engeniering of rigidbody animation**: Uses Hertzian contact theory for accurate collisions modeling
 - **Multi-object, multi-collision support**: Handles complex scenes with multiple interacting objects
@@ -59,6 +71,7 @@ References [not confirmed]:
 
 References [not confirmed]:
 - https://www.cs.cornell.edu/projects/Sound/fire/FireSound2011.pdf for fire and explosion sound
+- https://onlinelibrary.wiley.com/doi/epdf/10.1002/cav.1970
 
 
 ### Physically plausible swings object, aeolian and aeroacoustic sound effects.

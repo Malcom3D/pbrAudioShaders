@@ -151,7 +151,6 @@ def _parse_lib(lib_content: str):
                 gain_tuple_match = re.sub("'", "", gain_tuple_match[0])
                 gains = [float(f) for f in gain_tuple_match.split(",")]
 
-    print(lib_content, 'frequencies: ', len(frequencies), 'gains: ', len(gains), 't60s: ', len(t60s))
     return {
         'frequencies': np.array(frequencies),
         't60s': np.array(t60s),
