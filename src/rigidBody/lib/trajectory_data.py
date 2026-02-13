@@ -17,6 +17,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import os
+import pickle
 import numpy as np
 from typing import Union, List, Dict, Tuple, Optional, Any
 from dataclasses import dataclass, field
@@ -114,10 +115,6 @@ class TrajectoryData:
             return self.rotations.copy()
         else:
             # Moving object: rotations is a tuple of CubicSpline functions
-#            x = self.rotations[0](sample_idx)
-#            y = self.rotations[1](sample_idx)
-#            z = self.rotations[2](sample_idx)
-#            return np.array([x, y, z])
            return self.rotations(sample_idx)
 
     def get_angular_velocity(self, sample_idx: float) -> np.ndarray:
@@ -128,14 +125,6 @@ class TrajectoryData:
         else:
             # Moving object: rotations is a tuple of CubicSpline functions
             return self.rotations(sample_idx, 1)
-#            frames = self.get_x()
-#            if not sample_idx == frames[0]:
-#                sample_before = min([x for x in frames if x < sample_idx], key=lambda x: abs(x - sample_idx))
-#                delta_t = ( sample_idx - sample_before ) / self.sample_rate
-#                delta_rot = Rotation.from_euler('XYZ', self.get_rotation(sample_idx)) * Rotation.from_euler('XYZ', self.get_rotation(sample_before)).inv()
-#                return delta_rot.as_rotvec() / 2 * delta_t
-#            else:
-#                return np.array([0,0,0])
 
     def get_angular_acceleration(self, sample_idx: float) -> np.ndarray:
         """Get interpolated angular acceleration at specific sample_idx."""
@@ -145,13 +134,6 @@ class TrajectoryData:
         else:
             # Moving object: rotations is a tuple of CubicSpline functions
             return self.rotations(sample_idx, 2)
-#            frames = self.get_x()
-#            if not sample_idx == frames[0]:
-#                sample_before = min([x for x in frames if x < sample_idx], key=lambda x: abs(x - sample_idx))
-#                delta_t = ( sample_idx - sample_before ) / self.sample_rate
-#                return (self.get_angular_velocity(sample_idx) - self.get_angular_velocity(sample_before)) / 2 * delta_t
-#            else:
-#                return np.array([0,0,0])
 
     def get_vertices(self, sample_idx: float) -> np.ndarray:
         """Get interpolated position of vertices at specific sample_idx."""
@@ -180,3 +162,46 @@ class TrajectoryData:
     def get_faces(self, sample_idx: float = None) -> np.ndarray:
         """Get faces"""
         return self.faces
+
+    def save(self, filepath: str) -> None:
+        """Save data in pickle format (preserves interpolation objects)."""
+        # Create a serializable version of the object
+        save_dict = {
+            'obj_idx': self.obj_idx,
+            'static': self.static,
+            'sfps': self.sfps,
+            'sample_rate': self.sample_rate,
+            'positions': self.positions,
+            'rotations': self.rotations,
+            'vertices': self.vertices,
+            'normals': self.normals,
+            'faces': self.faces,
+            '_format': 'TrajectoryData_v1_pickle'
+        }
+    
+        with open(filepath, 'wb') as f:
+            pickle.dump(save_dict, f, protocol=pickle.HIGHEST_PROTOCOL)
+        print(f"Trajectory data saved to {filepath}")
+
+    @staticmethod
+    def load(filepath: str) -> 'TrajectoryData':
+        """Load data from pickle format."""
+        with open(filepath, 'rb') as f:
+            data = pickle.load(f)
+    
+        # Check format
+        if '_format' not in data or data['_format'] != 'TrajectoryData_v1_pickle':
+            raise ValueError("Invalid file format or version")
+    
+        # Reconstruct the object
+        return TrajectoryData(
+            obj_idx=data['obj_idx'],
+            static=data['static'],
+            sfps=data['sfps'],
+            sample_rate=data['sample_rate'],
+            positions=data['positions'],
+            rotations=data['rotations'],
+            vertices=data['vertices'],
+            normals=data['normals'],
+            faces=data['faces']
+        )

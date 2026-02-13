@@ -35,8 +35,10 @@ class ForceSynth:
 
     def __post_init__(self):
         config = self.entity_manager.get('config')
-        self.output_dir = f"{config.system.cache_path}/audio_force"
-        os.makedirs(self.output_dir, exist_ok=True)
+        self.collisions_dir = f"{config.system.cache_path}/collisions"
+        os.makedirs(self.collisions_dir, exist_ok=True)
+        self.audio_force_dir = f"{config.system.cache_path}/audio_force"
+        os.makedirs(self.audio_force_dir, exist_ok=True)
 
     def compute(self, obj_idx: int) -> None:
         config = self.entity_manager.get('config')
@@ -48,23 +50,23 @@ class ForceSynth:
         sfps = ( fps / fps_base ) * subframes # subframes per seconds
         spsf = sample_rate / sfps # Samples Per SubFrame
 
-        trajectories = self.entity_manager.get('trajectories')
-        forces = self.entity_manager.get('forces')
-        collision_data = self.entity_manager.get('collisions')
         collisions = []
+        collision_data = self.entity_manager.get('collisions')
         for conf_obj in config.objects:
             if conf_obj.idx == obj_idx:
                 config_obj = conf_obj
-                if not config_obj.static: 
-                    for t_idx in trajectories.keys():
-                        if trajectories[t_idx].obj_idx == obj_idx:
-                            trajectory = trajectories[t_idx]
-                    for f_idx in forces.keys():
-                        if forces[f_idx].obj_idx == obj_idx:
-                            force = forces[f_idx]
+                if not config_obj.static:
                     for c_idx in collision_data.keys():
                         if collision_data[c_idx].obj1_idx == obj_idx or collision_data[c_idx].obj2_idx == obj_idx:
                             collisions.append(collision_data[c_idx])
+                    trajectories = self.entity_manager.get('trajectories')
+                    for t_idx in trajectories.keys():
+                        if trajectories[t_idx].obj_idx == obj_idx:
+                            trajectory = trajectories[t_idx]
+                            forces = self.entity_manager.get('forces')
+                    for f_idx in forces.keys():
+                        if forces[f_idx].obj_idx == obj_idx:
+                            force = forces[f_idx]
 
         # Calculate total duration in samples
         frames = force.frames
@@ -489,10 +491,10 @@ class ForceSynth:
         }
         
         for track_name, track_data in tracks.items():
-#            npz_file = f"{self.output_dir}/{config_obj.name}_{track_name}.npz"
+#            npz_file = f"{self.audio_force_dir}/{config_obj.name}_{track_name}.npz"
 #            np.savez_compressed(npz_file, track_data)
             track_file = f"{config_obj.name}_{track_name}.raw"
-            wave_file = f"{self.output_dir}/{track_file}"
+            wave_file = f"{self.audio_force_dir}/{track_file}"
             sf.write(wave_file, track_data, sample_rate, subtype='FLOAT')
             project_data['tracks'].append({
                 'name': track_name,
@@ -502,10 +504,10 @@ class ForceSynth:
                 'volume': 1.0,
                 'pan': 0.0
             })
-            print(f"Saved {track_name} tracks to {self.output_dir}")
+            print(f"Saved {track_name} tracks to {self.audio_force_dir}")
 
         # Save project file
-        json_file = f"{self.output_dir}/{config_obj.name}.json"
+        json_file = f"{self.audio_force_dir}/{config_obj.name}.json"
         with open(json_file, 'w') as f:
             json.dump(project_data, f, indent=2)
 

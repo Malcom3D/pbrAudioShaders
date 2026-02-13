@@ -32,25 +32,24 @@ class ModalLuthier:
 
     def __post_init__(self):
         config = self.entity_manager.get('config')
-        sample_counter = self.entity_manager.get('sample_counter')
         self.connected_buffer = self.entity_manager.get('connected_buffer')
-        self.connected_buffer.set_total_samples(sample_counter.total_samples)
         self.dsp_path = f"{config.system.cache_path}/dsp"
 
     def compute(self, obj_idx: int) -> None:
         config = self.entity_manager.get('config')
+        sample_counter = self.entity_manager.get('sample_counter')
+        self.connected_buffer.set_total_samples(sample_counter.total_samples)
         sample_rate = config.system.sample_rate
+        modal_vertices = self.entity_manager.get('modal_vertices')
 
-        vertex_list = np.empty(0)
         for conf_obj in config.objects:
             if conf_obj.idx == obj_idx:
                 config_obj = conf_obj
-                collision_data = self.entity_manager.get('collisions')
-                for c_idx in collision_data.keys():
-                    if collision_data[c_idx].obj1_idx == obj_idx:
-                        vertex_list = np.append(vertex_list, collision_data[c_idx].collision_area[3])
-                    if collision_data[c_idx].obj2_idx == obj_idx:
-                        vertex_list = np.append(vertex_list, collision_data[c_idx].collision_area[6])
+
+        vertex_list = np.array([])
+        for idx in modal_vertices.keys():
+            if modal_vertices[idx].obj_idx == obj_idx:
+                vertex_list = modal_vertices[idx].get_vertices()
 
         self.connected_buffer.add_obj(obj_idx)
 

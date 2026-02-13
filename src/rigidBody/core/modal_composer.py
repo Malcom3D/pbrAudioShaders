@@ -33,64 +33,51 @@ class ModalComposer:
         os.makedirs(self.score_path, exist_ok=True)
 
     def compute(self, collision: Any) -> None:
+        if collision.type.value == 'connected':
+            return
         config = self.entity_manager.get('config')
-        sample_counter = self.entity_manager.get('sample_counter')
         forces_path = f"{config.system.cache_path}/audio_force"
-        collision_area = collision.collision_area
-        samples = collision_area[0]
+        samples = collision.samples
         sample_start = samples[0]
         sample_stop = samples[-1] + 1
 
         obj1_idx = collision.obj1_idx
-        vertex1_ids = collision_area[1]
-        num_vertex1_ids = collision_area[2]
-
         obj2_idx = collision.obj2_idx
-        vertex2_ids = collision_area[4]
-        num_vertex2_ids = collision_area[5]
-
-        trajectories = self.entity_manager.get('trajectories')
 
         for conf_obj in config.objects:
             if conf_obj.idx == obj1_idx:
                 config_obj1 = conf_obj
                 force1, coupling_strenght1 = self._load_audioforce_tracks(samples=samples, forces_path=forces_path, obj_name=config_obj1.name)
-                force1 = np.divide(force1, num_vertex1_ids, out=np.zeros_like(force1), where=num_vertex1_ids != 0)
+#                force1 = force1 / np.max(force1)
             if conf_obj.idx == obj2_idx:
                 config_obj2 = conf_obj
-                force2, coupling_strenght2 = self._load_audioforce_tracks(samples=samples, forces_path=forces_path, obj_name=config_obj1.name)
-                force2 = np.divide(force2, num_vertex2_ids, out=np.zeros_like(force2), where=num_vertex2_ids != 0)
-        if not config_obj1.static or not config_obj2.static:
-            for t_idx in trajectories.keys():
-                if trajectories[t_idx].obj_idx == obj1_idx:
-                    self.trajectory1 = trajectories[t_idx]
-                if trajectories[t_idx].obj_idx == obj2_idx:
-                    self.trajectory2 = trajectories[t_idx]
+                force2, coupling_strenght2 = self._load_audioforce_tracks(samples=samples, forces_path=forces_path, obj_name=config_obj2.name)
+#                force2 = force2 / np.max(force2)
 
-        total_samples = int(self.trajectory1.get_x()[-1])
-        sample_counter.total_samples = total_samples
-
-        score_obj1 = np.zeros((total_samples, 3), dtype=object)
-        score_obj2 = np.zeros((total_samples, 3), dtype=object)
+        score_track1, score_track2 = ([] for _ in range(2))
+        score_tracks = self.entity_manager.get('score_tracks')
+        for idx in score_tracks.keys():
+            if score_tracks[idx].obj_idx == obj1_idx:
+                score_track1.append(score_tracks[idx])
+            elif score_tracks[idx].obj_idx == obj2_idx:
+                score_track2.append(score_tracks[idx])
 
         for sample_idx in range(sample_start, sample_stop):
             index = sample_idx - sample_start
-            vertex1_idx = self._reshape_vertex_list(vertex1_ids[index], num_vertex1_ids[index])
-            vertex2_idx = self._reshape_vertex_list(vertex2_ids[index], num_vertex2_ids[index])
-            score_obj1[sample_idx] = [vertex1_idx, force1[index], np.array([obj2_idx, coupling_strenght1[index]])]
-            score_obj2[sample_idx] = [vertex2_idx, force2[index], np.array([obj1_idx, coupling_strenght2[index]])]
-
-        np.savez_compressed(f"{self.score_path}/{config_obj1.name}_{samples[0]:05d}_{samples[-1]:05d}.npz", score_obj1)
-        np.savez_compressed(f"{self.score_path}/{config_obj2.name}_{samples[0]:05d}_{samples[-1]:05d}.npz", score_obj2)
-
-    def _reshape_vertex_list(self, vertex_ids: np.ndarray, num_vertex: int) -> np.ndarray:
-        if not np.all(vertex_ids == 0) and not vertex_ids.shape[0] == num_vertex:
-            _vertex_ids = np.trim_zeros(vertex_ids, trim='b').astype(np.int32)
-            if not _vertex_ids.shape[0] == num_vertex:
-                delta = num_vertex - _vertex_ids.shape[0]
-                _vertex_ids = np.append(_vertex_ids, np.zeros(delta, dtype=np.int32))
-            return _vertex_ids
-        return np.array([])
+            for score_idx in range(len(score_track1)):
+                events = score_track1[score_idx].get_events_at_sample(sample_idx)
+                for e_idx in range(len(events)):
+                    force = np.divide(force1[index], events[e_idx].vertex_ids.shape[0], out=np.zeros_like(force1[index]), where=events[e_idx].vertex_ids.shape[0] != 0)
+                    events[e_idx].force = force if not np.isnan(force) else 0.0
+                    coupling_data1 = coupling_strenght1[index] if not np.isnan(coupling_strenght1[index]) else 0.0
+                    events[e_idx].coupling_data = np.array([[obj2_idx, coupling_strenght1[index]]])
+            for score_idx in range(len(score_track2)):
+                events = score_track2[score_idx].get_events_at_sample(sample_idx)
+                for e_idx in range(len(events)):
+                    force = np.divide(force2[index], events[e_idx].vertex_ids.shape[0], out=np.zeros_like(force2[index]), where=events[e_idx].vertex_ids.shape[0] != 0)
+                    events[e_idx].force = force if not np.isnan(force) else 0.0
+                    coupling_data2 = coupling_strenght2[index] if not np.isnan(coupling_strenght2[index]) else 0.0
+                    events[e_idx].coupling_data = np.array([[obj1_idx, coupling_data2]])
 
     def _load_audioforce_tracks(self, samples: np.ndarray, forces_path: str, obj_name: str) -> Tuple[np.ndarray, np.ndarray]:
         """Load and sum audio-force tracks for obj_name in forces_path"""

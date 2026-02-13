@@ -16,6 +16,7 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import os
 import trimesh
 import numpy as np
 from typing import Dict, Tuple, Optional, Any
@@ -57,14 +58,14 @@ class HertzianContact:
         """
         # Get object configurations and trajectories
         config = self.entity_manager.get('config')
-        trajectories = self.entity_manager.get('trajectories')
         
         for obj in config.objects:
             if obj.idx == obj1_idx:
                 config_obj1 = obj
             if obj.idx == obj2_idx:
                 config_obj2 = obj
-        
+
+        trajectories = self.entity_manager.get('trajectories')
         for traj in trajectories.values():
             if hasattr(traj, 'obj_idx'):
                 if traj.obj_idx == obj1_idx:
@@ -222,7 +223,6 @@ class HertzianContact:
         """
         # Get object configurations and trajectories
         config = self.entity_manager.get('config')
-        trajectories = self.entity_manager.get('trajectories')
         
         for obj in config.objects:
             if obj.idx == obj1_idx:
@@ -230,6 +230,7 @@ class HertzianContact:
             if obj.idx == obj2_idx:
                 config_obj2 = obj
         
+        trajectories = self.entity_manager.get('trajectories')
         for traj in trajectories.values():
             if hasattr(traj, 'obj_idx'):
                 if traj.obj_idx == obj1_idx:
@@ -329,7 +330,7 @@ class HertzianContact:
         vertices1, vertices2 : np.ndarray
             Vertex positions
         trajectory1, trajectory2 : Any
-                       Trajectory objects
+            Trajectory objects
         sample_idx : float
             Sample index
             

@@ -45,21 +45,21 @@ class ForceSolver:
         sfps = ( fps / fps_base ) * subframes # subframes per seconds
 
         collisions, active_collisions = ([] for _ in range(2))
+        trajectories = self.entity_manager.get('trajectories')
         for config_obj in config.objects:
             if config_obj.idx == obj_idx:
                 if config_obj.static:
                     # exit: obj_idx are static
                     return
-                collisions_data = self.entity_manager.get('collisions')
-                trajectories = self.entity_manager.get('trajectories')
+                collisions = self.entity_manager.get('collisions')
                 for t_idx in trajectories.keys():
                     if 'TrajectoryData' in str(type(trajectories[t_idx])):
                         if trajectories[t_idx].obj_idx == config_obj.idx:
                             trajectory = trajectories[t_idx]
-                            frames = trajectory.get_x()
-                for c_idx in collisions_data.keys():
-                    if collisions_data[c_idx].obj1_idx  == config_obj.idx or collisions_data[c_idx].obj2_idx == config_obj.idx:
-                        active_collisions.append(collisions_data[c_idx])
+                frames = trajectory.get_x()
+                for c_idx in collisions.keys():
+                    if collisions[c_idx].obj1_idx  == config_obj.idx or collisions[c_idx].obj2_idx == config_obj.idx:
+                        active_collisions.append(collisions[c_idx])
 
                 forces_frames, other_obj_idx, restitution, relative_velocity, normal_velocity, normal_force, tangential_force, tangential_velocity, normal_force_magnitude, tangential_force_magnitude, stochastic_normal_force, stochastic_tangential_force, contact_type, contact_point, contact_radius, rolling_radius, impact_duration, contact_pressure, penetration_depth, coupling_strength = ([] for _ in range(20))
 
@@ -70,13 +70,15 @@ class ForceSolver:
                         if (active_collisions[c_idx].frame <= frame <= active_collisions[c_idx].frame + active_collisions[c_idx].frame_range):
                             collisions.append(active_collisions[c_idx])
                             other_obj_indices.append(active_collisions[c_idx].obj1_idx if not active_collisions[c_idx].obj1_idx == obj_idx else active_collisions[c_idx].obj2_idx)
-                            for t_idx in trajectories.keys():
-                                if 'TrajectoryData' in str(type(trajectories[t_idx])):
-                                    if trajectories[t_idx].obj_idx in other_obj_indices:
-                                        other_trajectories.append(trajectories[t_idx])
-                                    for other_config in config.objects:
-                                        if other_config.idx in other_obj_indices:
-                                            other_config_objs.append(other_config)
+                            for other_config in config.objects:
+                                if other_config.idx in other_obj_indices:
+                                    other_config_objs.append(other_config)
+                                    trajectories = self.entity_manager.get('trajectories') if len(trajectories) == 0 else trajectories
+                                    for t_idx in trajectories.keys():
+                                        if 'TrajectoryData' in str(type(trajectories[t_idx])):
+                                            if trajectories[t_idx].obj_idx in other_obj_indices:
+                                                other_trajectories.append(trajectories[t_idx])
+
                     if collisions == []: 
                         forces_data = self._calculate_forces(frame=frame, obj_idx=obj_idx, config_obj=config_obj, trajectory=trajectory, sfps=sfps, sample_rate=sample_rate)
                     else:
@@ -98,21 +100,13 @@ class ForceSolver:
                             tangential_force_magnitude.append(force_data.tangential_force_magnitude)
                             stochastic_normal_force.append(force_data.stochastic_normal_force)
                             stochastic_tangential_force.append(force_data.stochastic_tangential_force)
-                            print('force_data.contact_type: ', force_data.contact_type)
                             contact_type.append(force_data.contact_type if not force_data.contact_type == None else 0)
-                            print('force_data.contact_point: ', type(force_data.contact_point), force_data.contact_point)
                             contact_point.append(force_data.contact_point if isinstance(force_data.contact_point, np.ndarray) else np.array([np.nan,np.nan,np.nan]))
-                            print('force_data.contact_radius: ', force_data.contact_radius)
                             contact_radius.append(force_data.contact_radius if not force_data.contact_radius == None else np.nan)
-                            print('force_data.rolling_radius: ', force_data.rolling_radius)
                             rolling_radius.append(force_data.rolling_radius if not force_data.rolling_radius == None else np.nan)
-                            print('force_data.impact_duration: ', force_data.impact_duration)
                             impact_duration.append(force_data.impact_duration if not force_data.impact_duration == None else np.nan)
-                            print('force_data.contact_pressure: ', force_data.contact_pressure)
                             contact_pressure.append(force_data.contact_pressure if not force_data.contact_pressure == None else np.nan)
-                            print('force_data.penetration_depth: ', force_data.penetration_depth)
                             penetration_depth.append(force_data.penetration_depth if not force_data.penetration_depth == None else np.nan)
-                            print('force_data.coupling_strength: ', force_data.coupling_strength)
                             coupling_strength.append(force_data.coupling_strength if not force_data.coupling_strength == None else 0.0)
 
                 forces_frames = np.unique(np.sort(np.array(forces_frames)))
@@ -148,7 +142,6 @@ class ForceSolver:
                 tangential_force_magnitude = CubicSpline(forces_frames, tangential_force_magnitude, extrapolate=1)
                 stochastic_normal_force = [CubicSpline(forces_frames, stochastic_normal_force[:, i], extrapolate=1) for i in range(stochastic_normal_force.shape[1])]
                 stochastic_tangential_force = [CubicSpline(forces_frames, stochastic_tangential_force[:, i], extrapolate=1) for i in range(stochastic_tangential_force.shape[1])]
-                print(contact_point)
                 contact_point = [CubicSplineWithNaN(forces_frames, contact_point[:, i], extrapolate=1) for i in range(contact_point.shape[1])]
                 contact_radius = CubicSplineWithNaN(forces_frames, contact_radius, extrapolate=1)
                 rolling_radius = CubicSplineWithNaN(forces_frames, rolling_radius, extrapolate=1)
