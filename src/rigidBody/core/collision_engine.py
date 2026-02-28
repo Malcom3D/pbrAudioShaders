@@ -39,6 +39,7 @@ from ..core.modal_player import ModalPlayer
 
 from ..lib.collision_data import CollisionData
 from ..lib.trajectory_data import TrajectoryData
+from ..lib.force_data import ForceDataSequence
 
 @dataclass
 class CollisionEngine:
@@ -51,6 +52,9 @@ class CollisionEngine:
         config = self.entity_manager.get('config')
         self.collisions_dir = f"{config.system.cache_path}/collisions"
         self.trajectories_dir = f"{config.system.cache_path}/trajectories"
+        self.forces_dir = f"{config.system.cache_path}/forces_data"
+        self.modalvertices_dir = f"{config.system.cache_path}/modalvertices"
+        self.scoretracks_dir = f"{config.system.cache_path}/scoretracks"
         obj_static, obj_dyn, obj_pairs = ([] for _ in range(3))
         for config_obj in config.objects:
             if not config_obj.static and not config_obj.idx in obj_dyn:
@@ -67,12 +71,16 @@ class CollisionEngine:
         self.vs = VertexSolver(self.entity_manager)
         self.ns = NormalSolver(self.entity_manager)
         self.fp = FlightPath(self.entity_manager)
+        self.mm = Mesh2Modal(self.entity_manager)
 
         tasks_static = [self.fp.compute(obj_idx) for obj_idx in self.obj_static]
         tasks_obj = [self.prebake_object(obj_idx) for obj_idx in self.obj_dyn]
 
         results_static = compute(*tasks_static)
         results_obj = compute(*tasks_obj)
+
+        tasks_modal = [self.prebake_modal(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
+        results_modal = compute(*tasks_modal)
 
     def bake(self):
         config = self.entity_manager.get('config')
@@ -89,7 +97,6 @@ class CollisionEngine:
         self.ds = DistanceSolver(self.entity_manager)
         self.fs = ForceSolver(self.entity_manager)
         self.force_synth = ForceSynth(self.entity_manager)
-        self.mm = Mesh2Modal(self.entity_manager)
 
         tasks_dists = [self.bake_distances(objs_idx) for objs_idx in self.obj_pairs]
         results_dists = compute(*tasks_dists)
@@ -100,21 +107,20 @@ class CollisionEngine:
         tasks_force_synth = [self.bake_force_synth(obj_idx) for obj_idx in self.obj_dyn]
         results_force_synth = compute(*tasks_force_synth)
 
-        tasks_modal = [self.bake_modal(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
-        results_modal = compute(*tasks_modal)
-
 #        import shutil
 #        s = '/home/malcom3d/Documents/dsp'
 #        t = 'pbrAudioCache/dsp'
 #        files = os.listdir(s)
 #        for fname in files:
 #            shutil.copy(os.path.join(s, fname), t)
+
         # Save updated collision data
         collision_data = self.entity_manager.get('collisions')
+        print('Save collisions: ', len(collision_data))
         for c_idx in collision_data.keys():
             collision_data[c_idx].save(f"{self.collisions_dir}/{c_idx:05d}.json")
 
-    def render(self):
+    def prerender(self):
         config = self.entity_manager.get('config')
         trajectories = self.entity_manager.get('trajectories')
         if len(trajectories) == 0:
@@ -128,20 +134,63 @@ class CollisionEngine:
 
         collisions = self.entity_manager.get('collisions')
         if len(collisions) == 0:
-            collisions = {}
             if os.path.exists(f"{self.collisions_dir}") and not len(os.listdir(f"{self.collisions_dir}")) == 0:
                 for filename in os.listdir(f"{self.collisions_dir}"):
                     if filename.endswith('.json'):
                         idx = int(filename.removesuffix('.json'))
-                        collisions[idx] = CollisionData.load(f"{self.collisions_dir}/{filename}")
+                        collisions = CollisionData.load(f"{self.collisions_dir}/{filename}")
+                        self.entity_manager.register('collisions', collisions, idx)
+        collisions = self.entity_manager.get('collisions')
 
-        self.ml = ModalLuthier(self.entity_manager)
+        forces = self.entity_manager.get('forces')
+        if len(forces) == 0:
+            if os.path.exists(f"{self.forces_dir}") and not len(os.listdir(f"{self.forces_dir}")) == 0:
+                for filename in os.listdir(f"{self.forces_dir}"):
+                    if filename.endswith('.pkl'):
+                        idx = int(filename.removesuffix('.pkl'))
+                        forces = ForceDataSequence.load(f"{self.forces_dir}/{filename}")
+                        self.entity_manager.register('forces', forces, idx)
 
         tasks_collision = [self.render_collision(collisions[collision_idx]) for collision_idx in collisions.keys()]
         results_collision = compute(*tasks_collision)
 
         tasks_composer = [self.render_composer(collisions[collision_idx]) for collision_idx in collisions.keys()]
         results_composer = compute(*tasks_composer)
+
+        # Save modal vertices and score tracks data
+        modal_vertices = self.entity_manager.get('modal_vertices')
+        print('Save modal_vertices: ', len(modal_vertices))
+        for m_idx in modal_vertices.keys():
+            modal_vertices[m_idx].save(f"{self.modalvertices_dir}/{m_idx:05d}.json")
+
+        score_tracks = self.entity_manager.get('score_tracks')
+        print('Save score_tracks: ', len(score_tracks))
+        for s_idx in score_tracks.keys():
+            score_tracks[s_idx].save(f"{self.scoretracks_dir}/{s_idx:05d}.json")
+
+    def render(self):
+        config = self.entity_manager.get('config')
+        modal_vertices = self.entity_manager.get('modal_vertices')
+        if len(modal_vertices) == 0:
+            if os.path.exists(self.modalvertices_dir):
+                filenames = os.listdir(self.modalvertices_dir)
+                modalvertices_idx = 0
+                for filename in filenames:
+                    modal_vertices = ModalVertices.load(f"{self.modalvertices_dir}/{filename}")
+                    self.entity_manager.register('modal_vertices', modal_vertices, modalvertices_idx)
+                    modalvertices_idx += 1
+
+        score_tracks = self.entity_manager.get('score_tracks')
+        if len(score_tracks) == 0:
+            if os.path.exists(self.scoretracks_dir):
+                filenames = os.listdir(self.scoretracks_dir)
+                scoretracks_idx = 0
+                for filename in filenames:
+                    score_tracks = ScoreTrack.load(f"{self.scoretracks_dir}/{filename}")
+                    self.entity_manager.register('score_tracks', score_tracks, scoretracks_idx)
+                    scoretracks_idx += 1
+
+        self.ml = ModalLuthier(self.entity_manager)
 
         tasks_luthier = [self.render_luthier(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
         results_luthier = compute(*tasks_luthier)
@@ -165,6 +214,10 @@ class CollisionEngine:
                 self.fp.compute(config_obj.idx)
 
     @delayed
+    def prebake_modal(self, obj_idx: int):
+        self.mm.compute(obj_idx)
+
+    @delayed
     def bake_distances(self, objs_idx: Tuple[int, int]):
         self.ds.compute(objs_idx)
 
@@ -175,10 +228,6 @@ class CollisionEngine:
     @delayed
     def bake_force_synth(self, obj_idx: int):
         self.force_synth.compute(obj_idx)
-
-    @delayed
-    def bake_modal(self, obj_idx: int):
-        self.mm.compute(obj_idx)
 
     @delayed
     def render_collision(self, collision: CollisionData):
@@ -200,4 +249,4 @@ class CollisionEngine:
 
     @delayed
     def render_save(self, player: Any):
-        player.save_synth_track()
+        player.save_synth_tracks()

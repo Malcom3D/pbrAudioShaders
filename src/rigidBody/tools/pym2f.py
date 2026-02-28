@@ -80,7 +80,6 @@ class Pym2f:
             """
             alpha_rayleigh, beta_rayleigh = self._compute_rayleigh_damping(minmode, maxmode, damping)
             cmd += f"--material {young_modulus} {poisson_ratio} {density} {alpha_rayleigh} {beta_rayleigh} "
-        cmd += f"--infile {obj_file} "
         if not minmode == None:
             cmd += f"--minmode {minmode} "
         if not maxmode == None:
@@ -90,26 +89,32 @@ class Pym2f:
             for pos in expos:
                 verts += f"{pos} "
             cmd += f"--expos {verts} "
-        if not output_name == None:
-            cmd += f"--name {output_name} "
         if not config_obj.connected == False:
             cmd += f"--freqcontrol "
 
         cmd += f"--showfreqs"
-        exit_code = os.system(cmd)
+        exit_code = os.system(f"{cmd} --name {output_name} --infile {obj_file}")
+        file_names = []
         if not exit_code == 0:
             raise ValueError(f'Error: {cmd}')
-        file_name = f"{output_name}.lib"
+        file_names.append(f"{output_name}.lib")
+
+#        exit_code = os.system(f"{cmd} --name {output_name}_resonance --nsynthmodes 10 --infile {obj_file.removesuffix('.obj')}_resonance.obj")
+        exit_code = os.system(f"{cmd} --name {output_name}_resonance --nsynthmodes 32 --infile {obj_file}")
+        if not exit_code == 0:
+            raise ValueError(f'Error: {cmd}')
+        file_names.append(f"{output_name}_resonance.lib")
 
         # remove import(stdfaust.lib)
-        with open(file_name, 'r') as file:
-            data = file.read()
-        data = data.replace('import(', '//import(')
-        with open(file_name, 'w') as file:
-            file.write(data)
+        for file_name in file_names:
+            with open(file_name, 'r') as file:
+                data = file.read()
+            data = data.replace('import(', '//import(')
+            with open(file_name, 'w') as file:
+                file.write(data)
 
-        dest_path = f"{self.cache_path}/dsp/{output_name}.lib"
-        shutil.move(file_name, dest_path)
+            dest_path = f"{self.cache_path}/dsp/{file_name}"
+            shutil.move(file_name, dest_path)
 
     def _compute_rayleigh_damping(self, f1: float, f2: float, xi1: float, xi2: float = None) -> Tuple[float, float]:
         """

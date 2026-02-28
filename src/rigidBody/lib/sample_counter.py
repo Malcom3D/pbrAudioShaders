@@ -85,6 +85,7 @@ class SampleCounter:
             # Increment the sample counter
                 if self.current_sample < self.total_samples - 1:
                     self.current_sample += 1
+                    print('SampleCounter: ', self.current_sample, self.total_samples)
                 # Reset ready counter
                 self.players_ready = []
                 locker.signal_ready() 

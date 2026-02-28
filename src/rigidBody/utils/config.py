@@ -41,7 +41,8 @@ class ObjectConfig:
     obj_path: str
     pose_path: str
     static: bool
-    connected: Union[bool, np.ndarray] = False # for static coupled systems
+    ground: bool
+    connected: Union[bool, np.ndarray] = False # for static coupled systems [[obj_idx, coupling_strength]]
     tiny_edge: float = None
     acoustic_shader: Optional[AcousticShader] = None
 

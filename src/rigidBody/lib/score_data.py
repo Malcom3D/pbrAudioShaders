@@ -24,8 +24,10 @@ from typing import List, Tuple, Dict, Any, Optional
 @dataclass
 class ScoreEvent:
     """Represents a single score event at a specific sample."""
+    type: int
     sample_idx: int
     vertex_ids: np.ndarray  # Variable length array of vertex indices
+    contact_area: float = None # 
     force: float = None # Excitation force magnitude
     coupling_data: np.ndarray = None # Array of [other_obj_idx, coupling_strength] pairs
     
@@ -37,8 +39,10 @@ class ScoreEvent:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
+            'type': int(self.type),
             'sample_idx': int(self.sample_idx),
             'vertex_ids': self.vertex_ids.tolist(),
+            'contact_area': float(self.contact_area),
             'force': float(self.force),
             'coupling_data': self.coupling_data.tolist()
         }

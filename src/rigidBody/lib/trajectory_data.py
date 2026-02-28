@@ -74,7 +74,7 @@ class TrajectoryData:
             # Static object: positions is a single (3,) array
             return self.positions.copy()
         else:
-            # Moving object: positions is a tuple of interp1d functions
+            # Moving object: positions is a tuple of CubicSpline functions
             x = self.positions[0](sample_idx)
             y = self.positions[1](sample_idx)
             z = self.positions[2](sample_idx)
@@ -86,13 +86,10 @@ class TrajectoryData:
             return np.array([0,0,0])
         else:
             # Moving object: positions is a tuple of CubicSpline functions
-            frames = self.get_x()
-            if not sample_idx == frames[0]:
-                sample_before = min([x for x in frames if x < sample_idx], key=lambda x: abs(x - sample_idx))
-                delta_t = ( sample_idx - sample_before ) / self.sample_rate
-                return (self.get_position(sample_idx) - self.get_position(sample_before)) / delta_t
-            else:
-                return np.array([0,0,0])
+            x = self.positions[0](sample_idx, 1) * self.sample_rate
+            y = self.positions[1](sample_idx, 1) * self.sample_rate
+            z = self.positions[2](sample_idx, 1) * self.sample_rate
+            return np.array([x, y, z])
 
     def get_acceleration(self, sample_idx: float) -> np.ndarray:
         if self.static:
@@ -100,13 +97,10 @@ class TrajectoryData:
             return np.array([0,0,0])
         else:
             # Moving object: positions is a tuple of CubicSpline functions
-            frames = self.get_x()
-            if not sample_idx == frames[0]:
-                sample_before = min([x for x in frames if x < sample_idx], key=lambda x: abs(x - sample_idx))
-                delta_t = ( sample_idx - sample_before ) / self.sample_rate
-                return (self.get_velocity(sample_idx) - self.get_velocity(sample_before)) / delta_t
-            else:
-                return np.array([0,0,0])
+            x = self.positions[0](sample_idx, 2) * self.sample_rate**2
+            y = self.positions[1](sample_idx, 2) * self.sample_rate**2
+            z = self.positions[2](sample_idx, 2) * self.sample_rate**2
+            return np.array([x, y, z])
 
     def get_rotation(self, sample_idx: float) -> np.ndarray:
         """Get interpolated rotation at specific sample_idx."""
@@ -115,7 +109,7 @@ class TrajectoryData:
             return self.rotations.copy()
         else:
             # Moving object: rotations is a tuple of CubicSpline functions
-           return self.rotations(sample_idx)
+           return self.rotations(sample_idx).as_euler('XYZ')
 
     def get_angular_velocity(self, sample_idx: float) -> np.ndarray:
         """Get interpolated angular velocity at specific sample_idx."""
@@ -123,8 +117,8 @@ class TrajectoryData:
             # Static object: rotations is a single (3,) array of Euler angles
             return np.array([0,0,0])
         else:
-            # Moving object: rotations is a tuple of CubicSpline functions
-            return self.rotations(sample_idx, 1)
+            # Moving object: rotations is a tuple of RotationSpline functions
+            return self.rotations(sample_idx, 1) * self.sample_rate
 
     def get_angular_acceleration(self, sample_idx: float) -> np.ndarray:
         """Get interpolated angular acceleration at specific sample_idx."""
@@ -133,7 +127,7 @@ class TrajectoryData:
             return np.array([0,0,0])
         else:
             # Moving object: rotations is a tuple of CubicSpline functions
-            return self.rotations(sample_idx, 2)
+            return self.rotations(sample_idx, 1) * self.sample_rate**2
 
     def get_vertices(self, sample_idx: float) -> np.ndarray:
         """Get interpolated position of vertices at specific sample_idx."""

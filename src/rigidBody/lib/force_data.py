@@ -17,6 +17,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import os
+import pickle
 import numpy as np
 from enum import IntEnum
 from typing import Tuple, List, Optional
@@ -27,6 +28,7 @@ from ..lib.cubicspline_with_nan import CubicSplineWithNaN
 
 class ContactType(IntEnum):
     """Enum for different Type of contact mechanics"""
+    NO_CONTACT = 0
     IMPACT = 1
     SCRAPING = 2
     SLIDING = 3
@@ -161,3 +163,56 @@ class ForceDataSequence:
             self.stochastic_tangential_force[1](frame_idx),
             self.stochastic_tangential_force[2](frame_idx)
         ])
+
+    def save(self, filepath: str) -> None:
+        """
+        Save the ForceDataSequence object to a file using pickle.
+        
+        Parameters
+        ----------
+        filepath : str
+            Path to the file where the object should be saved.
+            If the directory doesn't exist, it will be created.
+        """
+        # Create directory if it doesn't exist
+        directory = os.path.dirname(filepath)
+        if directory and not os.path.exists(directory):
+            os.makedirs(directory, exist_ok=True)
+        
+        # Save the object using pickle
+        with open(filepath, 'wb') as f:
+            pickle.dump(self, f)
+    
+    @classmethod
+    def load(cls, filepath: str) -> 'ForceDataSequence':
+        """
+        Load a ForceDataSequence object from a pickle file.
+        
+        Parameters
+        ----------
+        filepath : str
+            Path to the pickle file containing the saved object.
+            
+        Returns
+        -------
+        ForceDataSequence
+            The loaded ForceDataSequence object.
+            
+        Raises
+        ------
+        FileNotFoundError
+            If the specified file doesn't exist.
+        pickle.UnpicklingError
+            If the file cannot be unpickled or doesn't contain a valid object.
+        """
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(f"File not found: {filepath}")
+        
+        with open(filepath, 'rb') as f:
+            obj = pickle.load(f)
+        
+        # Verify that the loaded object is of the correct type
+        if not isinstance(obj, cls):
+            raise TypeError(f"Loaded object is not of type {cls.__name__}")
+        
+        return obj
