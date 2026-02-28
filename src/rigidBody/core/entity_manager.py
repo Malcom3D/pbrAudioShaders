@@ -47,6 +47,7 @@ class EntityManager:
                 self._modal_vertices = {}
                 self._score_tracks = {}
                 self._rigidbody_synth = {}
+                self._resonance_synth = {}
                 self._singleton = {}
                 self._initialized = True
 
@@ -68,7 +69,8 @@ class EntityManager:
                     'forces': [ 'ForceData', 'ForceDataSequence'],
                     'modal_vertices': 'ModalVertices',
                     'score_tracks': 'ScoreTrack',
-                    'rigidbody_synth': 'RigidBodySynth'
+                    'rigidbody_synth': 'RigidBodySynth',
+                    'resonance_synth': 'ResonanceSynth'
                 }
 
                 config = Config(config)
@@ -93,7 +95,7 @@ class EntityManager:
     def get(self, entity: str = None, idx: int = None) -> dict[str, Any]:
         """Get all objects"""
         if entity == None:
-            return self._singleton, self._sources, self._objects, self._outputs, self._wave_propagators, self._trajectories, self._collisions, self._forces, self._modal_vertices, self._score_tracks, self._rigidbody_synth
+            return self._singleton, self._sources, self._objects, self._outputs, self._wave_propagators, self._trajectories, self._collisions, self._forces, self._modal_vertices, self._score_tracks, self._rigidbody_synth, self._resonance_synth
         for key in self.sigleton_map.keys():
             if entity in key:
                 return self._singleton[entity]

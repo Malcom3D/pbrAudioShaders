@@ -156,7 +156,9 @@ class RotationSolver:
         self.mass = mesh.mass
 
         # Material properties
-        self.coefficient_of_restitution = abs(post_impact_vel)/abs(pre_impact_vel)
+        self.coefficient_of_restitution = 0
+        if not post_impact_vel == 0 and not pre_impact_vel == 0:
+            self.coefficient_of_restitution = abs(post_impact_vel)/abs(pre_impact_vel)
 
         self.friction_coefficient = config_obj.acoustic_shader.friction
         youngs_modulus = config_obj.acoustic_shader.young_modulus

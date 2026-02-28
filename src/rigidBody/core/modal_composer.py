@@ -47,11 +47,11 @@ class ModalComposer:
         for conf_obj in config.objects:
             if conf_obj.idx == obj1_idx:
                 config_obj1 = conf_obj
-                force1, coupling_strenght1 = self._load_audioforce_tracks(samples=samples, forces_path=forces_path, obj_name=config_obj1.name)
+                force1, coupling_strength1 = self._load_audioforce_tracks(samples=samples, forces_path=forces_path, obj_name=config_obj1.name)
 #                force1 = force1 / np.max(force1)
             if conf_obj.idx == obj2_idx:
                 config_obj2 = conf_obj
-                force2, coupling_strenght2 = self._load_audioforce_tracks(samples=samples, forces_path=forces_path, obj_name=config_obj2.name)
+                force2, coupling_strength2 = self._load_audioforce_tracks(samples=samples, forces_path=forces_path, obj_name=config_obj2.name)
 #                force2 = force2 / np.max(force2)
 
         score_track1, score_track2 = ([] for _ in range(2))
@@ -67,35 +67,44 @@ class ModalComposer:
             for score_idx in range(len(score_track1)):
                 events = score_track1[score_idx].get_events_at_sample(sample_idx)
                 for e_idx in range(len(events)):
-                    force = np.divide(force1[index], events[e_idx].vertex_ids.shape[0], out=np.zeros_like(force1[index]), where=events[e_idx].vertex_ids.shape[0] != 0)
-                    events[e_idx].force = force if not np.isnan(force) else 0.0
-                    coupling_data1 = coupling_strenght1[index] if not np.isnan(coupling_strenght1[index]) else 0.0
-                    events[e_idx].coupling_data = np.array([[obj2_idx, coupling_strenght1[index]]])
+                    force_type = int(events[e_idx].type)
+                    force = np.divide(force1[force_type][index], events[e_idx].vertex_ids.shape[0], out=np.zeros_like(force1[force_type][index]), where=events[e_idx].vertex_ids.shape[0] != 0)
+                    events[e_idx].force = float(force) if not np.isnan(force) else 0.0
+                    coupling_data1 = coupling_strength1[index] if not np.isnan(coupling_strength1[index]) else 0.0
+                    events[e_idx].coupling_data = np.array([[obj2_idx, coupling_data1]])
             for score_idx in range(len(score_track2)):
                 events = score_track2[score_idx].get_events_at_sample(sample_idx)
                 for e_idx in range(len(events)):
-                    force = np.divide(force2[index], events[e_idx].vertex_ids.shape[0], out=np.zeros_like(force2[index]), where=events[e_idx].vertex_ids.shape[0] != 0)
-                    events[e_idx].force = force if not np.isnan(force) else 0.0
-                    coupling_data2 = coupling_strenght2[index] if not np.isnan(coupling_strenght2[index]) else 0.0
+                    force_type = int(events[e_idx].type)
+                    force = np.divide(force2[force_type][index], events[e_idx].vertex_ids.shape[0], out=np.zeros_like(force2[force_type][index]), where=events[e_idx].vertex_ids.shape[0] != 0)
+                    events[e_idx].force = float(force) if not np.isnan(force) else 0.0
+                    coupling_data2 = coupling_strength2[index] if not np.isnan(coupling_strength2[index]) else 0.0
                     events[e_idx].coupling_data = np.array([[obj1_idx, coupling_data2]])
 
     def _load_audioforce_tracks(self, samples: np.ndarray, forces_path: str, obj_name: str) -> Tuple[np.ndarray, np.ndarray]:
         """Load and sum audio-force tracks for obj_name in forces_path"""
         sample_start = samples[0]
         sample_stop = samples[-1] + 1
-        audio_force = np.empty(sample_stop - sample_start)
-        coupling_strenght = np.empty(sample_stop - sample_start)
-        if os.path.exists(f"{forces_path}/{obj_name}_impact.raw"):
-            audio_force += np.fromfile(f"{forces_path}/{obj_name}_impact.raw", dtype=np.float32)[sample_start:sample_stop]
-        if os.path.exists(f"{forces_path}/{obj_name}_sliding.raw"):
-            audio_force += np.fromfile(f"{forces_path}/{obj_name}_sliding.raw", dtype=np.float32)[sample_start:sample_stop]
-        if os.path.exists(f"{forces_path}/{obj_name}_scraping.raw"):
-            audio_force += np.fromfile(f"{forces_path}/{obj_name}_scraping.raw", dtype=np.float32)[sample_start:sample_stop]
-        if os.path.exists(f"{forces_path}/{obj_name}_rolling.raw"):
-            audio_force += np.fromfile(f"{forces_path}/{obj_name}_rolling.raw", dtype=np.float32)[sample_start:sample_stop]
-        if os.path.exists(f"{forces_path}/{obj_name}_non_collision.raw"):
-            audio_force += np.fromfile(f"{forces_path}/{obj_name}_non_collision.raw", dtype=np.float32)[sample_start:sample_stop]
-        if os.path.exists(f"{forces_path}/{obj_name}_coupling_strenght.raw"):
-            coupling_strenght = np.fromfile(f"{forces_path}/{obj_name}_coupling_strenght.raw", dtype=np.float32)[sample_start:sample_stop]
 
-        return audio_force, coupling_strenght
+        _no_force = np.zeros(sample_stop - sample_start)
+        impact = np.zeros(sample_stop - sample_start)
+        scraping = np.zeros(sample_stop - sample_start)
+        sliding = np.zeros(sample_stop - sample_start)
+        rolling = np.zeros(sample_stop - sample_start)
+        non_collision = np.zeros(sample_stop - sample_start)
+        coupling_strength = np.zeros(sample_stop - sample_start)
+
+        if os.path.exists(f"{forces_path}/{obj_name}_impact.raw"):
+            impact += np.fromfile(f"{forces_path}/{obj_name}_impact.raw", dtype=np.float32)[sample_start:sample_stop]
+        if os.path.exists(f"{forces_path}/{obj_name}_scraping.raw"):
+            scraping += np.fromfile(f"{forces_path}/{obj_name}_scraping.raw", dtype=np.float32)[sample_start:sample_stop]
+        if os.path.exists(f"{forces_path}/{obj_name}_sliding.raw"):
+            sliding += np.fromfile(f"{forces_path}/{obj_name}_sliding.raw", dtype=np.float32)[sample_start:sample_stop]
+        if os.path.exists(f"{forces_path}/{obj_name}_rolling.raw"):
+            rolling += np.fromfile(f"{forces_path}/{obj_name}_rolling.raw", dtype=np.float32)[sample_start:sample_stop]
+        if os.path.exists(f"{forces_path}/{obj_name}_non_collision.raw"):
+            non_collision += np.fromfile(f"{forces_path}/{obj_name}_non_collision.raw", dtype=np.float32)[sample_start:sample_stop]
+        if os.path.exists(f"{forces_path}/{obj_name}_coupling_strength.raw"):
+            coupling_strength += np.fromfile(f"{forces_path}/{obj_name}_coupling_strength.raw", dtype=np.float32)[sample_start:sample_stop]
+
+        return [_no_force, impact, scraping, sliding, rolling, non_collision], coupling_strength

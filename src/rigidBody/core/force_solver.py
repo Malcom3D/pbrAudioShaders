@@ -35,6 +35,11 @@ from ..lib.cubicspline_with_nan import CubicSplineWithNaN
 class ForceSolver:
     entity_manager: EntityManager
 
+    def __post_init__(self):
+        config = self.entity_manager.get('config')
+        self.output_dir = f"{config.system.cache_path}/forces_data"
+        os.makedirs(self.output_dir, exist_ok=True)
+
     def compute(self, obj_idx: int) -> None:
         config = self.entity_manager.get('config')
         collision_margin = config.system.collision_margin
@@ -152,6 +157,7 @@ class ForceSolver:
                 force_data_sequence = ForceDataSequence(frames=forces_frames, obj_idx=obj_idx, other_obj_idx=other_obj_idx, restitution=restitution, relative_velocity=relative_velocity, normal_velocity=normal_velocity, normal_force=normal_force, tangential_force=tangential_force, tangential_velocity=tangential_velocity, normal_force_magnitude=normal_force_magnitude, tangential_force_magnitude=tangential_force_magnitude, stochastic_normal_force=stochastic_normal_force, stochastic_tangential_force=stochastic_tangential_force, contact_type=contact_type, contact_point=contact_point, contact_radius=contact_radius, rolling_radius=rolling_radius, impact_duration=impact_duration, contact_pressure=contact_pressure, penetration_depth=penetration_depth, coupling_strength=coupling_strength)
 
                 force_idx = len(self.entity_manager.get('forces')) + 1
+                force_data_sequence.save(f"{self.output_dir}/{config_obj.idx:05d}.pkl")
                 self.entity_manager.register('forces', force_data_sequence, force_idx)
 
     def _calculate_forces(self, frame: float, obj_idx: int, config_obj: Any, trajectory: Any, sfps: int, sample_rate: int) -> Optional[List[ForceData]]:
@@ -294,7 +300,9 @@ class ForceSolver:
             tangential_velocity = relative_velocity - normal_velocity
         
             # Get material properties
-            restitution = abs(np.linalg.norm(other_linear_velocity_after) - np.linalg.norm(linear_velocity_after))/abs(np.linalg.norm(linear_velocity_before) - np.linalg.norm(other_linear_velocity_before))
+            restitution = 0
+            if not np.linalg.norm(linear_velocity_before) == 0 and not np.linalg.norm(other_linear_velocity_before) == 0:
+                restitution = abs(np.linalg.norm(other_linear_velocity_after) - np.linalg.norm(linear_velocity_after))/abs(np.linalg.norm(linear_velocity_before) - np.linalg.norm(other_linear_velocity_before))
             if hasattr(config_obj.acoustic_shader, 'restitution'):
                 restitution = config_obj.acoustic_shader.restitution
         
@@ -384,7 +392,7 @@ class ForceSolver:
                 penetration_depth = hertz_impact_data['penetration_depth']
                 coupling_strength = hertz_impact_data['coupling_strength']
             elif not hertz_impact_data == None and not hertz_continuous_data == None:
-                contact_type = hertz_continuous_data['contact_type'].value
+                contact_type = hertz_impact_data['contact_type'].value
                 contact_point = (hertz_impact_data['contact_point'] + hertz_continuous_data['contact_point']) / 2
                 contact_radius = (hertz_impact_data['contact_radius'] + hertz_continuous_data['contact_radius']) / 2
                 rolling_radius = hertz_continuous_data['rolling_radius']

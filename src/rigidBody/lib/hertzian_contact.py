@@ -17,12 +17,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import os
+import math
 import trimesh
 import numpy as np
 from typing import Dict, Tuple, Optional, Any
 from dataclasses import dataclass
 from scipy.spatial import ConvexHull
-from enum import Enum
 
 from ..core.entity_manager import EntityManager
 from ..lib.force_data import ContactType
@@ -288,7 +288,9 @@ class HertzianContact:
         delta = a_contact**2 / R_eff
         
         # Contact pressure
-        p_contact = (3 * normal_force_mag) / (2 * np.pi * a_contact**2)
+        p_contact = 0
+        if not a_contact == 0:
+            p_contact = (3 * normal_force_mag) / (2 * np.pi * a_contact**2)
         
         # Get contact normal
         contact_normal = self._get_contact_normal(trajectory1, trajectory2, sample_idx)
@@ -300,7 +302,7 @@ class HertzianContact:
         rolling_radius = self._compute_rolling_radius(vertices1, vertices2, trajectory1, trajectory2, contact_normal, contact_point, sample_idx)
         
         # Classify contact type
-        contact_type = self._classify_contact_type(relative_velocity, tangential_velocity, normal_force_mag, tangential_force_mag, omega1, omega2, roughness1, roughness2, friction1, friction2)
+        contact_type = self._classify_contact_type(relative_velocity, tangential_velocity, normal_force_mag, tangential_force_mag, omega1, omega2, roughness1, roughness2, friction1, friction2, R1, R2)
         
         # Compute coupling strength for continuous contact
         coupling_strength = self._compute_coupling_strength(config_obj1, config_obj2, normal_force_mag, a_contact, relative_velocity, is_continuous=True, contact_type=contact_type)
@@ -416,7 +418,7 @@ class HertzianContact:
         # Midpoint
         return (point1 + point2) / 2
     
-    def _classify_contact_type(self, relative_velocity: float, tangential_velocity: float, normal_force: float, tangential_force: float, omega1: np.ndarray, omega2: np.ndarray, roughness1: float, roughness2: float, friction1: float, friction2: float) -> ContactType:
+    def _classify_contact_type(self, relative_velocity: float, tangential_velocity: float, normal_force: float, tangential_force: float, omega1: np.ndarray, omega2: np.ndarray, roughness1: float, roughness2: float, friction1: float, friction2: float, R1: float, R2: float) -> ContactType:
         """
         Classify the type of continuous contact.
         
@@ -436,6 +438,8 @@ class HertzianContact:
             Surface roughness
         friction1, friction2 : float
             Friction coefficients
+        R1, R2 : float
+            Mean radius
             
         Returns:
         --------
@@ -444,17 +448,23 @@ class HertzianContact:
         # Average friction
         friction = (friction1 + friction2) / 2 if friction1 and friction2 else 0.3
         
-        # Check for static contact
-        if relative_velocity < 0.001:  # Very slow
-            return ContactType.STATIC
-        
         # Check for rolling
         angular_speed1 = np.linalg.norm(omega1)
         angular_speed2 = np.linalg.norm(omega2)
         
+        # Check for static contact
+        if (angular_speed1 == 0.0 or angular_speed2 == 0.0) and relative_velocity == 0.0:  # No movement
+            return ContactType.STATIC
+        
         # Rolling condition: tangential velocity matches angular velocity * radius
-        if (angular_speed1 > 0.1 or angular_speed2 > 0.1) and tangential_velocity < 0.01:
+        rolling_speed1 = R1 * angular_speed1 / 2
+        rolling_speed2 = R2 * angular_speed2 / 2
+#        print('R1: ', R1, 'rolling_speed1: ', rolling_speed1, 'relative_velocity: ', relative_velocity, 'tangential_velocity: ', tangential_velocity)
+#        print('R2: ', R2, 'rolling_speed2: ', rolling_speed2, 'relative_velocity: ', relative_velocity, 'tangential_velocity: ', tangential_velocity)
+        if math.isclose(rolling_speed1, relative_velocity, rel_tol=0.2) or math.isclose(rolling_speed2, relative_velocity, rel_tol=0.2):
             return ContactType.ROLLING
+#        if (0.01 <= angular_speed1 or 0.01 <= angular_speed2) and tangential_velocity < 0.01:
+#            return ContactType.ROLLING
         
         # Check friction condition for sliding vs scraping
         max_friction_force = friction * normal_force

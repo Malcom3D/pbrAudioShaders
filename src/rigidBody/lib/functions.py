@@ -21,7 +21,14 @@ def _mesh_to_obj(vertices: np.ndarray, normals: np.ndarray, faces: np.ndarray, o
     """
     # Create trimesh object
     mesh = trimesh.Trimesh(vertices=vertices, vertex_normals=normals, faces=faces)
+
+    # Create simplified convex hull for resonance model
+#    simplified = mesh.simplify_quadric_decimation(face_count=20)
+#    hull = trimesh.convex.convex_hull(simplified)
+
+    # Export as obj
     mesh.export(obj_file, file_type='obj')
+#    hull.export(f"{obj_file.removesuffix('.obj')}_resonance.obj", file_type='obj')
     return
 
 def _load_mesh(config_obj: Any, frame_idx: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:

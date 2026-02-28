@@ -64,13 +64,13 @@ class DistanceSolver:
 
         frames = np.unique(np.sort(np.concatenate((frames[0], frames[1]))))
 
-        if config_objs[0].static and config_objs[1].static:
+        if isinstance(config_objs[1].connected, np.ndarray) and config_objs[0].idx in config_objs[1].connected[:,0] and isinstance(config_objs[0].connected, np.ndarray) and config_objs[1].idx in config_objs[0].connected[:,0]:
             frame = sample_rate / sfps
             distance, closest_points = self._distance(config_objs=config_objs, trajectory1=trajectory1, trajectory2=trajectory2, frame=frame, sfps=sfps, sample_rate=sample_rate, collision_margin=collision_margin)
             distances = np.array(distance)
             closest_point1 = np.array(closest_points['mesh1_point'])
             closest_point2 = np.array(closest_points['mesh2_point'])
-            filename = f"{self.output_dir}/{objs_idx[0]}_{objs_idx[1]}.npz"
+            filename = f"{self.output_dir}/connected_{objs_idx[0]}_{objs_idx[1]}.npz"
             np.savez_compressed(filename, distances, closest_point1, closest_point2)
 
             collision_type = CollisionType.CONNECTED
@@ -78,7 +78,7 @@ class DistanceSolver:
             collision_idx = len(self.entity_manager.get('collisions')) + 1
             self.entity_manager.register('collisions', collision_data, collision_idx)
 
-        elif not config_objs[0].static or not config_objs[1].static:
+        if not config_objs[0].static or not config_objs[1].static:
             distances, closest_point1, closest_point2 = ([] for _ in range(3))
             for idx in range(len(frames)):
                 distance, closest_points = self._distance(config_objs=config_objs, trajectory1=trajectory1, trajectory2=trajectory2, frame=frames[idx], sfps=sfps, sample_rate=sample_rate, collision_margin=collision_margin)

@@ -69,7 +69,8 @@ class ForceSynth:
                             force = forces[f_idx]
 
         # Calculate total duration in samples
-        frames = force.frames
+        #frames = force.frames
+        frames = trajectory.get_x()
         total_samples = int(trajectory.get_x()[-1])
 
         # Init tracks
@@ -77,7 +78,11 @@ class ForceSynth:
         sliding_track = np.zeros(total_samples)
         scraping_track = np.zeros(total_samples)
         rolling_track = np.zeros(total_samples)
+        sliding_sound = np.zeros(total_samples)
+        scraping_sound = np.zeros(total_samples)
+        rolling_sound = np.zeros(total_samples)
         non_collision_track = np.zeros(total_samples)
+        coupling_strength_track = np.zeros(total_samples)
 
         frame_samples = self._create_empty_tracks(total_samples)
         for sample_idx in frames:
@@ -90,16 +95,17 @@ class ForceSynth:
                     for conf_obj in config.objects:
                         if conf_obj.idx == other_obj_idx:
                             other_config_obj = conf_obj 
-                    if collision.type.value == 'impact': 
+                    if collision.type.value == 'impact':
                         # Synthesize impact sound using Hertzian model
                         frame_samples = self._synthesize_impact(force, collision, config_obj, other_config_obj, sample_idx, total_samples, sample_rate)
                     elif collision.type.value == 'contact': 
-                        # Synthesize impact sound using Hertzian model
-                        impact_samples = self._synthesize_impact(force, collision, config_obj, other_config_obj, sample_idx, total_samples, sample_rate)
                         # Synthesize contact sound
                         frame_samples = self._synthesize_contact(trajectory, force, collision, config_obj, other_config_obj, sample_idx, total_samples, sample_rate, sfps, spsf)
-                        for key in frame_samples.keys():
-                            frame_samples[key] += impact_samples[key]
+                        if not np.any(np.isnan(forces[1].impact_duration)):
+                            # Synthesize impact sound using Hertzian model
+                            impact_samples = self._synthesize_impact(force, collision, config_obj, other_config_obj, sample_idx, total_samples, sample_rate)
+                            for key in frame_samples.keys():
+                                frame_samples[key] += impact_samples[key]
 
                 # Add to tracks
                 impact_track += frame_samples['impact']
@@ -107,14 +113,22 @@ class ForceSynth:
                 scraping_track += frame_samples['scraping']
                 rolling_track += frame_samples['rolling']
                 non_collision_track += frame_samples['non_collision']
-        
+                coupling_strength_track += frame_samples['coupling_strength']
+                sliding_sound += frame_samples['sliding_sound']
+                scraping_sound += frame_samples['scraping_sound']
+                rolling_sound += frame_samples['rolling_sound']
+
         # Save tracks
         tracks = {
             'impact': impact_track,
             'sliding': sliding_track,
             'scraping': scraping_track,
             'rolling': rolling_track,
+            'sliding_sound': sliding_sound,
+            'scraping_sound': scraping_sound,
+            'rolling_sound': rolling_sound,
             'non_collision': non_collision_track,
+            'coupling_strength': coupling_strength_track
         }
         
         self._save_tracks(config_obj, tracks, total_samples, sample_rate)
@@ -175,6 +189,9 @@ class ForceSynth:
             'sliding': np.zeros(total_samples),
             'scraping': np.zeros(total_samples),
             'rolling': np.zeros(total_samples),
+            'sliding_sound': np.zeros(total_samples),
+            'scraping_sound': np.zeros(total_samples),
+            'rolling_sound': np.zeros(total_samples),
             'non_collision': np.zeros(total_samples),
             'coupling_strength': coupling_strength
         }
@@ -202,6 +219,9 @@ class ForceSynth:
             'sliding': np.zeros(total_samples),
             'scraping': np.zeros(total_samples),
             'rolling': np.zeros(total_samples),
+            'sliding_sound': np.zeros(total_samples),
+            'scraping_sound': np.zeros(total_samples),
+            'rolling_sound': np.zeros(total_samples),
             'non_collision': non_collision,
             'coupling_strength': np.zeros(total_samples)
         }
@@ -319,14 +339,49 @@ class ForceSynth:
                 total_noise[spike_start:spike_end] += spike_signal * spike_scale * 2.0
     
         # Normalize signal
-        scraping_signal = total_noise / np.max(np.abs(total_noise))
+        scraping_sound = total_noise / np.max(np.abs(total_noise))
+
+        """Generate scraping vibration signal."""
+        # Base frequency depends on velocity and roughness
+        base_freq = 2000 + 5000 * np.mean(contact_velocities) * Rq_effective
+        
+        # Create modulated noise
+        t = np.arange(n_samples) / sample_rate
+        noise = np.random.randn(n_samples) * 0.1
+        
+        # Amplitude modulation based on tangential force
+        amplitude_env = tangential_forces / np.max(tangential_forces + 1e-10)
+        
+        # Frequency modulation based on velocity
+        freq_mod = 1.0 + 0.5 * np.sin(2 * np.pi * 50 * t)  # 50 Hz modulation
+        
+        # Generate scraping_signal
+        scraping_signal = np.zeros(n_samples)
+        for i in range(n_samples):
+            freq = base_freq * freq_mod[i]
+            if freq < sample_rate / 2:  # Nyquist limit
+                scraping_signal[i] = np.sin(2 * np.pi * freq * t[i]) * amplitude_env[i]
+        
+        # Add noise component
+        scraping_signal += noise * 0.3
+        
+        # Apply envelope
+        envelope = signal.windows.tukey(n_samples, alpha=0.3)
+        scraping_signal *= envelope
+        
+        # Add scraping_signal to empty track
+        scraping_vibration = np.zeros(total_samples)
+        scraping_vibration[start_idx:stop_idx] += scraping_signal
 
         # Create tracks
         result = {
             'impact': np.zeros(total_samples),
             'sliding': np.zeros(total_samples),
-            'scraping': scraping_signal,
+            'scraping': scraping_vibration,
             'rolling': np.zeros(total_samples),
+            'sliding_sound': np.zeros(total_samples),
+            'scraping_sound': scraping_sound,
+            'rolling_sound': np.zeros(total_samples),
             'non_collision': np.zeros(total_samples),
             'coupling_strength': coupling_strength
         }
@@ -394,14 +449,49 @@ class ForceSynth:
         total_noise[start_idx:stop_idx] += resonant_noises * amplitude
 
         # Normalize signal
-        sliding_signal = total_noise / np.max(np.abs(total_noise))
-        
+        sliding_sound = total_noise / np.max(np.abs(total_noise))
+
+        """Generate sliding vibration signal."""
+        # Base frequency depends on velocity
+        base_freq = 500 + 2000 * np.mean(contact_velocities)
+
+        # Create modulated signal
+        t = np.arange(n_samples) / sample_rate
+        noise = np.random.randn(n_samples) * 0.05
+
+        # Amplitude modulation based on normal force
+        amplitude_env = normal_forces / np.max(normal_forces + 1e-10)
+
+        # Generate sliding_signal
+        sliding_signal = np.zeros(n_samples)
+        for i in range(n_samples):
+            # Slight frequency variation
+            freq_variation = 1.0 + 0.1 * np.sin(2 * np.pi * 20 * t[i])
+            freq = base_freq * freq_variation
+
+            if freq < sample_rate / 2:  # Nyquist limit
+                sliding_signal[i] = np.sin(2 * np.pi * freq * t[i]) * amplitude_env[i]
+
+        # Add noise component (less than scraping)
+        sliding_signal += noise * 0.1
+
+        # Apply smoother envelope
+        envelope = signal.windows.hann(n_samples)
+        sliding_signal *= envelope
+
+        # Add sliding_signal to empty track
+        sliding_vibration = np.zeros(total_samples)
+        sliding_vibration[start_idx:stop_idx] += sliding_signal
+
         # Create tracks
         result = {
             'impact': np.zeros(total_samples),
-            'sliding': sliding_signal,
+            'sliding': sliding_vibration,
             'scraping': np.zeros(total_samples),
             'rolling': np.zeros(total_samples),
+            'sliding_sound': sliding_sound,
+            'scraping_sound': np.zeros(total_samples),
+            'rolling_sound': np.zeros(total_samples),
             'non_collision': np.zeros(total_samples),
             'coupling_strength': coupling_strength
         }
@@ -409,27 +499,68 @@ class ForceSynth:
         return result
     
     def _synthesize_rolling(self, trajectory: Any, force: Any, collision: Any, config_obj: Any, other_config_obj: Any, sample_idx: float, total_samples: int, sample_rate: int):
-        """Synthesize rolling sound using second-order resonant filter driven by noise."""
+        """Synthesize rolling sound using Poisson pulse sequence filtered by second-order resonant filter."""
         # Extract parameters
         n_samples = int(collision.frame_range)
-        rolling_samples, coupling_strength = (np.zeros(total_samples) for _ in range(2))
-        normal_forces, tangential_velocities, angular_velocities = (np.zeros(n_samples) for _ in range(3))
+        rolling_vibration, rolling_signal, coupling_strength = (np.zeros(total_samples) for _ in range(3))
+        normal_forces, tangential_velocities, angular_velocities, contact_velocity = (np.zeros(n_samples) for _ in range(4))
         for s_idx in range(n_samples):
             current_idx = int(sample_idx) + s_idx
             normal_forces[s_idx] = np.linalg.norm(force.get_stochastic_normal_force(current_idx))
             tangential_velocities[s_idx] = np.linalg.norm(force.get_tangential_velocity(current_idx))
             angular_velocities[s_idx] = np.linalg.norm(trajectory.get_angular_velocity(current_idx))
+            contact_velocity[s_idx] = np.linalg.norm(force.get_relative_velocity(current_idx))
             coupling_strength[current_idx] = force.get_coupling_strength(current_idx)
 
-        # Generate white noise
-        noise = np.random.randn(n_samples)
-        
+        # Time array
+        t = np.arange(n_samples) / sample_rate
+
+        # Get material properties for irregularity estimation
+        roughness = config_obj.acoustic_shader.roughness
+        other_roughness = other_config_obj.acoustic_shader.roughness
+
+        # Estimate ovality/irregularity from roughness
+        # Ovality factor: 0 = perfect sphere, 1 = highly irregular
+        # TODO: use rolling_radius delta in (t)
+        ovality = 0.1 + 0.9 * (roughness + other_roughness) / 2.0
+        ovality = np.clip(ovality, 0.1, 0.9)
+
+        # Base pulse rate from angular velocity (revolutions per second)
+        # Each revolution causes multiple impacts due to surface irregularities
+        avg_angular_velocity = np.mean(np.abs(angular_velocities))
+        base_pulse_rate = avg_angular_velocity / (2 * np.pi)  # Convert rad/s to Hz
+
+        # Scale by ovality: more irregular = more pulses per revolution
+        pulse_rate = base_pulse_rate * (1.0 + 10.0 * ovality)
+        pulse_rate = np.clip(pulse_rate, 1.0, 1000.0)  # Reasonable limits
+
+        # Generate Poisson pulse sequence
+        # Average pulse rate λ (pulses per second) depends on angular velocity
+        # and surface irregularity (ovality)
+
+        poisson_pulses = self._generate_poisson_pulse_sequence(n_samples=n_samples, sample_rate=sample_rate, pulse_rate=pulse_rate, amplitude_env=normal_forces / np.max(normal_forces + 1e-10))
+
         # Design spectral envelope S(w) = 1 / sqrt((w - p)² + d²)
         # where p is center frequency, d is damping
+
+        # Center frequency p depends on material properties and normal force
+        # Higher normal force = higher frequency (stiffer contact)
+        avg_normal_force = np.mean(normal_forces)
+        p_base = 50.0 + 200.0 * avg_normal_force * 0.001  # Hz
+        p_variation = 0.2 * p_base  # Some variation
         
-        # Center frequency depends on normal force and velocity
-        p = 50.0 + 100.0 * normal_forces * 0.001  # Hz
-        d = 10.0 + 5.0 * tangential_velocities  # Damping
+        # Damping d depends on material damping and velocity
+        # Higher velocity = more damping
+        avg_velocity = np.mean(tangential_velocities)
+        d_base = 10.0 + 20.0 * avg_velocity  # Damping coefficient
+        d_variation = 0.3 * d_base
+
+        # Time-varying parameters for richer sound
+        p = p_base + p_variation * np.sin(2 * np.pi * 0.5 * t)  # Slow variation
+        d = d_base + d_variation * np.sin(2 * np.pi * 0.3 * t)  # Different slow variation
+
+        # Apply resonant filter to Poisson pulses
+        filtered_pulses = np.zeros(n_samples)
 
         for s_idx in range(n_samples):
             # Create IIR filter that approximates the spectral envelope
@@ -439,31 +570,212 @@ class ForceSynth:
             center_normalized = p[s_idx] / nyquist
         
             # Design resonant filter
-            b, a = signal.iirpeak(center_normalized, Q)
-        
-            # Apply filter to noise
-            rolling_signal = signal.lfilter(b, a, noise)
-        
-            # Amplitude modulation
-            amplitude = 1 + angular_velocities[s_idx] / np.max(np.abs(angular_velocities))
-            rolling_signal *= amplitude
-            current_idx = int(sample_idx) + s_idx
-            rolling_samples[current_idx] = rolling_signal[s_idx]
+            b, a = signal.iirpeak(center_normalized, Q, fs=sample_rate)
 
-        # Normalize signal
-        rolling_samples = rolling_samples / np.max(np.abs(rolling_samples))
+            # Apply filter (using convolution in frequency domain for efficiency)
+            # We'll apply to a window around the current sample
+            window_size = min(1024, n_samples - s_idx)
+            if window_size > 10:
+                window_signal = poisson_pulses[s_idx:s_idx + window_size]
+                filtered_window = signal.lfilter(b, a, window_signal)
+                filtered_pulses[s_idx] = filtered_window[0]
+
+        # Amplitude modulation
+        # Modulation frequency proportional to relative speed/angular velocity
+        # Modulation depth proportional to ovality
+    
+        # Base modulation frequency (Hz)
+        mod_freq_base = 1.0 + 5.0 * avg_angular_velocity / (2 * np.pi)
+    
+        # Add some variation
+        mod_freq = mod_freq_base * (1.0 + 0.3 * np.sin(2 * np.pi * 0.2 * t))
+    
+        # Modulation depth: 0 = no modulation, 1 = full modulation
+        mod_depth = 0.3 + 0.7 * ovality  # More ovality = deeper modulation
+    
+        # Create amplitude modulation signal
+        mod_signal = 1.0 - mod_depth + mod_depth * np.sin(2 * np.pi * mod_freq * t)
+    
+        # Apply amplitude modulation
+        modulated_signal = filtered_pulses * mod_signal
+
+        # Amplitude scales with tangential velocity (rolling speed)
+        velocity_scale = tangential_velocities / np.max(tangential_velocities + 1e-10)
+        velocity_scale = np.clip(velocity_scale, 0.1, 1.0)
+    
+        # Apply velocity scaling
+        rolling_sound = modulated_signal * velocity_scale
+
+        # Add some filtered noise for texture (surface roughness effects)
+        noise_level = 0.1 * ovality  # More ovality = more noise
+        texture_noise = np.random.randn(n_samples) * noise_level
+    
+        # Apply same resonant filter to noise
+        filtered_noise = np.zeros(n_samples)
+        for s_idx in range(n_samples):
+            if s_idx % 100 == 0:  # Update filter less frequently for efficiency
+                nyquist = sample_rate / 2
+                center_normalized = p[s_idx] / nyquist
+                Q = p[s_idx] / (2 * d[s_idx]) if d[s_idx] > 0 else 10.0
+                Q = np.clip(Q, 0.5, 100.0)
+                b, a = signal.iirpeak(center_normalized, Q, fs=sample_rate)
         
+            window_size = min(512, n_samples - s_idx)
+            if window_size > 10:
+                window_noise = texture_noise[s_idx:s_idx + window_size]
+                filtered_window = signal.lfilter(b, a, window_noise)
+                filtered_noise[s_idx] = filtered_window[0]
+    
+        # Combine pulse signal and noise
+        rolling_sound = rolling_sound + 0.3 * filtered_noise
+
+        # Apply smooth envelope to avoid clicks
+        envelope = signal.windows.tukey(n_samples, alpha=0.3)
+        rolling_sound *= envelope
+    
+        # Normalize
+        rolling_sound = rolling_sound / np.max(np.abs(rolling_sound))
+
+        # Add rolling_sound to empty track
+        start_idx = int(sample_idx)
+        stop_idx = start_idx + n_samples
+        rolling_signal[start_idx:stop_idx] += rolling_sound
+
+        # Create vibration signal with harmonic content related to rolling frequency
+        vibration_signal = self._generate_rolling_vibration(n_samples=n_samples, sample_rate=sample_rate, angular_velocities=angular_velocities, normal_forces=normal_forces, ovality=ovality)
+    
+        rolling_vibration[start_idx:stop_idx] += vibration_signal
+
         # Create tracks
         result = {
             'impact': np.zeros(total_samples),
             'sliding': np.zeros(total_samples),
             'scraping': np.zeros(total_samples),
-            'rolling': rolling_samples,
+            'rolling': rolling_signal,
+            'sliding_sound': np.zeros(total_samples),
+            'scraping_sound': np.zeros(total_samples),
+            'rolling_sound': rolling_vibration,
             'non_collision': np.zeros(total_samples),
             'coupling_strength': coupling_strength
         }
         
         return result
+
+    def _generate_poisson_pulse_sequence(self, n_samples: int, sample_rate: int, pulse_rate: float, amplitude_env: np.ndarray) -> np.ndarray:
+        """
+        Generate a Poisson pulse sequence with time-varying amplitude.
+    
+        Parameters:
+        -----------
+        n_samples : int
+            Number of samples to generate
+        sample_rate : int
+            Sample rate in Hz
+        pulse_rate : float
+            Average pulse rate in Hz (λ parameter)
+        amplitude_env : np.ndarray
+            Amplitude envelope for pulses
+    
+        Returns:
+        --------
+        np.ndarray : Poisson pulse sequence
+        """
+        # Initialize output
+        pulse_sequence = np.zeros(n_samples)
+    
+        # Convert pulse rate to probability per sample
+        prob_per_sample = pulse_rate / sample_rate
+    
+        # Generate random pulse positions
+        # Using exponential distribution for inter-pulse intervals
+        current_sample = 0
+        while current_sample < n_samples:
+            # Generate exponential random variable for next pulse
+            # Mean interval = 1 / pulse_rate seconds
+            interval_seconds = np.random.exponential(1.0 / pulse_rate)
+            interval_samples = int(interval_seconds * sample_rate)
+        
+            current_sample += interval_samples
+        
+            if current_sample < n_samples:
+                # Add pulse with amplitude from envelope
+                pulse_amplitude = amplitude_env[min(current_sample, len(amplitude_env)-1)]
+            
+                # Create short pulse (3 samples to avoid delta function)
+                pulse_width = min(3, n_samples - current_sample)
+                for i in range(pulse_width):
+                    idx = current_sample + i
+                    if idx < n_samples:
+                        # Tukey window for smooth pulse
+                        pulse_shape = signal.windows.tukey(pulse_width, alpha=0.5)[i]
+                        pulse_sequence[idx] += pulse_amplitude * pulse_shape * np.random.randn()
+    
+        return pulse_sequence
+
+    def _generate_rolling_vibration(self, n_samples: int, sample_rate: int, angular_velocities: np.ndarray, normal_forces: np.ndarray, ovality: float) -> np.ndarray:
+        """
+        Generate vibration signal for resonance synthesis from rolling contact.
+    
+        Parameters:
+        -----------
+        n_samples : int
+            Number of samples
+        sample_rate : int
+            Sample rate in Hz
+        angular_velocities : np.ndarray
+            Angular velocity over time
+        normal_forces : np.ndarray
+            Normal force over time
+        ovality : float
+            Ovality factor (0-1)
+    
+        Returns:
+        --------
+        np.ndarray : Vibration signal for modal excitation
+        """
+        t = np.arange(n_samples) / sample_rate
+    
+        # Base vibration frequency from angular velocity
+        base_freq = np.abs(angular_velocities) / (2 * np.pi)  # Hz
+    
+        # Add harmonics due to ovality/irregularity
+        num_harmonics = int(3 + 7 * ovality)  # More ovality = more harmonics
+        harmonics = np.arange(1, num_harmonics + 1)
+    
+        # Initialize vibration signal
+        vibration = np.zeros(n_samples)
+    
+        # Amplitude envelope from normal force
+        amplitude_env = normal_forces / np.max(normal_forces + 1e-10)
+
+        # Generate signal with harmonics
+        for i in range(n_samples):
+            if base_freq[i] > 0.1:  # Only add if there's significant rotation
+                for harmonic in harmonics:
+                    freq = base_freq[i] * harmonic
+                    if freq < sample_rate / 2:  # Nyquist limit
+                        # Harmonic amplitude decays with harmonic number
+                        harmonic_amp = amplitude_env[i] / (harmonic ** (1.5 - ovality))
+                    
+                        # Add some phase modulation for richness
+                        phase_mod = 0.1 * ovality * np.sin(2 * np.pi * 2.0 * t[i])
+                    
+                        vibration[i] += harmonic_amp * np.sin(2 * np.pi * freq * t[i] + phase_mod)
+    
+        # Add some noise component for texture
+        noise_level = 0.1 * ovality
+        vibration += np.random.randn(n_samples) * noise_level * amplitude_env
+    
+        # Apply smooth envelope
+        envelope = signal.windows.tukey(n_samples, alpha=0.4)
+        vibration *= envelope
+    
+        # Normalize
+        max_val = np.max(np.abs(vibration))
+        if max_val > 0:
+            vibration = vibration / max_val * 0.8
+    
+        return vibration
 
     def _create_empty_tracks(self, total_samples: int) -> Dict:
         """Create empty tracks for silent sections."""
@@ -472,6 +784,9 @@ class ForceSynth:
             'sliding': np.zeros(total_samples),
             'scraping': np.zeros(total_samples),
             'rolling': np.zeros(total_samples),
+            'sliding_sound': np.zeros(total_samples),
+            'scraping_sound': np.zeros(total_samples),
+            'rolling_sound': np.zeros(total_samples),
             'non_collision': np.zeros(total_samples),
             'coupling_strength': np.zeros(total_samples)
         }
@@ -491,8 +806,6 @@ class ForceSynth:
         }
         
         for track_name, track_data in tracks.items():
-#            npz_file = f"{self.audio_force_dir}/{config_obj.name}_{track_name}.npz"
-#            np.savez_compressed(npz_file, track_data)
             track_file = f"{config_obj.name}_{track_name}.raw"
             wave_file = f"{self.audio_force_dir}/{track_file}"
             sf.write(wave_file, track_data, sample_rate, subtype='FLOAT')
