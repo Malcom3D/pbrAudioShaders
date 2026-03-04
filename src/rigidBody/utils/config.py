@@ -31,7 +31,6 @@ class SystemConfig:
     fps_base: int = 1
     subframes: int = 1 # video subframes
     collision_margin: float = 0.05
-    min_vertex: int = None
     cache_path: str = "./pbrAudioCache/"
 
 @dataclass

@@ -16,7 +16,7 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import json
+import pickle
 import numpy as np
 from dataclasses import dataclass, field
 from typing import List, Tuple, Dict, Any, Optional
@@ -72,38 +72,22 @@ class ScoreTrack:
         """Get all events at a specific sample index."""
         return [event for event in self.events if event.sample_idx == sample_idx]
     
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for serialization."""
-        return {
-            'obj_idx': self.obj_idx,
-            'obj_name': self.obj_name,
-            'events': [event.to_dict() for event in self.events]
-        }
-    
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'ScoreTrack':
-        """Create from dictionary."""
-        track = cls(obj_idx=data['obj_idx'], obj_name=data['obj_name'])
-        track.events = [ScoreEvent.from_dict(event_data) for event_data in data['events']]
-        return track
-
-    def save(self, filepath: str, indent: int = 2) -> None:
+    def save(self, filepath: str) -> None:
         """
-        Save the ScoreTrack to a JSON file.
+        Save the ScoreTrack to a pickle file.
         
         Args:
             filepath: Path to save the JSON file
             indent: JSON indentation level (None for compact format)
         """
-        data = self.to_dict()
         
-        with open(filepath, 'w') as f:
-            json.dump(data, f, indent=indent)
+        with open(filepath, 'wb') as f:
+            pickle.dump(self, f)
     
     @classmethod
     def load(cls, filepath: str) -> 'ScoreTrack':
         """
-        Load a ScoreTrack from a JSON file.
+        Load a ScoreTrack from a pickle file.
         
         Args:
             filepath: Path to the JSON file to load
@@ -111,7 +95,7 @@ class ScoreTrack:
         Returns:
             Loaded ScoreTrack instance
         """
-        with open(filepath, 'r') as f:
-            data = json.load(f)
+        with open(filepath, 'rb') as f:
+            obj = pickle.load(f)
         
-        return cls.from_dict(data)
+        return obj

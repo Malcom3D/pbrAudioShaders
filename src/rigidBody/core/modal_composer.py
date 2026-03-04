@@ -29,8 +29,6 @@ class ModalComposer:
 
     def __post_init__(self):
         config = self.entity_manager.get('config')
-        self.score_path = f"{config.system.cache_path}/score"
-        os.makedirs(self.score_path, exist_ok=True)
 
     def compute(self, collision: Any) -> None:
         if collision.type.value == 'connected':

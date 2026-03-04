@@ -62,9 +62,6 @@ class ModalVertices:
         """
         data_dict = self.to_dict()
 
-        # Ensure directory exists
-        os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
-
         with open(filepath, 'w') as f:
             json.dump(data_dict, f, indent=indent)
 
