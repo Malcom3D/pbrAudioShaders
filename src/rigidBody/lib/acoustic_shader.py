@@ -56,7 +56,6 @@ class AcousticProperties:
 @dataclass
 class AcousticShader:
     sound_speed: float = 343.0  # m/s
-    density: float = 1.2        # kg/m³
     young_modulus: float = None
     poisson_ratio: float = None
     density: float = None

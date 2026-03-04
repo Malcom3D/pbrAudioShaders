@@ -40,6 +40,8 @@ from ..core.modal_player import ModalPlayer
 from ..lib.collision_data import CollisionData
 from ..lib.trajectory_data import TrajectoryData
 from ..lib.force_data import ForceDataSequence
+from ..lib.modal_vertices import ModalVertices
+from ..lib.score_data import ScoreTrack
 
 @dataclass
 class CollisionEngine:
@@ -157,6 +159,10 @@ class CollisionEngine:
         tasks_composer = [self.render_composer(collisions[collision_idx]) for collision_idx in collisions.keys()]
         results_composer = compute(*tasks_composer)
 
+        # Ensure directory exists
+        os.makedirs(self.modalvertices_dir, exist_ok=True)
+        os.makedirs(self.scoretracks_dir, exist_ok=True)
+
         # Save modal vertices and score tracks data
         modal_vertices = self.entity_manager.get('modal_vertices')
         print('Save modal_vertices: ', len(modal_vertices))
@@ -166,7 +172,7 @@ class CollisionEngine:
         score_tracks = self.entity_manager.get('score_tracks')
         print('Save score_tracks: ', len(score_tracks))
         for s_idx in score_tracks.keys():
-            score_tracks[s_idx].save(f"{self.scoretracks_dir}/{s_idx:05d}.json")
+            score_tracks[s_idx].save(f"{self.scoretracks_dir}/{s_idx:05d}.pkl")
 
     def render(self):
         config = self.entity_manager.get('config')
@@ -189,6 +195,18 @@ class CollisionEngine:
                     score_tracks = ScoreTrack.load(f"{self.scoretracks_dir}/{filename}")
                     self.entity_manager.register('score_tracks', score_tracks, scoretracks_idx)
                     scoretracks_idx += 1
+
+        sample_counter = self.entity_manager.get('sample_counter')
+        if sample_counter.total_samples == None:
+            trajectories = self.entity_manager.get('trajectories')
+            if len(trajectories) == 0: 
+                if os.path.exists(self.trajectories_dir):
+                    filenames = os.listdir(self.trajectories_dir)
+                    for filename in filenames:
+                        trajectory = TrajectoryData.load(f"{self.trajectories_dir}/{filename}")
+                        if not trajectory.static:
+                            sample_counter.set_total_samples(int(trajectory.get_x()[-1]))
+                            break
 
         self.ml = ModalLuthier(self.entity_manager)
 

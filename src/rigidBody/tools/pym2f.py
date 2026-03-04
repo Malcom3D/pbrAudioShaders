@@ -17,6 +17,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import os, sys
+import stat
 import numpy as np
 import shutil
 from typing import List, Tuple
@@ -35,6 +36,8 @@ class Pym2f:
         bin_dir = f"{os.path.dirname(os.path.abspath(sys.modules[Pym2f.__module__].__file__))}/../bin"
         os.environ['LD_LIBRARY_PATH'] = bin_dir
         self.mesh2faust = f"{bin_dir}/{self.mesh2faust}"
+        if not os.access(self.mesh2faust, os.X_OK):
+            os.chmod(self.mesh2faust, stat.S_IXUSR)
         self.cache_path = f"{self.config.system.cache_path}"
         os.makedirs(f"{self.cache_path}/obj", exist_ok=True)
         os.makedirs(f"{self.cache_path}/dsp", exist_ok=True)
