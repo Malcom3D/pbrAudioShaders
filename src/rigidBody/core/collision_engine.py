@@ -76,10 +76,18 @@ class CollisionEngine:
         self.mm = Mesh2Modal(self.entity_manager)
 
         tasks_static = [self.fp.compute(obj_idx) for obj_idx in self.obj_static]
-        tasks_obj = [self.prebake_object(obj_idx) for obj_idx in self.obj_dyn]
-
         results_static = compute(*tasks_static)
-        results_obj = compute(*tasks_obj)
+
+        tasks_pos = [self.prebake_position(obj_idx) for obj_idx in self.obj_dyn]
+        results_pos = compute(*tasks_pos)
+        tasks_rot = [self.prebake_rotation(obj_idx) for obj_idx in self.obj_dyn]
+        results_rot = compute(*tasks_rot)
+        tasks_vertex = [self.prebake_vertex(obj_idx) for obj_idx in self.obj_dyn]
+        results_vertex = compute(*tasks_vertex)
+        tasks_norm = [self.prebake_normal(obj_idx) for obj_idx in self.obj_dyn]
+        results_norm = compute(*tasks_norm)
+        tasks_traj = [self.prebake_trajectory(obj_idx) for obj_idx in self.obj_dyn]
+        results_traj = compute(*tasks_traj)
 
         tasks_modal = [self.prebake_modal(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
         results_modal = compute(*tasks_modal)
@@ -221,14 +229,43 @@ class CollisionEngine:
         results_save = compute(*tasks_save)
 
     @delayed
-    def prebake_object(self, obj_idx: int):
+    def prebake_position(self, obj_idx: int):
+        print('prebake_position: ', obj_idx)
         config = self.entity_manager.get('config')
         for config_obj in config.objects:
             if config_obj.idx == obj_idx:
                 self.ps.compute(config_obj.idx)
+
+    @delayed
+    def prebake_rotation(self, obj_idx: int):
+        print('prebake_rotation: ', obj_idx)
+        config = self.entity_manager.get('config')
+        for config_obj in config.objects:
+            if config_obj.idx == obj_idx:
                 self.rs.compute(config_obj.idx)
+
+    @delayed
+    def prebake_vertex(self, obj_idx: int):
+        print('prebake_vertex: ', obj_idx)
+        config = self.entity_manager.get('config')
+        for config_obj in config.objects:
+            if config_obj.idx == obj_idx:
                 self.vs.compute(config_obj.idx)
+
+    @delayed
+    def prebake_normal(self, obj_idx: int):
+        print('prebake_normal: ', obj_idx)
+        config = self.entity_manager.get('config')
+        for config_obj in config.objects:
+            if config_obj.idx == obj_idx:
                 self.ns.compute(config_obj.idx)
+
+    @delayed
+    def prebake_trajectory(self, obj_idx: int):
+        print('prebake_trajectory: ', obj_idx)
+        config = self.entity_manager.get('config')
+        for config_obj in config.objects:
+            if config_obj.idx == obj_idx:
                 self.fp.compute(config_obj.idx)
 
     @delayed

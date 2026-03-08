@@ -142,7 +142,7 @@ class ModalPlayer:
                             new_banks_state += [new_state]
                         for idx in range(len(events)):
                             event = events[idx].to_dict()
-                            if int(event['type']) in [2,3,4]:
+                            if int(event['type']) in [2,3]:
                                 #print('ModalPlayer resonance_synth.process: ', self.obj_idx, event['type'], event['force'])
                                 resonance_output += self.resonance_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
                                 sliding_output += sliding_sound[sample_idx] * event['contact_area']

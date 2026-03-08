@@ -50,6 +50,7 @@ class RigidBodySynth:
             for other_idx in range(len(other_objs)):
                 other_obj_idx, coupling_strength = other_objs[other_idx]
                 self.connected_buffer.write_to_obj(int(other_obj_idx), synth_type, coupling_strength * output_banks)
+        #print('RigidBodySynth: ', self.obj_idx, output_banks)
         return output_banks 
 
     def get_banks_state(self) -> List[Union[int, Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]]]:

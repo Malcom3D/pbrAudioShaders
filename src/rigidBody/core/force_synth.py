@@ -136,7 +136,10 @@ class ForceSynth:
     def _synthesize_impact(self, force: Any, collision: Any, config_obj: Any, other_config_obj: Any, sample_idx: float, total_samples: int, sample_rate: int) -> Dict[str, Any]:
         """Synthesize Hertzian impact audio-force."""
         # Hertzian impact parameters
-        normal_force_mag = force.get_normal_force_magnitude(sample_idx)
+        if config_obj.stochastic_variation:
+            normal_force_mag = np.linalg.norm(force.get_stochastic_normal_force(sample_idx))
+        else:
+            normal_force_mag = force.get_normal_force_magnitude(sample_idx)
         relative_velocity_mag = np.linalg.norm(force.get_relative_velocity(sample_idx))
         
         # Get impact duration using Hertzian theory
@@ -252,9 +255,13 @@ class ForceSynth:
         contact_velocities, normal_forces, tangential_forces = (np.zeros(n_samples) for _ in range(3))
         for s_idx in range(n_samples):
             current_idx = int(sample_idx) + s_idx
+            if config_obj.stochastic_variation:
+                normal_forces[s_idx] = np.linalg.norm(force.get_stochastic_normal_force(current_idx))
+                tangential_forces[s_idx] = np.linalg.norm(force.get_stochastic_tangential_force(current_idx))
+            else:
+                normal_forces[s_idx] = np.linalg.norm(force.get_normal_force(current_idx))
+                tangential_forces[s_idx] = np.linalg.norm(force.get_tangential_force(current_idx))
             contact_velocities[s_idx] = np.linalg.norm(force.get_relative_velocity(current_idx))
-            normal_forces[s_idx] = np.linalg.norm(force.get_stochastic_normal_force(current_idx))
-            tangential_forces[s_idx] = np.linalg.norm(force.get_stochastic_tangential_force(current_idx))
             coupling_strength[current_idx] = force.get_coupling_strength(current_idx)
     
         # Frequency array for FFT
@@ -406,8 +413,11 @@ class ForceSynth:
         contact_velocities, normal_forces = (np.zeros(n_samples) for _ in range(2))
         for s_idx in range(n_samples):
             current_idx = int(sample_idx) + s_idx
+            if config_obj.stochastic_variation:
+                normal_forces[s_idx] = np.linalg.norm(force.get_stochastic_normal_force(current_idx))
+            else:
+                normal_forces[s_idx] = np.linalg.norm(force.get_normal_force(current_idx))
             contact_velocities[s_idx] = np.linalg.norm(force.get_relative_velocity(current_idx))
-            normal_forces[s_idx] = np.linalg.norm(force.get_stochastic_normal_force(current_idx))
             coupling_strength[current_idx] = force.get_coupling_strength(current_idx)
     
         # Frequency array for FFT
@@ -506,7 +516,10 @@ class ForceSynth:
         normal_forces, tangential_velocities, angular_velocities, contact_velocity = (np.zeros(n_samples) for _ in range(4))
         for s_idx in range(n_samples):
             current_idx = int(sample_idx) + s_idx
-            normal_forces[s_idx] = np.linalg.norm(force.get_stochastic_normal_force(current_idx))
+            if config_obj.stochastic_variation:
+                normal_forces[s_idx] = np.linalg.norm(force.get_stochastic_normal_force(current_idx))
+            else:
+                normal_forces[s_idx] = np.linalg.norm(force.get_normal_force(current_idx))
             tangential_velocities[s_idx] = np.linalg.norm(force.get_tangential_velocity(current_idx))
             angular_velocities[s_idx] = np.linalg.norm(trajectory.get_angular_velocity(current_idx))
             contact_velocity[s_idx] = np.linalg.norm(force.get_relative_velocity(current_idx))
