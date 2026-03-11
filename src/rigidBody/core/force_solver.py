@@ -66,15 +66,14 @@ class ForceSolver:
                     if collisions[c_idx].obj1_idx  == config_obj.idx or collisions[c_idx].obj2_idx == config_obj.idx:
                         active_collisions.append(collisions[c_idx])
 
-                forces_frames, other_obj_idx, restitution, relative_velocity, normal_velocity, normal_force, tangential_force, tangential_velocity, normal_force_magnitude, tangential_force_magnitude, stochastic_normal_force, stochastic_tangential_force, contact_type, contact_point, contact_radius, rolling_radius, impact_duration, contact_pressure, penetration_depth, coupling_strength = ([] for _ in range(20))
-
+                full_forces_data, other_objs_idx = ([] for _ in range(2))
                 for idx in range(len(frames)):
                     collisions, other_obj_indices, other_trajectories, other_config_objs = ([] for _ in range(4))
                     frame = frames[idx]            
                     for c_idx in range(len(active_collisions)):
                         if (active_collisions[c_idx].frame <= frame <= active_collisions[c_idx].frame + active_collisions[c_idx].frame_range):
                             collisions.append(active_collisions[c_idx])
-                            other_obj_indices.append(active_collisions[c_idx].obj1_idx if not active_collisions[c_idx].obj1_idx == obj_idx else active_collisions[c_idx].obj2_idx)
+                            other_obj_indices.append(active_collisions[c_idx].obj2_idx if active_collisions[c_idx].obj1_idx == obj_idx else active_collisions[c_idx].obj1_idx)
                             for other_config in config.objects:
                                 if other_config.idx in other_obj_indices:
                                     other_config_objs.append(other_config)
@@ -91,10 +90,18 @@ class ForceSolver:
 
                     if not forces_data == None:
                         for index in range(len(forces_data)):
-                            force_data = forces_data[index]
+                            other_objs_idx.append((forces_data[index].obj2_idx if forces_data[index].obj1_idx == obj_idx else forces_data[index].obj2_idx))
+                            full_forces_data.append(forces_data[index])
+                other_objs_idx = np.unique(np.sort(np.array(other_objs_idx)))
+                other_objs_idx = other_objs_idx[other_objs_idx != -1]
+
+                for other_idx in range(other_objs_idx.shape[0]):
+                    forces_frames, restitution, relative_velocity, normal_velocity, normal_force, tangential_force, tangential_velocity, normal_force_magnitude, tangential_force_magnitude, stochastic_normal_force, stochastic_tangential_force, contact_type, contact_point, contact_radius, rolling_radius, impact_duration, contact_pressure, penetration_depth, coupling_strength = ([] for _ in range(19))
+                    other_obj_idx = other_objs_idx[other_idx]
+                    for force_idx in range(len(full_forces_data)):
+                        force_data = full_forces_data[force_idx]
+                        if force_data.obj2_idx in [other_obj_idx, -1]:
                             forces_frames.append(force_data.frame)
-                            if not force_data.obj2_idx == -1:
-                                other_obj_idx.append(force_data.obj2_idx if not force_data.obj2_idx == obj_idx else force_data.obj1_idx)
                             restitution.append(force_data.restitution)
                             relative_velocity.append(force_data.relative_velocity)
                             normal_velocity.append(force_data.normal_velocity)
@@ -114,51 +121,50 @@ class ForceSolver:
                             penetration_depth.append(force_data.penetration_depth if not force_data.penetration_depth == None else np.nan)
                             coupling_strength.append(force_data.coupling_strength if not force_data.coupling_strength == None else 0.0)
 
-                forces_frames = np.unique(np.sort(np.array(forces_frames)))
-                other_obj_idx = np.unique(np.sort(np.array(other_obj_idx)))
+                    # sort all list in the frames order
+                    restitution = np.array([x for _, x in sorted(zip(forces_frames, restitution))])
+                    relative_velocity = np.array([x for _, x in sorted(zip(forces_frames, relative_velocity))])
+                    normal_velocity = np.array([x for _, x in sorted(zip(forces_frames, normal_velocity))])
+                    normal_force = np.array([x for _, x in sorted(zip(forces_frames, normal_force))])
+                    tangential_force = np.array([x for _, x in sorted(zip(forces_frames, tangential_force))])
+                    tangential_velocity = np.array([x for _, x in sorted(zip(forces_frames, tangential_velocity))])
+                    normal_force_magnitude = np.array([x for _, x in sorted(zip(forces_frames, normal_force_magnitude))])
+                    tangential_force_magnitude = np.array([x for _, x in sorted(zip(forces_frames, tangential_force_magnitude))])
+                    stochastic_normal_force = np.array([x for _, x in sorted(zip(forces_frames, stochastic_normal_force))])
+                    stochastic_tangential_force = np.array([x for _, x in sorted(zip(forces_frames, stochastic_tangential_force))])
+                    contact_type = np.array([x for _, x in sorted(zip(forces_frames, contact_type))])
+                    contact_point = np.array([x for _, x in sorted(zip(forces_frames, contact_point))])
+                    contact_radius = np.array([x for _, x in sorted(zip(forces_frames, contact_radius))])
+                    rolling_radius = np.array([x for _, x in sorted(zip(forces_frames, rolling_radius))])
+                    impact_duration = np.array([x for _, x in sorted(zip(forces_frames, impact_duration))])
+                    contact_pressure = np.array([x for _, x in sorted(zip(forces_frames, contact_pressure))])
+                    penetration_depth = np.array([x for _, x in sorted(zip(forces_frames, penetration_depth))])
+                    coupling_strength = np.array([x for _, x in sorted(zip(forces_frames, coupling_strength))])
+                    forces_frames = np.sort(np.array(forces_frames))
 
-                restitution = np.array(restitution)
-                relative_velocity = np.array(relative_velocity)
-                normal_velocity = np.array(normal_velocity)
-                normal_force = np.array(normal_force)
-                tangential_force = np.array(tangential_force)
-                tangential_velocity = np.array(tangential_velocity)
-                normal_force_magnitude = np.array(normal_force_magnitude)
-                tangential_force_magnitude = np.array(tangential_force_magnitude)
-                stochastic_normal_force = np.array(stochastic_normal_force)
-                stochastic_tangential_force = np.array(stochastic_tangential_force)
-                contact_type = np.array(contact_type)
-                contact_point = np.array(contact_point)
-                contact_radius = np.array(contact_radius)
-                rolling_radius = np.array(rolling_radius)
-                impact_duration = np.array(impact_duration)
-                contact_pressure = np.array(contact_pressure)
-                penetration_depth = np.array(penetration_depth)
-                coupling_strength = np.array(coupling_strength)
+                    # create interpolator
+                    restitution = CubicSpline(forces_frames, restitution, extrapolate=1)
+                    relative_velocity = [CubicSpline(forces_frames, relative_velocity[:, i], extrapolate=1) for i in range(relative_velocity.shape[1])]
+                    normal_velocity = [CubicSpline(forces_frames, normal_velocity[:, i], extrapolate=1) for i in range(normal_velocity.shape[1])]
+                    normal_force = [CubicSpline(forces_frames, normal_force[:, i], extrapolate=1) for i in range(normal_force.shape[1])]
+                    tangential_force = [CubicSpline(forces_frames, tangential_force[:, i], extrapolate=1) for i in range(tangential_force.shape[1])]
+                    tangential_velocity = [CubicSpline(forces_frames, tangential_velocity[:, i], extrapolate=1) for i in range(tangential_velocity.shape[1])]
+                    normal_force_magnitude = CubicSpline(forces_frames, normal_force_magnitude, extrapolate=1)
+                    tangential_force_magnitude = CubicSpline(forces_frames, tangential_force_magnitude, extrapolate=1)
+                    stochastic_normal_force = [CubicSpline(forces_frames, stochastic_normal_force[:, i], extrapolate=1) for i in range(stochastic_normal_force.shape[1])]
+                    stochastic_tangential_force = [CubicSpline(forces_frames, stochastic_tangential_force[:, i], extrapolate=1) for i in range(stochastic_tangential_force.shape[1])]
+                    contact_point = [CubicSplineWithNaN(forces_frames, contact_point[:, i], extrapolate=1) for i in range(contact_point.shape[1])]
+                    contact_radius = CubicSplineWithNaN(forces_frames, contact_radius, extrapolate=1)
+                    rolling_radius = CubicSplineWithNaN(forces_frames, rolling_radius, extrapolate=1)
+                    contact_pressure = CubicSplineWithNaN(forces_frames, contact_pressure, extrapolate=1)
+                    penetration_depth = CubicSplineWithNaN(forces_frames, penetration_depth, extrapolate=1)
+                    coupling_strength = CubicSpline(forces_frames, coupling_strength, extrapolate=1)
 
-                # create interpolator
-                restitution = CubicSpline(forces_frames, restitution, extrapolate=1)
-                relative_velocity = [CubicSpline(forces_frames, relative_velocity[:, i], extrapolate=1) for i in range(relative_velocity.shape[1])]
-                normal_velocity = [CubicSpline(forces_frames, normal_velocity[:, i], extrapolate=1) for i in range(normal_velocity.shape[1])]
-                normal_force = [CubicSpline(forces_frames, normal_force[:, i], extrapolate=1) for i in range(normal_force.shape[1])]
-                tangential_force = [CubicSpline(forces_frames, tangential_force[:, i], extrapolate=1) for i in range(tangential_force.shape[1])]
-                tangential_velocity = [CubicSpline(forces_frames, tangential_velocity[:, i], extrapolate=1) for i in range(tangential_velocity.shape[1])]
-                normal_force_magnitude = CubicSpline(forces_frames, normal_force_magnitude, extrapolate=1)
-                tangential_force_magnitude = CubicSpline(forces_frames, tangential_force_magnitude, extrapolate=1)
-                stochastic_normal_force = [CubicSpline(forces_frames, stochastic_normal_force[:, i], extrapolate=1) for i in range(stochastic_normal_force.shape[1])]
-                stochastic_tangential_force = [CubicSpline(forces_frames, stochastic_tangential_force[:, i], extrapolate=1) for i in range(stochastic_tangential_force.shape[1])]
-                contact_point = [CubicSplineWithNaN(forces_frames, contact_point[:, i], extrapolate=1) for i in range(contact_point.shape[1])]
-                contact_radius = CubicSplineWithNaN(forces_frames, contact_radius, extrapolate=1)
-                rolling_radius = CubicSplineWithNaN(forces_frames, rolling_radius, extrapolate=1)
-                contact_pressure = CubicSplineWithNaN(forces_frames, contact_pressure, extrapolate=1)
-                penetration_depth = CubicSplineWithNaN(forces_frames, penetration_depth, extrapolate=1)
-                coupling_strength = CubicSpline(forces_frames, coupling_strength, extrapolate=1)
+                    force_data_sequence = ForceDataSequence(frames=forces_frames, obj_idx=obj_idx, other_obj_idx=other_obj_idx, restitution=restitution, relative_velocity=relative_velocity, normal_velocity=normal_velocity, normal_force=normal_force, tangential_force=tangential_force, tangential_velocity=tangential_velocity, normal_force_magnitude=normal_force_magnitude, tangential_force_magnitude=tangential_force_magnitude, stochastic_normal_force=stochastic_normal_force, stochastic_tangential_force=stochastic_tangential_force, contact_type=contact_type, contact_point=contact_point, contact_radius=contact_radius, rolling_radius=rolling_radius, impact_duration=impact_duration, contact_pressure=contact_pressure, penetration_depth=penetration_depth, coupling_strength=coupling_strength)
 
-                force_data_sequence = ForceDataSequence(frames=forces_frames, obj_idx=obj_idx, other_obj_idx=other_obj_idx, restitution=restitution, relative_velocity=relative_velocity, normal_velocity=normal_velocity, normal_force=normal_force, tangential_force=tangential_force, tangential_velocity=tangential_velocity, normal_force_magnitude=normal_force_magnitude, tangential_force_magnitude=tangential_force_magnitude, stochastic_normal_force=stochastic_normal_force, stochastic_tangential_force=stochastic_tangential_force, contact_type=contact_type, contact_point=contact_point, contact_radius=contact_radius, rolling_radius=rolling_radius, impact_duration=impact_duration, contact_pressure=contact_pressure, penetration_depth=penetration_depth, coupling_strength=coupling_strength)
-
-                force_idx = len(self.entity_manager.get('forces')) + 1
-                force_data_sequence.save(f"{self.output_dir}/{config_obj.idx:05d}.pkl")
-                self.entity_manager.register('forces', force_data_sequence, force_idx)
+                    force_data_sequence.save(f"{self.output_dir}/{obj_idx:05d}_{other_obj_idx:05d}.pkl")
+                    force_idx = len(self.entity_manager.get('forces')) + 1
+                    self.entity_manager.register('forces', force_data_sequence, force_idx)
 
     def _calculate_forces(self, frame: float, obj_idx: int, config_obj: Any, trajectory: Any, sfps: int, sample_rate: int) -> Optional[List[ForceData]]:
         """

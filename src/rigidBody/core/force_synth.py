@@ -16,7 +16,7 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import os
+import os, sys
 import json
 import resampy
 import math
@@ -55,7 +55,10 @@ class ForceSynth:
         for conf_obj in config.objects:
             if conf_obj.idx == obj_idx:
                 config_obj = conf_obj
-                if not config_obj.static:
+                if config_obj.static:
+                    # exit: obj_idx are static
+                    return
+                elif not config_obj.static:
                     for c_idx in collision_data.keys():
                         if collision_data[c_idx].obj1_idx == obj_idx or collision_data[c_idx].obj2_idx == obj_idx:
                             collisions.append(collision_data[c_idx])
@@ -64,12 +67,8 @@ class ForceSynth:
                         if trajectories[t_idx].obj_idx == obj_idx:
                             trajectory = trajectories[t_idx]
                             forces = self.entity_manager.get('forces')
-                    for f_idx in forces.keys():
-                        if forces[f_idx].obj_idx == obj_idx:
-                            force = forces[f_idx]
 
         # Calculate total duration in samples
-        #frames = force.frames
         frames = trajectory.get_x()
         total_samples = int(trajectory.get_x()[-1])
 
@@ -84,10 +83,13 @@ class ForceSynth:
         non_collision_track = np.zeros(total_samples)
         coupling_strength_track = np.zeros(total_samples)
 
-        frame_samples = self._create_empty_tracks(total_samples)
+        synthesized_track = self._create_empty_tracks(total_samples)
         for sample_idx in frames:
 #            # Synthesize non-collision forces (air resistance, etc etc.)
-#            frame_samples = self._synthesize_non_collision(force, config_obj, sample_idx, total_samples, sample_rate)
+#            for f_idx in forces.keys():
+#                if forces[f_idx].obj_idx == obj_idx:
+#                    force = forces[f_idx]
+#                    synthesized_track = self._synthesize_non_collision(force, config_obj, sample_idx, total_samples, sample_rate)
             # Check if this frame contains a collision
             for collision in collisions:
                 if collision.frame == sample_idx:
@@ -95,28 +97,31 @@ class ForceSynth:
                     for conf_obj in config.objects:
                         if conf_obj.idx == other_obj_idx:
                             other_config_obj = conf_obj 
+                    for f_idx in forces.keys():
+                        if forces[f_idx].obj_idx == obj_idx and forces[f_idx].other_obj_idx == other_obj_idx:
+                            force = forces[f_idx]
                     if collision.type.value == 'impact':
                         # Synthesize impact sound using Hertzian model
-                        frame_samples = self._synthesize_impact(force, collision, config_obj, other_config_obj, sample_idx, total_samples, sample_rate)
+                        synthesized_track = self._synthesize_impact(force, collision, config_obj, other_config_obj, sample_idx, total_samples, sample_rate)
                     elif collision.type.value == 'contact': 
                         # Synthesize contact sound
-                        frame_samples = self._synthesize_contact(trajectory, force, collision, config_obj, other_config_obj, sample_idx, total_samples, sample_rate, sfps, spsf)
-                        if not np.any(np.isnan(forces[1].impact_duration)):
+                        synthesized_track = self._synthesize_contact(trajectory, force, collision, config_obj, other_config_obj, sample_idx, total_samples, sample_rate, sfps, spsf)
+                        if not np.any(np.isnan(force.impact_duration)):
                             # Synthesize impact sound using Hertzian model
-                            impact_samples = self._synthesize_impact(force, collision, config_obj, other_config_obj, sample_idx, total_samples, sample_rate)
-                            for key in frame_samples.keys():
-                                frame_samples[key] += impact_samples[key]
+                            synthesized_impact_track = self._synthesize_impact(force, collision, config_obj, other_config_obj, sample_idx, total_samples, sample_rate)
+                            for key in synthesized_impact_track.keys():
+                                synthesized_track[key] += synthesized_impact_track[key]
 
                 # Add to tracks
-                impact_track += frame_samples['impact']
-                sliding_track += frame_samples['sliding']
-                scraping_track += frame_samples['scraping']
-                rolling_track += frame_samples['rolling']
-                non_collision_track += frame_samples['non_collision']
-                coupling_strength_track += frame_samples['coupling_strength']
-                sliding_sound += frame_samples['sliding_sound']
-                scraping_sound += frame_samples['scraping_sound']
-                rolling_sound += frame_samples['rolling_sound']
+                impact_track += synthesized_track['impact']
+                sliding_track += synthesized_track['sliding']
+                scraping_track += synthesized_track['scraping']
+                rolling_track += synthesized_track['rolling']
+                non_collision_track += synthesized_track['non_collision']
+                coupling_strength_track += synthesized_track['coupling_strength']
+                sliding_sound += synthesized_track['sliding_sound']
+                scraping_sound += synthesized_track['scraping_sound']
+                rolling_sound += synthesized_track['rolling_sound']
 
         # Save tracks
         tracks = {
@@ -269,7 +274,7 @@ class ForceSynth:
     
         # Pre-calculate fractal frequency response (1/f^B noise)
         mask = freqs != 0
-        fractal_response_response = np.ones_like(freqs, dtype=complex)
+        fractal_response = np.ones_like(freqs, dtype=complex)
         fractal_response[mask] = (2 * np.pi * np.abs(freqs[mask])) ** (B/2)
     
         # Generate multiple noise layers for richer scraping sound
@@ -285,9 +290,8 @@ class ForceSynth:
         
             # Design resonant filters for scraping
             # Higher frequencies for scraping compared to sliding
-            start_idx = int(sample_idx)
-            stop_idx = start_idx + n_samples
-            f0_base = 2000 + 8000 * np.abs(contact_velocities[start_idx:stop_idx])
+#            f0_base = 2000 + 8000 * np.abs(contact_velocities[start_idx:stop_idx])
+            f0_base = 2000 + 8000 * np.abs(contact_velocities)
             f0 = f0_base * (1 + 0.5 * layer)  # Different center frequency for each layer
 
             f0 = np.clip(f0, 100, sample_rate/2 - 1)
@@ -299,7 +303,7 @@ class ForceSynth:
             # Apply resonant filter to each sample
             resonant_noise = np.zeros(n_samples)
             for s_idx in range(n_samples):
-                current_idx = int(sample_idx) + s_idx
+                current_idx = int(sample_idx + s_idx)
                 # Design and apply resonant filter
                 b, a = signal.iirpeak(f0[s_idx], Q, fs=sample_rate)
                 w, h = signal.freqz(b, a, worN=n_samples, fs=sample_rate)
@@ -307,7 +311,7 @@ class ForceSynth:
                 # Apply filter in frequency domain
                 layer_noise_fft = noise_fft * h
                 layer_noise = np.real(np.fft.ifft(layer_noise_fft))
-                resonant_noise[current_idx] = layer_noise[s_idx]
+                resonant_noise[s_idx] = layer_noise[s_idx]
         
             # Apply amplitude modulation based on forces and velocities
             # Scraping has stronger modulation with tangential force
@@ -322,6 +326,8 @@ class ForceSynth:
             total_amplitude = amplitude * irregularity_mod
         
             # Add this layer to total noise
+            start_idx = int(sample_idx)
+            stop_idx = start_idx + n_samples
             total_noise[start_idx:stop_idx] += layer_weights[layer] * resonant_noise * total_amplitude
     
         # Add transient spikes for scraping events (sudden catches/releases)
