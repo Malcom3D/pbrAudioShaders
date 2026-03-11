@@ -54,9 +54,9 @@ class RotationSolver:
                 impact_position = tmp_trajectory.position
                 for config_obj in config.objects:
                     if config_obj.idx == obj_idx:
-                            positions, rotations = _load_pose(config_obj)
-                            rotation = self._impact_rotation(config_obj=config_obj, positions=positions, rotations=rotations, impact_position=impact_position, frame=frame, sfps=sfps)
-                            tmp_trajectory.add_data('rotation', rotation)
+                        positions, rotations = _load_pose(config_obj)
+                        rotation = self._impact_rotation(config_obj=config_obj, positions=positions, rotations=rotations, impact_position=impact_position, frame=frame, sfps=sfps)
+                        tmp_trajectory.add_data('rotation', rotation)
 
     def _impact_rotation(self, config_obj: ObjectConfig, positions: np.ndarray, rotations: np.ndarray, impact_position: np.ndarray, frame: float, sfps: int, max_iterations: int = 100, tolerance: float = 1e-6) -> Rotation:
         """

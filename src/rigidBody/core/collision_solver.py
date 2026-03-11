@@ -70,7 +70,7 @@ class CollisionSolver:
             self._connected_facing_face(obj1_idx=obj1_idx, obj2_idx=obj2_idx, mesh1_faces=mesh1_faces, mesh2_faces=mesh2_faces)
         if not config_obj1.static or not config_obj2.static:
             for f_idx in forces.keys():
-                if forces[f_idx].obj_idx == obj1_idx and obj2_idx in forces[f_idx].other_obj_idx or forces[f_idx].obj_idx == obj2_idx and obj1_idx in forces[f_idx].other_obj_idx:
+                if forces[f_idx].obj_idx == obj1_idx and forces[f_idx].other_obj_idx == obj2_idx:
                     force = forces[f_idx]
         else:
             return
@@ -99,7 +99,8 @@ class CollisionSolver:
             closest_points2 = distance_data[distance_data.files[2]]
 
             # Get the frames corresponding to our sample range
-            frames = self.trajectory1.get_x() if not config_obj1.static else self.trajectory2.get_x()
+#            frames = self.trajectory1.get_x() if not config_obj1.static else self.trajectory2.get_x()
+            frames = np.unique(np.sort(np.concatenate((self.trajectory1.get_x(), self.trajectory2.get_x()))))
 
             distances = CubicSpline(frames, distances, extrapolate=1)
             closest_points1 = [CubicSpline(frames, closest_points1[:, i], extrapolate=1) for i in range(closest_points1.shape[1])]

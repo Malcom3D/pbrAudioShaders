@@ -65,7 +65,7 @@ class ForceDataSequence:
     """Container for forces sequences data."""
     frames: np.ndarray  # interpolated frame number
     obj_idx: int
-    other_obj_idx: np.ndarray
+    other_obj_idx: int
     restitution: CubicSpline
     relative_velocity: Tuple[CubicSpline, CubicSpline, CubicSpline]
     normal_velocity: Tuple[CubicSpline, CubicSpline, CubicSpline]

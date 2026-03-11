@@ -18,7 +18,7 @@
 
 __version__ = "0.2.33"
 __author__ = "Malcom3D"
-__description__ = "Physically plausible impact sound for rigid body simulation"
+__description__ = "Physically plausible collision sound for rigid body simulation"
 
 import os, sys
 import numpy as np

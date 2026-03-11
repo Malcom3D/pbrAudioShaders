@@ -230,7 +230,6 @@ class CollisionEngine:
 
     @delayed
     def prebake_position(self, obj_idx: int):
-        print('prebake_position: ', obj_idx)
         config = self.entity_manager.get('config')
         for config_obj in config.objects:
             if config_obj.idx == obj_idx:
@@ -238,7 +237,6 @@ class CollisionEngine:
 
     @delayed
     def prebake_rotation(self, obj_idx: int):
-        print('prebake_rotation: ', obj_idx)
         config = self.entity_manager.get('config')
         for config_obj in config.objects:
             if config_obj.idx == obj_idx:
@@ -246,7 +244,6 @@ class CollisionEngine:
 
     @delayed
     def prebake_vertex(self, obj_idx: int):
-        print('prebake_vertex: ', obj_idx)
         config = self.entity_manager.get('config')
         for config_obj in config.objects:
             if config_obj.idx == obj_idx:
@@ -254,7 +251,6 @@ class CollisionEngine:
 
     @delayed
     def prebake_normal(self, obj_idx: int):
-        print('prebake_normal: ', obj_idx)
         config = self.entity_manager.get('config')
         for config_obj in config.objects:
             if config_obj.idx == obj_idx:
@@ -262,7 +258,6 @@ class CollisionEngine:
 
     @delayed
     def prebake_trajectory(self, obj_idx: int):
-        print('prebake_trajectory: ', obj_idx)
         config = self.entity_manager.get('config')
         for config_obj in config.objects:
             if config_obj.idx == obj_idx:
