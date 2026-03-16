@@ -23,8 +23,8 @@ import shutil
 from typing import List, Tuple
 from dataclasses import dataclass
 
-from ..core.entity_manager import EntityManager
-from ..lib.functions import _load_mesh, _mesh_to_obj
+from physicsSolver import EntityManager
+from physicsSolver.lib.functions import _load_mesh, _mesh_to_obj
 
 @dataclass
 class Pym2f:

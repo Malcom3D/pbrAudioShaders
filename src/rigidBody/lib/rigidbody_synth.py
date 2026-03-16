@@ -20,9 +20,9 @@ import numpy as np
 from typing import Any, List, Tuple, Dict, Optional, Union
 from dataclasses import dataclass, field
 
-from ..core.entity_manager import EntityManager
+from physicsSolver import EntityManager
 
-from ..lib.functions import _parse_lib
+from physicsSolver.lib.functions import _parse_lib
 from ..lib.modal_bank import ModalBank
 
 @dataclass

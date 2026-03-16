@@ -23,8 +23,8 @@ import soundfile as sf
 from typing import Any, List, Tuple, Dict, Optional
 from dataclasses import dataclass, field
 
-from ..core.entity_manager import EntityManager
-from ..lib.functions import _parse_lib
+from physicsSolver import EntityManager
+from physicsSolver.lib.functions import _parse_lib
 
 @dataclass
 class ModalPlayer:

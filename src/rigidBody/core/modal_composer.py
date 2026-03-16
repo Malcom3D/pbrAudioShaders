@@ -21,7 +21,7 @@ import numpy as np
 from typing import Any, List, Tuple, Dict, Optional
 from dataclasses import dataclass, field
 
-from ..core.entity_manager import EntityManager
+from physicsSolver import EntityManager
 
 @dataclass
 class ModalComposer:
@@ -67,7 +67,7 @@ class ModalComposer:
                 for e_idx in range(len(events)):
                     force_type = int(events[e_idx].type)
                     force = np.divide(force1[force_type][index], events[e_idx].vertex_ids.shape[0], out=np.zeros_like(force1[force_type][index]), where=events[e_idx].vertex_ids.shape[0] != 0)
-                    events[e_idx].force = float(force) if not np.isnan(force) else 0.0
+                    events[e_idx].force = float(force) if not np.isnan(force) or not force == None else 0.0
                     coupling_data1 = coupling_strength1[index] if not np.isnan(coupling_strength1[index]) else 0.0
                     events[e_idx].coupling_data = np.array([[obj2_idx, coupling_data1]])
             for score_idx in range(len(score_track2)):
@@ -75,7 +75,7 @@ class ModalComposer:
                 for e_idx in range(len(events)):
                     force_type = int(events[e_idx].type)
                     force = np.divide(force2[force_type][index], events[e_idx].vertex_ids.shape[0], out=np.zeros_like(force2[force_type][index]), where=events[e_idx].vertex_ids.shape[0] != 0)
-                    events[e_idx].force = float(force) if not np.isnan(force) else 0.0
+                    events[e_idx].force = float(force) if not np.isnan(force) or not force == None else 0.0
                     coupling_data2 = coupling_strength2[index] if not np.isnan(coupling_strength2[index]) else 0.0
                     events[e_idx].coupling_data = np.array([[obj1_idx, coupling_data2]])
 

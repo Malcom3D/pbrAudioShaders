@@ -16,22 +16,10 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import os
-import numpy as np
-from typing import Optional, Tuple, List
-from dataclasses import dataclass
+from .config import SystemConfig, ObjectConfig, Config
 
-from physicsSolver import EntityManager
-from ..tools.pym2f import Pym2f
-
-@dataclass
-class Mesh2Modal:
-    entity_manager: EntityManager
-    
-    def __post_init__(self):
-        self.py_m2f = Pym2f(self.entity_manager)
-
-    def compute(self, obj_idx: int) -> None:
-        config = self.entity_manager.get('config')
-        
-        self.py_m2f.compute(obj_idx)
+__all__ = [
+    'SystemConfig',
+    'ObjectConfig',
+    'Config'
+]

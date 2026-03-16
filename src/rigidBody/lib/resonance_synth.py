@@ -20,9 +20,9 @@ import numpy as np
 from typing import Any, List, Tuple, Dict, Optional, Union
 from dataclasses import dataclass, field
 
-from ..core.entity_manager import EntityManager
+from physicsSolver import EntityManager
 
-from ..lib.functions import _parse_lib
+from physicsSolver.lib.functions import _parse_lib
 from ..lib.modal_bank import ModalBank
 
 @dataclass
@@ -62,8 +62,8 @@ class ResonanceSynth:
         if isinstance(other_objs, list):
             for other_idx in range(len(other_objs)):
                 other_obj_idx, coupling_strength = other_objs[other_idx]
+                #print('ResonanceSynth: ', self.obj_idx, output_banks, coupling_strength * output_banks)
                 self.connected_buffer.write_to_obj(int(other_obj_idx), synth_type, coupling_strength * output_banks)
-        #print('ResonanceSynth: ', self.obj_idx, output_banks)
         return output_banks
 
     def get_banks_state(self) -> List[Union[int, Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]]]:

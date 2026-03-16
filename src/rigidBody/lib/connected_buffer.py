@@ -20,7 +20,7 @@ import numpy as np
 from typing import Any, List, Tuple, Dict, Optional
 from dataclasses import dataclass, field
 
-from ..core.entity_manager import EntityManager
+from physicsSolver import EntityManager
 
 @dataclass
 class ConnectedBuffer:
@@ -42,4 +42,5 @@ class ConnectedBuffer:
         return sample_value
 
     def write_to_obj(self, obj_idx: int, synth_type: int, sample_value: float):
+        print('ConnectedBuffer: ', obj_idx, synth_type, sample_value)
         self.objs_buffer[obj_idx][synth_type] += sample_value
