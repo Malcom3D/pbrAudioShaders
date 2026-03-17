@@ -50,7 +50,13 @@ class DistanceSolver:
         sfps = ( fps / fps_base ) * subframes # subframes per seconds
  
         trajectory, frames  = ([] for _ in range(2))
-        config_objs = [config.objects[objs_idx[0]], config.objects[objs_idx[1]]]
+        config_objs = [[],[]]
+        for conf_obj in config.objects:
+            if conf_obj.idx == objs_idx[0]:
+                config_objs[0] = conf_obj
+            elif conf_obj.idx == objs_idx[1]:
+                config_objs[1] = conf_obj
+            
         trajectories = self.entity_manager.get('trajectories')
         for idx in trajectories.keys():
             if 'TrajectoryData' in str(type(trajectories[idx])):

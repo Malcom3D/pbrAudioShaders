@@ -103,10 +103,9 @@ class ForceSynth:
                     if collision.type.value == 'impact':
                         # Synthesize impact sound using Hertzian model
                         synthesized_track = self._synthesize_impact(force, collision, config_obj, other_config_obj, sample_idx, total_samples, sample_rate)
-                    elif collision.type.value == 'contact': 
+                    elif collision.type.value == 'contact':
                         # Synthesize contact sound
                         synthesized_track = self._synthesize_contact(trajectory, force, collision, config_obj, other_config_obj, sample_idx, total_samples, sample_rate, sfps, spsf)
-#                        if not np.any(np.isnan(force.impact_duration)):
                         # Synthesize impact sound using Hertzian model
                         synthesized_impact_track = self._synthesize_impact(force, collision, config_obj, other_config_obj, sample_idx, total_samples, sample_rate)
                         for key in synthesized_impact_track.keys():
@@ -164,11 +163,6 @@ class ForceSynth:
         t_decay = np.linspace(0.5, 1, int(decay_sample))
         t = np.concatenate((t_rise, t_decay[1:]))
 
-#        # update collision.impulse_range and collision.frame_range
-#        frame_range = collision.frame_range if collision.frame_range > 1 else 0
-#        collision.update_frame_range(rise_sample + frame_range)
-#        collision.update_impulse_range(total_impact_sample)
-        
         # Hertzian force profile: F(t) = F_max * (1 - (t/T)^(3/2))
         # Using qualitative correct form 1 − cos(2πt/τ ) for 0 ≤ t ≤ τ,
         # with τ the total duration as in van den Doel FoleyAutomatic
@@ -209,7 +203,7 @@ class ForceSynth:
     def _synthesize_contact(self, trajectory: Any, force: Any, collision: Any, config_obj: Any, other_config_obj: Any, sample_idx: float, total_samples: int, sample_rate: int, sfps: float, spsf: float):
         """Synthesize contact audio-force (scraping, sliding, rolling)."""
         
-        if force.get_contact_type(sample_idx) == ContactType.STATIC.value:
+        if force.get_contact_type(sample_idx) == [ContactType.STATIC.value, ContactType.NO_CONTACT.value]:
             return self._create_empty_tracks(total_samples)
         elif force.get_contact_type(sample_idx) == ContactType.ROLLING.value:
             return self._synthesize_rolling(trajectory=trajectory, force=force, collision=collision, config_obj=config_obj, other_config_obj=other_config_obj, sample_idx=sample_idx, total_samples=total_samples, sample_rate=sample_rate)
