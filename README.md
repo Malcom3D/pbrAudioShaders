@@ -156,6 +156,7 @@ References [not confirmed]:
 - https://pub.dega-akustik.de/ICA2019/data/articles/000819.pdf
 - https://www.researchgate.net/profile/Reto-Pieren/publication/317341926_Auralization_of_railway_noise_Emission_synthesis_of_rolling_and_impact_noise/links/5939d68f458515320632d429/Auralization-of-railway-noise-Emission-synthesis-of-rolling-and-impact-noise.pdf
 
+
 ### Large scene memory footprint optimazion with eigenmode compression for modal sound model.
 
 References [not confirmed]:
