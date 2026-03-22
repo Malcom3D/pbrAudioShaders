@@ -85,6 +85,8 @@ class HertzianContact:
         v1 = trajectory1.get_velocity(sample_idx)
         v2 = trajectory2.get_velocity(sample_idx)
         relative_velocity = np.linalg.norm(v1 - v2)
+#        relative_velocity = abs(np.linalg.norm(v1 - v2))
+#        relative_velocity = 1e-6 if 0 < relative_velocity < 1e-6 else relative_velocity
         
         # Get geometries at impact
         vertices1 = trajectory1.get_vertices(sample_idx)
@@ -118,12 +120,24 @@ class HertzianContact:
         mesh2.density = density2
         mass1 = mesh1.mass
         mass2 = mesh2.mass
+        # verify and limit too small masses to 0.1gr
+#        if mesh1.is_volume:
+#            mass1 = mesh1.mass if mesh1.mass < 9e-5 else 0.0001
+#        else:
+#            print(f"Warning: HertzianContact {obj1_idx} is not totally watertight. Using convex hull mass")
+#            mass1 = mesh1.convex_hull.mass if mesh1.mass < 9e-5 else 0.0001
+#        if mesh2.is_volume:
+#            mass2 = mesh2.mass if mesh1.mass < 9e-5 else 0.0001
+#        else:
+#            print(f"Warning: HertzianContact {obj2_idx} is not totally watertight. Using convex hull mass")
+#            mass2 = mesh2.convex_hull.mass if mesh1.mass < 9e-5 else 0.0001
         
         # Reduced mass
         reduced_mass = (mass1 * mass2) / (mass1 + mass2)
         
         # Hertzian impact parameters
         # Maximum penetration depth (δ_max)
+#        print(sample_idx, obj1_idx, obj2_idx, reduced_mass, relative_velocity, E_star, np.sqrt(R_eff))
         delta_max = ( (5 * reduced_mass * relative_velocity**2) / (4 * E_star * np.sqrt(R_eff)) )**(2/5)
         
         # Maximum contact radius
@@ -254,6 +268,8 @@ class HertzianContact:
         omega1 = trajectory1.get_angular_velocity(sample_idx)
         omega2 = trajectory2.get_angular_velocity(sample_idx)
         
+#        relative_velocity = abs(np.linalg.norm(v1 - v2))
+#        relative_velocity = 1e-6 if 0 < relative_velocity < 1e-6 else relative_velocity
         relative_velocity = np.linalg.norm(v1 - v2)
         tangential_velocity = np.linalg.norm(v1 - v2 - np.dot(v1 - v2, self._get_contact_normal(trajectory1, trajectory2, sample_idx)) * self._get_contact_normal(trajectory1, trajectory2, sample_idx))
         

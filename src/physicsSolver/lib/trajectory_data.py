@@ -37,6 +37,7 @@ class tmpTrajectoryData:
     rotation: np.ndarray = None
     vertices: np.ndarray = None
     normals: np.ndarray = None
+    valid: bool = True
 
     def add_data(self, component: str, data: np.ndarray):
         """Add a data component if not exist"""

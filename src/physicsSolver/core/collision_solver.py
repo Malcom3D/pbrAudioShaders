@@ -72,6 +72,26 @@ class CollisionSolver:
             if trajectories[t_idx].obj_idx == obj2_idx:
                 self.trajectory2 = trajectories[t_idx]
 
+        fracture_frame1 = None
+        if not config_obj1.fractured == False:
+            fracture_frame1 = config_obj1.fractured
+            fracture_frame1 *= sample_rate / sfps
+
+        fracture_frame2 = None
+        if not config_obj2.fractured == False:
+            fracture_frame2 = config_obj2.fractured
+            fracture_frame2 *= sample_rate / sfps
+
+        is_shard_frame1 = None
+        if not config_obj1.is_shard == False:
+            is_shard_frame1 = config_obj1.is_shard
+            is_shard_frame1 *= sample_rate / sfps
+
+        is_shard_frame2 = None
+        if not config_obj2.is_shard == False:
+            is_shard_frame2 = config_obj2.is_shard
+            is_shard_frame2 *= sample_rate / sfps
+
         mesh1_faces = self.trajectory1.get_faces()
         mesh2_faces = self.trajectory2.get_faces()
 
@@ -102,6 +122,11 @@ class CollisionSolver:
         if not stop_samples <= total_samples:
             stop_samples = total_samples
 
+        if (not is_shard_frame1 == None and is_shard_frame1 >= start_samples) or (not is_shard_frame2 == None and is_shard_frame2 >= start_samples):
+            start_samples = is_shard_frame1 if is_shard_frame1 > is_shard_frame2 else is_shard_frame2
+        if (not fracture_frame1 == None and stop_samples >= fracture_frame1) or (not fracture_frame2 == None and stop_samples >= fracture_frame2):
+            stop_samples = fracture_frame1 if fracture_frame1 < fracture_frame2 else fracture_frame2
+
         # Load pre-computed distance data
         distances_dir = f"{config.system.cache_path}/distances"
         distance_file = f"{distances_dir}/{collision.obj1_idx}_{collision.obj2_idx}.npz"
@@ -131,13 +156,15 @@ class CollisionSolver:
 
             if score_track1 == None:
                 score_track1 = ScoreTrack(obj_idx=obj1_idx, obj_name=config_obj1)
-                score_track_idx = len(self.entity_manager.get('score_tracks')) + 1
-                self.entity_manager.register('score_tracks', score_track1, score_track_idx)
+#                score_track_idx = len(self.entity_manager.get('score_tracks')) + 1
+#                self.entity_manager.register('score_tracks', score_track1, score_track_idx)
+                score_track_idx = self.entity_manager.register('score_tracks', score_track1)
                 score_track1 = self.entity_manager.get('score_tracks', score_track_idx)
             if score_track2 == None:
                 score_track2 = ScoreTrack(obj_idx=obj2_idx, obj_name=config_obj1)
-                score_track_idx = len(self.entity_manager.get('score_tracks')) + 1
-                self.entity_manager.register('score_tracks', score_track2, score_track_idx)
+#                score_track_idx = len(self.entity_manager.get('score_tracks')) + 1
+#                self.entity_manager.register('score_tracks', score_track2, score_track_idx)
+                score_track_idx = self.entity_manager.register('score_tracks', score_track2)
                 score_track2 = self.entity_manager.get('score_tracks', score_track_idx)
 
             samples_idx, vertex1_id_list, vertex2_id_list = ([] for _ in range(3))
@@ -232,7 +259,7 @@ class CollisionSolver:
             vertex1_id_list = np.unique(np.array(vertex1_id_list))
             vertex2_id_list = np.unique(np.array(vertex2_id_list))
 
-            print('CollisionSolver: ', collision.frame, obj1_idx, obj2_idx, len(samples_idx))
+#            print('CollisionSolver: ', collision.frame, obj1_idx, obj2_idx, len(samples_idx))
             collision.samples = np.array(samples_idx)
             modal_vertices = self.entity_manager.get('modal_vertices')
             mod_v1, mod_v2 = (None for _ in range(2))
@@ -246,17 +273,19 @@ class CollisionSolver:
                 mod_v1.add_vertices(vertex1_id_list)
             else:
                 modal_vertices1 = ModalVertices(obj_idx=obj1_idx, vertices=vertex1_id_list)
-                modal_idx = len(self.entity_manager.get('modal_vertices')) + 1
-                self.entity_manager.register('modal_vertices', modal_vertices1, modal_idx)
+#                modal_idx = len(self.entity_manager.get('modal_vertices')) + 1
+#                self.entity_manager.register('modal_vertices', modal_vertices1, modal_idx)
+                _ = self.entity_manager.register('modal_vertices', modal_vertices1)
 
             if not mod_v2 == None:
                 mod_v2.add_vertices(vertex2_id_list)
             else:
                 modal_vertices2 = ModalVertices(obj_idx=obj2_idx, vertices=vertex2_id_list)
-                modal_idx = len(self.entity_manager.get('modal_vertices')) + 1
-                self.entity_manager.register('modal_vertices', modal_vertices2, modal_idx)
+#                modal_idx = len(self.entity_manager.get('modal_vertices')) + 1
+#                self.entity_manager.register('modal_vertices', modal_vertices2, modal_idx)
+                _ = self.entity_manager.register('modal_vertices', modal_vertices2)
 
-    def _connceted_facing_face(self, obj1_idx: int, obj2_idx: int, mesh1_faces: np.ndarray, mesh2_faces: np.ndarray) -> None:
+    def _connected_facing_face(self, obj1_idx: int, obj2_idx: int, mesh1_faces: np.ndarray, mesh2_faces: np.ndarray) -> None:
         # Load pre-computed distance data
         config = self.entity_manager.get('config')
         distances_dir = f"{config.system.cache_path}/distances"
@@ -341,12 +370,14 @@ class CollisionSolver:
                     mod_v1.add_vertices(vertex1_id_list)
                 else:
                     modal_vertices1 = ModalVertices(obj_idx=obj1_idx, vertices=vertex1_id_list, connected_area=face_area1/vertex1_id_list.shape[0])
-                    modal_idx = len(self.entity_manager.get('modal_vertices')) + 1
-                    self.entity_manager.register('modal_vertices', modal_vertices1, modal_idx)
+#                    modal_idx = len(self.entity_manager.get('modal_vertices')) + 1
+#                    self.entity_manager.register('modal_vertices', modal_vertices1, modal_idx)
+                    _ = self.entity_manager.register('modal_vertices', modal_vertices1)
                    
                 if not mod_v2 == None:
                     mod_v2.add_vertices(vertex2_id_list)
                 else:
                     modal_vertices2 = ModalVertices(obj_idx=obj2_idx, vertices=vertex2_id_list, connected_area=face_area2/vertex2_id_list.shape[0])
-                    modal_idx = len(self.entity_manager.get('modal_vertices')) + 1
-                    self.entity_manager.register('modal_vertices', modal_vertices2, modal_idx)
+#                    modal_idx = len(self.entity_manager.get('modal_vertices')) + 1
+#                    self.entity_manager.register('modal_vertices', modal_vertices2, modal_idx)
+                    _ = self.entity_manager.register('modal_vertices', modal_vertices2)

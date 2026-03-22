@@ -58,56 +58,59 @@ class rigidBodyEngine:
         trajectories = self.entity_manager.get('trajectories')
         if len(trajectories) == 0:
             if os.path.exists(f"{self.trajectories_dir}") and not len(os.listdir(f"{self.trajectories_dir}")) == 0:
-                trajectories_idx = 0
+#                trajectories_idx = 0
                 for filename in os.listdir(f"{self.trajectories_dir}"):
                     if filename.endswith('.pkl'):
                         trajectories = TrajectoryData.load(f"{self.trajectories_dir}/{filename}")
-                        self.entity_manager.register('trajectories', trajectories, trajectories_idx)
-                        trajectories_idx += 1
+                        self.entity_manager.register('trajectories', trajectories)
+#                        self.entity_manager.register('trajectories', trajectories, trajectories_idx)
+#                        trajectories_idx += 1
 
         collisions = self.entity_manager.get('collisions')
         if len(collisions) == 0:
             if os.path.exists(f"{self.collisions_dir}") and not len(os.listdir(f"{self.collisions_dir}")) == 0:
                 for filename in os.listdir(f"{self.collisions_dir}"):
                     if filename.endswith('.pkl'):
-                        idx = int(filename.removesuffix('.pkl'))
+#                        idx = int(filename.removesuffix('.pkl'))
                         collisions = CollisionData.load(f"{self.collisions_dir}/{filename}")
-                        self.entity_manager.register('collisions', collisions, idx)
+#                        self.entity_manager.register('collisions', collisions, idx)
+                        self.entity_manager.register('collisions', collisions)
 
         forces = self.entity_manager.get('forces')
         if len(forces) == 0:
             if os.path.exists(f"{self.forces_dir}") and not len(os.listdir(f"{self.forces_dir}")) == 0:
-                forces_idx = 0
+#                forces_idx = 0
                 for filename in os.listdir(f"{self.forces_dir}"):
                     if filename.endswith('.pkl'):
                         forces = ForceDataSequence.load(f"{self.forces_dir}/{filename}")
-                        self.entity_manager.register('forces', forces, forces_idx)
-                        forces_idx += 1
+                        self.entity_manager.register('forces', forces)
+#                        self.entity_manager.register('forces', forces, forces_idx)
+#                        forces_idx += 1
             forces = self.entity_manager.get('forces')
 
         modal_vertices = self.entity_manager.get('modal_vertices')
         if len(modal_vertices) == 0:
             if os.path.exists(self.modalvertices_dir):
                 filenames = os.listdir(self.modalvertices_dir)
-                modalvertices_idx = 0
+#                modalvertices_idx = 0
                 for filename in filenames:
                     modal_vertices = ModalVertices.load(f"{self.modalvertices_dir}/{filename}")
-                    self.entity_manager.register('modal_vertices', modal_vertices, modalvertices_idx)
-                    modalvertices_idx += 1
+                    self.entity_manager.register('modal_vertices', modal_vertices)
+#                    self.entity_manager.register('modal_vertices', modal_vertices, modalvertices_idx)
+#                    modalvertices_idx += 1
 
         score_tracks = self.entity_manager.get('score_tracks')
         if len(score_tracks) == 0:
             if os.path.exists(self.scoretracks_dir):
                 filenames = os.listdir(self.scoretracks_dir)
-                scoretracks_idx = 0
+#                scoretracks_idx = 0
                 for filename in filenames:
                     score_tracks = ScoreTrack.load(f"{self.scoretracks_dir}/{filename}")
-                    self.entity_manager.register('score_tracks', score_tracks, scoretracks_idx)
-                    scoretracks_idx += 1
+                    self.entity_manager.register('score_tracks', score_tracks)
+#                    self.entity_manager.register('score_tracks', score_tracks, scoretracks_idx)
+#                    scoretracks_idx += 1
 
     def prebake(self):
-        self.mm = Mesh2Modal(self.entity_manager)
-
         tasks_modal = [self.prebake_modal(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
         results_modal = compute(*tasks_modal)
 
@@ -147,21 +150,20 @@ class rigidBodyEngine:
         sample_counter.set_total_samples(int(trajectory.get_x()[-1]))
         self.entity_manager.register('sample_counter', sample_counter)
 
-        self.ml = ModalLuthier(self.entity_manager)
-
         tasks_luthier = [self.bake_luthier(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
         results_luthier = compute(*tasks_luthier)
 
-        players = [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
-        tasks_player = [self.bake_player(player) for player in players]
+        self.players = [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
+        tasks_player = [self.bake_player(player) for player in self.players]
         results_player = compute(*tasks_player)
 
-        tasks_save = [self.bake_save(player) for player in players]
+        tasks_save = [self.bake_save(player) for player in self.players]
         results_save = compute(*tasks_save)
 
     @delayed
     def prebake_modal(self, obj_idx: int):
-        self.mm.compute(obj_idx)
+        mm = Mesh2Modal(self.entity_manager)
+        mm.compute(obj_idx)
 
     @delayed
     def prebake_composer(self, collision: CollisionData):
@@ -170,7 +172,8 @@ class rigidBodyEngine:
 
     @delayed
     def bake_luthier(self, obj_idx: int):
-        self.ml.compute(obj_idx)
+        ml = ModalLuthier(self.entity_manager)
+        ml.compute(obj_idx)
 
     @delayed
     def bake_player(self, player: Any):

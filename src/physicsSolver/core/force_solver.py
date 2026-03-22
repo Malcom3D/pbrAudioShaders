@@ -163,8 +163,9 @@ class ForceSolver:
                     force_data_sequence = ForceDataSequence(frames=forces_frames, obj_idx=obj_idx, other_obj_idx=other_obj_idx, restitution=restitution, relative_velocity=relative_velocity, normal_velocity=normal_velocity, normal_force=normal_force, tangential_force=tangential_force, tangential_velocity=tangential_velocity, normal_force_magnitude=normal_force_magnitude, tangential_force_magnitude=tangential_force_magnitude, stochastic_normal_force=stochastic_normal_force, stochastic_tangential_force=stochastic_tangential_force, contact_type=contact_type, contact_point=contact_point, contact_radius=contact_radius, rolling_radius=rolling_radius, impact_duration=impact_duration, contact_pressure=contact_pressure, penetration_depth=penetration_depth, coupling_strength=coupling_strength)
 
                     force_data_sequence.save(f"{self.output_dir}/{obj_idx:05d}_{other_obj_idx:05d}.pkl")
-                    force_idx = len(self.entity_manager.get('forces')) + 1
-                    self.entity_manager.register('forces', force_data_sequence, force_idx)
+#                    force_idx = len(self.entity_manager.get('forces')) + 1
+#                    self.entity_manager.register('forces', force_data_sequence, force_idx)
+                    _ = self.entity_manager.register('forces', force_data_sequence)
 
     def _calculate_forces(self, frame: float, obj_idx: int, config_obj: Any, trajectory: Any, sfps: int, sample_rate: int) -> Optional[List[ForceData]]:
         """
@@ -391,7 +392,7 @@ class ForceSolver:
             elif collision.type.value == 'contact' and collision.frame == frame: 
                 hertz_impact_data = hertzian_contact.compute_impact(obj_idx, other_obj_idx, frame)
                 hertz_continuous_data = hertzian_contact.compute_continuous_contact(force_data, obj_idx, other_obj_idx, frame, frame_range)
-            else:
+            elif collision.type.value == 'contact':
                 hertz_continuous_data = hertzian_contact.compute_continuous_contact(force_data, obj_idx, other_obj_idx, frame, frame_range)
 
             if not hertz_impact_data == None and hertz_continuous_data == None:
@@ -422,35 +423,36 @@ class ForceSolver:
                 penetration_depth = hertz_continuous_data['penetration_depth']
                 coupling_strength = hertz_continuous_data['coupling_strength']
 
-            if frame == collision.frame:
+            if frame == collision.frame and collision.valid:
                 # impact_duration in samples@sample_rate
                 total_impact_sample = int(sample_rate*impact_duration)
                 # update collision.impulse_range
                 collision.update_impulse_range(total_impact_sample)
 
-            # Rewrite complete ForceData class
-            force_data = ForceData(
-                frame=frame,
-                obj1_idx=obj_idx,
-                obj2_idx=other_obj_idx,
-                restitution=restitution,
-                relative_velocity=relative_velocity,
-                normal_velocity=normal_velocity,
-                normal_force=normal_force,
-                tangential_force=tangential_force,
-                tangential_velocity=tangential_velocity,
-                normal_force_magnitude=normal_force_magnitude,
-                tangential_force_magnitude=tangential_force_magnitude,
-                stochastic_normal_force=stochastic_normal_force,
-                stochastic_tangential_force=stochastic_tangential_force,
-                contact_type=contact_type,
-                contact_point=contact_point,
-                contact_radius=contact_radius,
-                rolling_radius=rolling_radius,
-                impact_duration=impact_duration,
-                contact_pressure=contact_pressure,
-                penetration_depth=penetration_depth,
-                coupling_strength=coupling_strength
+            if collision.valid:
+                # Rewrite complete ForceData class
+                force_data = ForceData(
+                    frame=frame,
+                    obj1_idx=obj_idx,
+                    obj2_idx=other_obj_idx,
+                    restitution=restitution,
+                    relative_velocity=relative_velocity,
+                    normal_velocity=normal_velocity,
+                    normal_force=normal_force,
+                    tangential_force=tangential_force,
+                    tangential_velocity=tangential_velocity,
+                    normal_force_magnitude=normal_force_magnitude,
+                    tangential_force_magnitude=tangential_force_magnitude,
+                    stochastic_normal_force=stochastic_normal_force,
+                    stochastic_tangential_force=stochastic_tangential_force,
+                    contact_type=contact_type,
+                    contact_point=contact_point,
+                    contact_radius=contact_radius,
+                    rolling_radius=rolling_radius,
+                    impact_duration=impact_duration,
+                    contact_pressure=contact_pressure,
+                    penetration_depth=penetration_depth,
+                    coupling_strength=coupling_strength
             )
 
             force_data_list.append(force_data)

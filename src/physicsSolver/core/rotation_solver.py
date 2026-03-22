@@ -47,8 +47,8 @@ class RotationSolver:
         sfps = ( fps / fps_base ) * subframes # subframes per seconds
 
         tmp_trajectories = self.entity_manager.get('trajectories')
-        for index in tmp_trajectories:
-            if 'tmpTrajectoryData' in str(type(tmp_trajectories[index])) and tmp_trajectories[index].obj_idx == obj_idx:
+        for index in tmp_trajectories.keys():
+            if 'tmpTrajectoryData' in str(type(tmp_trajectories[index])) and tmp_trajectories[index].obj_idx == obj_idx and tmp_trajectories[index].valid:
                 tmp_trajectory = tmp_trajectories[index]
                 frame = tmp_trajectory.frame
                 impact_position = tmp_trajectory.position
@@ -85,7 +85,7 @@ class RotationSolver:
             time_to_impact = impact_time * dt
             rot_pre_to_impact = self._integrate_to_impact(pre_impact_rot, pre_impact_ang_vel, time_to_impact)
         
-            # Error between integrated rotation and proposed proposed impact rotation
+            # Error between integrated rotation and proposed impact rotation
             error_consistency = Rotation.magnitude(rot_impact * rot_pre_to_impact.inv())
         
             if not use_post_impact or post_impact_rot is None:
@@ -155,6 +155,11 @@ class RotationSolver:
         self.inertia_tensor = mesh.moment_inertia
         self.mass = mesh.mass
 
+#        # Regularize and compute inverse inertia tensor
+#        epsilon = 1e-12 * np.trace(self.inertia_tensor) if np.trace(self.inertia_tensor) > 0 else 1e-12
+#        I_local_reg = self.inertia_tensor + np.eye(3) * epsilon
+#        self.inv_inertia_tensor = np.linalg.pinv(I_local_reg, rcond=1e-6)
+
         # Material properties
         self.coefficient_of_restitution = 0
         if not post_impact_vel == 0 and not pre_impact_vel == 0:
@@ -193,7 +198,11 @@ class RotationSolver:
             )
         
             optimal_rot = Rotation.from_rotvec(result.x)
-        
+            # Check if the computed rotation is valid
+            if not self._is_valid_rotation(optimal_rot):
+                optimal_rot = slerp(impact_time)
+                print(f"Warning: RotationSolver produced invalid rotation for object {config_obj.idx}, using fallback.")
+
         else:
             # No post-impact data available
             # Use simplified physics-based estimation
@@ -218,6 +227,15 @@ class RotationSolver:
                 optimal_rot = optimal_rot * delta_rot
     
         return optimal_rot.as_euler('xyz')
+
+    def _is_valid_rotation(self, rot: Rotation) -> bool:
+        """Check if a Rotation object is finite (no NaN/inf)."""
+        try:
+            # Convert to matrix and check for NaN/inf
+            mat = rot.as_matrix()
+            return np.all(np.isfinite(mat))
+        except:
+            return False
 
     def _estimate_impact_plane(self, pre_pos: np.ndarray, pos: np.ndarray, post_pos: np.ndarray, frame_before: float, frame: float, frame_after: float, sfps: int) -> np.ndarray:
         """
@@ -297,6 +315,7 @@ class RotationSolver:
         # Inertia tensor in world coordinates
         I_world = R @ self.inertia_tensor @ R.T
         I_inv_world = np.linalg.inv(I_world)
+#        I_inv_world = R @ self.inv_inertia_tensor @ R.T
         
         # Compute effective mass matrix
         r_cross = np.array([

@@ -22,7 +22,7 @@ References:
 
 ### Physically plausible acceleration noise for rigid body world simulation.
 
-References:
+References [not confirmed]:
 - https://www.cs.cornell.edu/projects/Sound/proxy/FasterAccelerationNoise_SCA2012.pdf
 - https://graphics.stanford.edu/courses/cs448z-21-spring/stuff/PAN_typoFix.pdf
 
@@ -51,6 +51,12 @@ References [not confirmed]:
 - https://www.cs.columbia.edu/cg/crumpling/crumpling-sound-synthesis-siggraph-asia-2016-cirio-et-al.pdf for crumpling Sound
 
 
+### Physically plausible sounds for physics-based paper simulation.  
+
+References [not confirmed]:
+- https://team.inria.fr/imagine/files/2015/03/SRJHC-SCA16s.pdf
+
+
 ### Physically plausible explosion, fire and combustion sounds for 3D simulation.
 
 References [not confirmed]:
@@ -63,11 +69,20 @@ References [not confirmed]:
 References [not confirmed]:
 - https://pdfs.semanticscholar.org/345f/1f4b15366ad1be2dd083975d87cf579ea2b1.pdf
 - https://mdpi-res.com/d_attachment/applsci/applsci-07-01177/article_deploy/applsci-07-01177.pdf
+- https://web.stanford.edu/~jw969/assets/projects/aerosound/aerosound.pdf
+- https://www.icas.org/icas_archive/icas2024/data/papers/icas2024_0309_paper.pdf
+
+
+### Physically plausible sounds for fluid interaction simulation.
+
+References [not confirmed]:
+- https://gamma.cs.unc.edu/GlassHalfFull/glass_half_full_cgi.pdf
+- https://haonancheng.cn/attaches/2019%20GMOD%20Liquid-solid%20interaction%20sound%20synthesis.pdf
+
 
 ### Physically plausible sounds for fluid simulation.
 
 References [not confirmed]:
-- https://haonancheng.cn/attaches/2019%20GMOD%20Liquid-solid%20interaction%20sound%20synthesis.pdf
  - https://github.com/kangruix/FluidSound
 - https://graphics.stanford.edu/papers/coupledbubbles/assets/coupledbubbles.pdf
 - https://www.cs.cornell.edu/projects/Sound/bubbles/bubbles.pdf
@@ -101,7 +116,17 @@ References [not confirmed]:
 - https://haonancheng.cn/attaches/2019%20SIGGRAPH.pdf
 
 
+### Physically plausible sounds for physics-based softbody simulation.  
+
+References [not confirmed]:
+- https://carleton.scholaris.ca/server/api/core/bitstreams/9c1cb809-27a4-47a9-a5a4-6134bed71aa0/content
+- https://dl.acm.org/doi/epdf/10.1145/3243274.3243285
+
+
 ### Physically plausible sounds for physics-based cloth simulation.  
+
+References [not confirmed]:
+- https://www.dafx17.eca.ed.ac.uk/papers/DAFx17_paper_58.pdf
 
 References [not confirmed]:
 - https://www.cs.cornell.edu/projects/Sound/cloth/cloth2012.pdf

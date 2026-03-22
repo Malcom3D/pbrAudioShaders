@@ -38,7 +38,7 @@ class VertexSolver:
 
         tmp_trajectories = self.entity_manager.get('trajectories')
         for index in tmp_trajectories:
-            if 'tmpTrajectoryData' in str(type(tmp_trajectories[index])) and tmp_trajectories[index].obj_idx == obj_idx:
+            if 'tmpTrajectoryData' in str(type(tmp_trajectories[index])) and tmp_trajectories[index].obj_idx == obj_idx and tmp_trajectories[index].valid:
                 tmp_trajectory = tmp_trajectories[index]
                 frame = tmp_trajectory.frame
                 impact_position = tmp_trajectory.position

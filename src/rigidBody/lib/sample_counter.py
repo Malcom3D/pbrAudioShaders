@@ -61,12 +61,20 @@ class SampleCounter:
             self.num_players += 1
             print(f"Player {player_id} registered. Total players: {self.num_players}")
     
-    def unregister_player(self, player_id: int) -> None:
+    def unregister_player(self, player_id: int, all: str = None) -> None:
         """Unregister a ModalPlayer instance."""
         if player_id in self.players_registered:
             self.players_registered.remove(player_id)
             self.num_players -= 1
             print(f"Player {player_id} unregistered. Total players: {self.num_players}")
+#            if self.current_sample == self.total_samples - 1 and self.num_players > 0 and not all == 'ALL':
+#                self.unregister_all_player()
+
+    def unregister_all_player(self) -> None:
+        """Force unregister of all ModalPlayer instance."""
+        print(f"Unregister all player")
+        for player_id in self.players_registered:
+            self.unregister_player(player_id, 'ALL')
     
     def get_current(self) -> int:
         """Get the current sample index."""
@@ -85,11 +93,12 @@ class SampleCounter:
             # Increment the sample counter
                 if self.current_sample < self.total_samples - 1:
                     self.current_sample += 1
-                    print('SampleCounter: ', self.current_sample, self.total_samples)
                 # Reset ready counter
                 self.players_ready = []
                 locker.signal_ready() 
             else:
+                print('SampleCounter: ', self.current_sample, self.total_samples)
+#                print(self.num_players, self.players_ready)
                 self._locked_next()
 
         return self.current_sample
@@ -106,5 +115,5 @@ class SampleCounter:
     def get_progress(self) -> float:
         """Get progress as a percentage."""
         if self.total_samples and self.total_samples > 0:
-            return (self.current_sample / self.total_samples) * 100.0
+            return (self.current_sample / self.total_samples - 1) * 100.0
         return 0.0

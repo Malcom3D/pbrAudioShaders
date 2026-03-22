@@ -31,11 +31,13 @@ class ModalComposer:
         config = self.entity_manager.get('config')
 
     def compute(self, collision: Any) -> None:
-        if collision.type.value == 'connected':
+        if collision.type.value == 'connected' or not collision.valid:
             return
         config = self.entity_manager.get('config')
         forces_path = f"{config.system.cache_path}/audio_force"
         samples = collision.samples
+        if samples.shape[0] == 0:
+            return
         sample_start = samples[0]
         sample_stop = samples[-1] + 1
 

@@ -67,7 +67,7 @@ class FlightPath:
         trajectory_frames = []
         
         for idx, traj in tmp_trajectories.items():
-            if isinstance(traj, tmpTrajectoryData) and traj.obj_idx == obj_idx:
+            if isinstance(traj, tmpTrajectoryData) and traj.obj_idx == obj_idx and traj.valid:
                 trajectory_frames.append([sample_rate * traj.frame / sfps, traj.position, traj.rotation, traj.vertices, traj.normals])
         
         if config_obj.static:
@@ -78,23 +78,24 @@ class FlightPath:
             rots = [] 
             for r_idx in range(rotations.shape[0]):
                 rots.append(Rotation.from_euler('XYZ', rotations[r_idx]))
-            rotations = Rotation.concatenate(rots)
+#            rotations = Rotation.concatenate(rots)
             if trajectory_frames:
                 # Use solved trajectory frames
-                trajectory_data = self._dynamic_trajectory_with_solved(config_obj, positions, rotations, trajectory_frames, sfps, sample_rate)
+                trajectory_data = self._dynamic_trajectory_with_solved(config_obj, positions, rots, trajectory_frames, sfps, sample_rate)
             else:
                 # Use original frames (no collisions detected)
-                trajectory_data = self._dynamic_trajectory_original(config_obj, positions, rotations, sfps, sample_rate)
+                trajectory_data = self._dynamic_trajectory_original(config_obj, positions, rots, sfps, sample_rate)
         
         # Register the trajectory data
-        trajectory_idx = len(self.entity_manager.get('trajectories')) + 1
-        self.entity_manager.register('trajectories', trajectory_data, trajectory_idx)
+#        trajectory_idx = len(self.entity_manager.get('trajectories')) + 1
+#        self.entity_manager.register('trajectories', trajectory_data, trajectory_idx)
+        _ = self.entity_manager.register('trajectories', trajectory_data)
         
         # Save the trajectory data
         trajectory_data.save(f"{self.output_dir}/{config_obj.name}.pkl")  # Pickle format
 
-        # Remove temporary trajectory data for this object
-        self._cleanup_tmp_trajectories(obj_idx)
+#        # Remove temporary trajectory data for this object
+#        self._cleanup_tmp_trajectories(obj_idx)
 
     def _static_trajectory(self, config_obj, positions: np.ndarray, rotations: np.ndarray, sfps: float, sample_rate: int) -> TrajectoryData:
         """Create trajectory data for static object."""
@@ -103,14 +104,23 @@ class FlightPath:
         
         return TrajectoryData(obj_idx=config_obj.idx, static=True, sfps=sfps, sample_rate=sample_rate, positions=positions, rotations=rotations, vertices=vertices, normals=normals, faces=faces)
 
-    def _dynamic_trajectory_original(self, config_obj, positions: np.ndarray, rotations: Rotation, sfps: float, sample_rate: int) -> TrajectoryData:
+    def _dynamic_trajectory_original(self, config_obj, positions: np.ndarray, rotations: List[Rotation], sfps: float, sample_rate: int) -> TrajectoryData:
         """Create trajectory data for dynamic object using original frames."""
         n_frames = len(positions)
         
         # Create time points for original frames
         frame_times = sample_rate * ( 1 + np.arange(n_frames)) / sfps
-        
+
+        # Get quaternion and normalize
+#        rot_from_quat = []
+#        for rot_idx in range(len(rotations)):
+#            quaternion = rotations[rot_idx].as_quat()
+#            normalized_quaternion = quaternion / np.linalg.norm(quaternion)
+#            rot_from_quat.append(Rotation.from_quat(normalized_quaternion))
+#        rotations = rot_from_quat
+
         # Interpolate positions and rotations using CubicSpline and RotationSpline
+        rotations = Rotation.concatenate(rotations)
         pos_interp = [CubicSpline(frame_times, positions[:, i], extrapolate=1) for i in range(positions.shape[1])]
         rot_interp = RotationSpline(frame_times, rotations)
         
@@ -135,11 +145,11 @@ class FlightPath:
         
         return TrajectoryData(obj_idx=config_obj.idx, static=False, sfps=sfps, sample_rate=sample_rate, positions=pos_interp, rotations=rot_interp, vertices=vertices_interp, normals=normals_interp, faces=faces)
 
-    def _dynamic_trajectory_with_solved(self, config_obj, positions: np.ndarray, rotations: Rotation, solved_frames: List[Tuple[float, np.ndarray, np.ndarray, np.ndarray, np.ndarray]], sfps: float, sample_rate: int) -> TrajectoryData:
+    def _dynamic_trajectory_with_solved(self, config_obj, positions: np.ndarray, rotations: List[Rotation], solved_frames: List[Tuple[float, np.ndarray, np.ndarray, np.ndarray, np.ndarray]], sfps: float, sample_rate: int) -> TrajectoryData:
         """Create trajectory data for dynamic object with solved collision frames."""
         n_original_frames = len(positions)
         original_frames = 1 + np.arange(n_original_frames)
-        original_frame_times = sample_rate * original_frames / sfps
+        original_frame_times = original_frames * sample_rate / sfps
 
         frames = []
         for idx in range(len(solved_frames)):
@@ -167,6 +177,7 @@ class FlightPath:
                 idx = next((i for i in range(len(solved_frames)) if frame_time == solved_frames[i][0]), None)
                 pos = solved_frames[idx][1]
                 rot = Rotation.from_euler('XYZ', solved_frames[idx][2])
+#                    rot = np.eye(3) 
                 vert = solved_frames[idx][3]
                 norm = solved_frames[idx][4]
             
@@ -174,7 +185,15 @@ class FlightPath:
             all_rotations.append(rot)
             all_vertices.append(vert)
             all_normals.append(norm)
-        
+
+#        # Get quaternion and normalize
+#        rot_from_quat = []
+#        for rot_idx in range(len(all_rotations)):
+#            quaternion = all_rotations[rot_idx].as_quat()
+#            normalized_quaternion = quaternion / np.linalg.norm(quaternion)
+#            rot_from_quat.append(Rotation.from_quat(normalized_quaternion))
+#        all_rotations = rot_from_quat
+
         all_positions = np.array(all_positions)
         all_rotations = Rotation.concatenate(all_rotations)
         all_vertices = np.array(all_vertices)  # Shape: (n_frames, n_vertices, 3)
@@ -218,14 +237,9 @@ class FlightPath:
         
         return vertices_interp, normals_interp
 
-    def _cleanup_tmp_trajectories(self, obj_idx: int) -> None:
-        """Remove temporary trajectory data for the given object."""
-        tmp_trajectories = self.entity_manager.get('trajectories')
-        indices_to_remove = []
-        
-        for idx, traj in tmp_trajectories.items():
-            if isinstance(traj, tmpTrajectoryData) and traj.obj_idx == obj_idx:
-                indices_to_remove.append(idx)
-        
-        for idx in indices_to_remove:
-            self.entity_manager.unregister('trajectories', idx)
+#    def _cleanup_tmp_trajectories(self, obj_idx: int) -> None:
+#        """Remove temporary trajectory data for the given object."""
+#        tmp_trajectories = self.entity_manager.get('trajectories')
+#        for idx, traj in tmp_trajectories.items():
+#            if isinstance(traj, tmpTrajectoryData) and traj.obj_idx == obj_idx:
+#                self.entity_manager.unregister('trajectories', idx)

@@ -49,7 +49,6 @@ class DistanceSolver:
         sample_rate = config.system.sample_rate
         sfps = ( fps / fps_base ) * subframes # subframes per seconds
  
-        trajectory, frames  = ([] for _ in range(2))
         config_objs = [[],[]]
         for conf_obj in config.objects:
             if conf_obj.idx == objs_idx[0]:
@@ -57,20 +56,20 @@ class DistanceSolver:
             elif conf_obj.idx == objs_idx[1]:
                 config_objs[1] = conf_obj
             
+        trajectory, frames  = ([] for _ in range(2))
         trajectories = self.entity_manager.get('trajectories')
         for idx in trajectories.keys():
-            if 'TrajectoryData' in str(type(trajectories[idx])):
-                if trajectories[idx].obj_idx == config_objs[0].idx or trajectories[idx].obj_idx == config_objs[1].idx:
-                    trajectory.append(trajectories[idx])
-                    frames.append(trajectories[idx].get_x())
+            if trajectories[idx].obj_idx in objs_idx:
+                trajectory.append(trajectories[idx])
+                frames.append(trajectories[idx].get_x())
 
         # assign trajectory
-        trajectory1 = trajectory[0] if trajectory[0].obj_idx == config_objs[0].idx else trajectory[1]
-        trajectory2 = trajectory[1] if trajectory[1].obj_idx == config_objs[1].idx else trajectory[0]
+        trajectory1 = trajectory[0] if trajectory[0].obj_idx == objs_idx[0] else trajectory[1]
+        trajectory2 = trajectory[1] if trajectory[1].obj_idx == objs_idx[1] else trajectory[0]
 
         frames = np.unique(np.sort(np.concatenate((frames[0], frames[1]))))
 
-        if isinstance(config_objs[1].connected, np.ndarray) and config_objs[0].idx in config_objs[1].connected[:,0] and isinstance(config_objs[0].connected, np.ndarray) and config_objs[1].idx in config_objs[0].connected[:,0]:
+        if isinstance(config_objs[1].connected, np.ndarray) and objs_idx[0] in objs_idx[1].connected[:,0] and isinstance(config_objs[0].connected, np.ndarray) and objs_idx[1] in config_objs[0].connected[:,0]:
             frame = sample_rate / sfps
             distance, closest_points = self._distance(config_objs=config_objs, trajectory1=trajectory1, trajectory2=trajectory2, frame=frame, sfps=sfps, sample_rate=sample_rate, collision_margin=collision_margin)
             distances = np.array(distance)
@@ -81,8 +80,9 @@ class DistanceSolver:
 
             collision_type = CollisionType.CONNECTED
             collision_data = CollisionData(type=collision_type, obj1_idx=objs_idx[0], obj2_idx=objs_idx[1], frame=float('inf'))
-            collision_idx = len(self.entity_manager.get('collisions')) + 1
-            self.entity_manager.register('collisions', collision_data, collision_idx)
+#            collision_idx = len(self.entity_manager.get('collisions')) + 1
+#            self.entity_manager.register('collisions', collision_data, collision_idx)
+            _ = self.entity_manager.register('collisions', collision_data)
 
         if not config_objs[0].static or not config_objs[1].static:
             distances, closest_point1, closest_point2 = ([] for _ in range(3))
@@ -102,8 +102,9 @@ class DistanceSolver:
             collision_events = self._analyze_distances(distances=distances, times=frames, config_objs=config_objs, collision_margin=collision_margin, sfps=sfps, sample_rate=sample_rate)
 
             for collision_data in collision_events:
-                collision_idx = len(self.entity_manager.get('collisions')) + 1
-                self.entity_manager.register('collisions', collision_data, collision_idx)
+#                collision_idx = len(self.entity_manager.get('collisions')) + 1
+#                self.entity_manager.register('collisions', collision_data, collision_idx)
+                _ = self.entity_manager.register('collisions', collision_data)
 
     def _analyze_distances(self, distances: np.ndarray, times: np.ndarray, config_objs: List[Any], collision_margin: float, sfps: float, sample_rate: int) -> List[CollisionData]:
         """
@@ -187,8 +188,12 @@ class DistanceSolver:
         
         Uses statistical analysis of distance data to determine appropriate threshold.
         """
+#        # Remove distance less than 2*collision_margin
+#        distances_margin = distances[distances <= 2*collision_margin]
+
         # Remove outliers for better threshold calculation
         q1, q3 = np.percentile(distances, [25, 75])
+#        q1, q3 = np.percentile(distances_margin, [25, 75])
         iqr = q3 - q1
         lower_bound = q1 - 1.5 * iqr
         upper_bound = q3 + 1.5 * iqr

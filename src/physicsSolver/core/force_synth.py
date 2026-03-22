@@ -60,13 +60,23 @@ class ForceSynth:
                     return
                 elif not config_obj.static:
                     for c_idx in collision_data.keys():
-                        if collision_data[c_idx].obj1_idx == obj_idx or collision_data[c_idx].obj2_idx == obj_idx:
+                        if (collision_data[c_idx].obj1_idx == obj_idx or collision_data[c_idx].obj2_idx == obj_idx) and collision_data[c_idx].valid:
                             collisions.append(collision_data[c_idx])
                     trajectories = self.entity_manager.get('trajectories')
                     for t_idx in trajectories.keys():
                         if trajectories[t_idx].obj_idx == obj_idx:
                             trajectory = trajectories[t_idx]
                             forces = self.entity_manager.get('forces')
+
+        fracture_frame = None
+        if not config_obj.fractured == False:
+            fracture_frame = config_obj.fractured
+            fracture_frame *= sample_rate / sfps
+
+        is_shard_frame = None
+        if not config_obj.is_shard == False:
+            is_shard_frame = config_obj.is_shard
+            is_shard_frame *= sample_rate / sfps
 
         # Calculate total duration in samples
         frames = trajectory.get_x()
@@ -85,42 +95,44 @@ class ForceSynth:
 
         synthesized_track = self._create_empty_tracks(total_samples)
         for sample_idx in frames:
-#            # Synthesize non-collision forces (air resistance, etc etc.)
-#            for f_idx in forces.keys():
-#                if forces[f_idx].obj_idx == obj_idx:
-#                    force = forces[f_idx]
-#                    synthesized_track = self._synthesize_non_collision(force, config_obj, sample_idx, total_samples, sample_rate)
-            # Check if this frame contains a collision
-            for collision in collisions:
-                if collision.frame == sample_idx:
-                    other_obj_idx = collision.obj2_idx if collision.obj1_idx == obj_idx else collision.obj1_idx
-                    for conf_obj in config.objects:
-                        if conf_obj.idx == other_obj_idx:
-                            other_config_obj = conf_obj 
-                    for f_idx in forces.keys():
-                        if forces[f_idx].obj_idx == obj_idx and forces[f_idx].other_obj_idx == other_obj_idx:
-                            force = forces[f_idx]
-                    if collision.type.value == 'impact':
-                        # Synthesize impact sound using Hertzian model
-                        synthesized_track = self._synthesize_impact(force, collision, config_obj, other_config_obj, sample_idx, total_samples, sample_rate)
-                    elif collision.type.value == 'contact':
-                        # Synthesize contact sound
-                        synthesized_track = self._synthesize_contact(trajectory, force, collision, config_obj, other_config_obj, sample_idx, total_samples, sample_rate, sfps, spsf)
-                        # Synthesize impact sound using Hertzian model
-                        synthesized_impact_track = self._synthesize_impact(force, collision, config_obj, other_config_obj, sample_idx, total_samples, sample_rate)
-                        for key in synthesized_impact_track.keys():
-                            synthesized_track[key] += synthesized_impact_track[key]
+            if (fracture_frame == None or sample_idx <= fracture_frame) and (is_shard_frame == None or is_shard_frame <= sample_idx):
+#                # Synthesize non-collision forces (air resistance, etc etc.)
+#                for f_idx in forces.keys():
+#                    if forces[f_idx].obj_idx == obj_idx:
+#                        force = forces[f_idx]
+#                        synthesized_track = self._synthesize_non_collision(force, config_obj, sample_idx, total_samples, sample_rate)
+                # Check if this frame contains a collision
+                for collision in collisions:
+                    if collision.frame == sample_idx:
+                        other_obj_idx = collision.obj2_idx if collision.obj1_idx == obj_idx else collision.obj1_idx
+                        for conf_obj in config.objects:
+                            if conf_obj.idx == other_obj_idx:
+                                other_config_obj = conf_obj 
+                        for f_idx in forces.keys():
+                            if forces[f_idx].obj_idx == obj_idx and forces[f_idx].other_obj_idx == other_obj_idx:
+                                force = forces[f_idx]
+                        if sample_idx >= force.frames[0] and sample_idx <= force.frames[-1]:
+                            if collision.type.value == 'impact':
+                                # Synthesize impact sound using Hertzian model
+                                synthesized_track = self._synthesize_impact(force, collision, config_obj, other_config_obj, sample_idx, total_samples, sample_rate)
+                            elif collision.type.value == 'contact':
+                                # Synthesize contact sound
+                                synthesized_track = self._synthesize_contact(trajectory, force, collision, config_obj, other_config_obj, sample_idx, total_samples, sample_rate, sfps, spsf)
+                                # Synthesize impact sound using Hertzian model
+                                synthesized_impact_track = self._synthesize_impact(force, collision, config_obj, other_config_obj, sample_idx, total_samples, sample_rate)
+                                for key in synthesized_impact_track.keys():
+                                    synthesized_track[key] += synthesized_impact_track[key]
 
-                # Add to tracks
-                impact_track += synthesized_track['impact']
-                sliding_track += synthesized_track['sliding']
-                scraping_track += synthesized_track['scraping']
-                rolling_track += synthesized_track['rolling']
-                non_collision_track += synthesized_track['non_collision']
-                coupling_strength_track += synthesized_track['coupling_strength']
-                sliding_sound += synthesized_track['sliding_sound']
-                scraping_sound += synthesized_track['scraping_sound']
-                rolling_sound += synthesized_track['rolling_sound']
+                    # Add to tracks
+                    impact_track += synthesized_track['impact']
+                    sliding_track += synthesized_track['sliding']
+                    scraping_track += synthesized_track['scraping']
+                    rolling_track += synthesized_track['rolling']
+                    non_collision_track += synthesized_track['non_collision']
+                    coupling_strength_track += synthesized_track['coupling_strength']
+                    sliding_sound += synthesized_track['sliding_sound']
+                    scraping_sound += synthesized_track['scraping_sound']
+                    rolling_sound += synthesized_track['rolling_sound']
 
         # Save tracks
         tracks = {
@@ -203,7 +215,7 @@ class ForceSynth:
     def _synthesize_contact(self, trajectory: Any, force: Any, collision: Any, config_obj: Any, other_config_obj: Any, sample_idx: float, total_samples: int, sample_rate: int, sfps: float, spsf: float):
         """Synthesize contact audio-force (scraping, sliding, rolling)."""
         
-        if force.get_contact_type(sample_idx) == [ContactType.STATIC.value, ContactType.NO_CONTACT.value]:
+        if force.get_contact_type(sample_idx) in [ContactType.STATIC.value, ContactType.NO_CONTACT.value]:
             return self._create_empty_tracks(total_samples)
         elif force.get_contact_type(sample_idx) == ContactType.ROLLING.value:
             return self._synthesize_rolling(trajectory=trajectory, force=force, collision=collision, config_obj=config_obj, other_config_obj=other_config_obj, sample_idx=sample_idx, total_samples=total_samples, sample_rate=sample_rate)

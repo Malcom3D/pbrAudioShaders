@@ -55,7 +55,8 @@ class ModalLuthier:
 
         print('ModalLuthier: init ', config_obj.name, 'RigidBodySynth')
         rigidbody_synth = RigidBodySynth(entity_manager=self.entity_manager, obj_idx=obj_idx, modal_lib=f"{self.dsp_path}/{config_obj.name}.lib", vertex_list=vertex_list, sample_rate=sample_rate)
-        self.entity_manager.register('rigidbody_synth', rigidbody_synth, config_obj.idx)
+#        self.entity_manager.register('rigidbody_synth', rigidbody_synth, config_obj.idx)
+        self.entity_manager.register('rigidbody_synth', rigidbody_synth)
         print('ModalLuthier: ', config_obj.name, 'RigidBodySynth registered')
 
         print('ModalLuthier: init ', config_obj.name, 'ResonanceSynth')
@@ -64,6 +65,7 @@ class ModalLuthier:
             resonance_synth = ResonanceSynth(entity_manager=self.entity_manager, obj_idx=obj_idx, modal_lib=f"{self.dsp_path}/{config_obj.name}_resonance.lib", sample_rate=sample_rate, contact_area_scale=contact_area_scale)
         else:
             resonance_synth = ResonanceSynth(entity_manager=self.entity_manager, obj_idx=obj_idx, modal_lib=f"{self.dsp_path}/{config_obj.name}_resonance.lib", sample_rate=sample_rate)
-        self.entity_manager.register('resonance_synth', resonance_synth, config_obj.idx)
+#        self.entity_manager.register('resonance_synth', resonance_synth, config_obj.idx)
+        self.entity_manager.register('resonance_synth', resonance_synth)
         print('ModalLuthier: ', config_obj.name, 'ResonanceSynth registered')
 

@@ -34,7 +34,7 @@ from ..core.collision_solver import CollisionSolver
 from ..core.force_synth import ForceSynth
 
 from ..lib.collision_data import CollisionData
-from ..lib.trajectory_data import TrajectoryData
+from ..lib.trajectory_data import TrajectoryData, tmpTrajectoryData
 from ..lib.force_data import ForceDataSequence
 from ..lib.modal_vertices import ModalVertices
 from ..lib.score_data import ScoreTrack
@@ -64,15 +64,18 @@ class physicsEngine:
                 self.obj_pairs.append([config.objects[i].idx, config.objects[j].idx])
 
     def bake(self):
-        self.ps = PositionSolver(self.entity_manager)
-        self.rs = RotationSolver(self.entity_manager)
-        self.vs = VertexSolver(self.entity_manager)
-        self.ns = NormalSolver(self.entity_manager)
-        self.fp = FlightPath(self.entity_manager)
-        self.ds = DistanceSolver(self.entity_manager)
-        self.fs = ForceSolver(self.entity_manager)
+#        self.ps = PositionSolver(self.entity_manager)
+#        self.rs = RotationSolver(self.entity_manager)
+#        self.vs = VertexSolver(self.entity_manager)
+#        self.ns = NormalSolver(self.entity_manager)
+#        self.fp = FlightPath(self.entity_manager)
+#        self.ds = DistanceSolver(self.entity_manager)
+#        self.fs = ForceSolver(self.entity_manager)
 
-        tasks_static = [self.fp.compute(obj_idx) for obj_idx in self.obj_static]
+#        tasks_static = [self.fp.compute(obj_idx) for obj_idx in self.obj_static]
+#        results_static = compute(*tasks_static)
+
+        tasks_static = [self.static(obj_idx) for obj_idx in self.obj_static]
         results_static = compute(*tasks_static)
 
         tasks_pos = [self.position(obj_idx) for obj_idx in self.obj_dyn]
@@ -86,6 +89,10 @@ class physicsEngine:
         tasks_traj = [self.trajectory(obj_idx) for obj_idx in self.obj_dyn]
         results_traj = compute(*tasks_traj)
 
+        # Remove temporary trajectory data for this object
+        for obj_idx in self.obj_dyn + self.obj_static:
+            self._cleanup_tmp_trajectories(obj_idx)
+
         tasks_dists = [self.distances(objs_idx) for objs_idx in self.obj_pairs]
         results_dists = compute(*tasks_dists)
 
@@ -96,7 +103,6 @@ class physicsEngine:
         tasks_collision = [self.collision(collisions[collision_idx]) for collision_idx in collisions.keys()]
         results_collision = compute(*tasks_collision)
 
-        self.fsy = ForceSynth(self.entity_manager)
         tasks_force_synth = [self.force_synth(obj_idx) for obj_idx in self.obj_dyn]
         results_force_synth = compute(*tasks_force_synth)
 
@@ -122,52 +128,60 @@ class physicsEngine:
         for s_idx in score_tracks.keys():
             score_tracks[s_idx].save(f"{self.scoretracks_dir}/{s_idx:05d}.pkl")
 
+    def _cleanup_tmp_trajectories(self, obj_idx: int):
+        """Remove temporary trajectory data for the given object."""
+        import copy
+        trajectories = self.entity_manager.get('trajectories')
+        tmp_trajectories = copy.deepcopy(trajectories)
+        for key in trajectories.keys():
+            if isinstance(tmp_trajectories[key], tmpTrajectoryData) and tmp_trajectories[key].obj_idx == obj_idx:
+                del tmp_trajectories[key]
+        self.entity_manager._trajectories = tmp_trajectories
+
     @delayed
     def position(self, obj_idx: int):
-        config = self.entity_manager.get('config')
-        for config_obj in config.objects:
-            if config_obj.idx == obj_idx:
-                self.ps.compute(config_obj.idx)
+        ps = PositionSolver(self.entity_manager)
+        ps.compute(obj_idx)
 
     @delayed
     def rotation(self, obj_idx: int):
-        config = self.entity_manager.get('config')
-        for config_obj in config.objects:
-            if config_obj.idx == obj_idx:
-                self.rs.compute(config_obj.idx)
+        rs = RotationSolver(self.entity_manager)
+        rs.compute(obj_idx)
 
     @delayed
     def vertex(self, obj_idx: int):
-        config = self.entity_manager.get('config')
-        for config_obj in config.objects:
-            if config_obj.idx == obj_idx:
-                self.vs.compute(config_obj.idx)
+        vs = VertexSolver(self.entity_manager)
+        vs.compute(obj_idx)
 
     @delayed
     def normal(self, obj_idx: int):
-        config = self.entity_manager.get('config')
-        for config_obj in config.objects:
-            if config_obj.idx == obj_idx:
-                self.ns.compute(config_obj.idx)
+        ns = NormalSolver(self.entity_manager)
+        ns.compute(obj_idx)
 
     @delayed
     def trajectory(self, obj_idx: int):
-        config = self.entity_manager.get('config')
-        for config_obj in config.objects:
-            if config_obj.idx == obj_idx:
-                self.fp.compute(config_obj.idx)
+        fp = FlightPath(self.entity_manager)
+        fp.compute(obj_idx)
+
+    @delayed
+    def static(self, obj_idx: int):
+        fp = FlightPath(self.entity_manager)
+        fp.compute(obj_idx)
 
     @delayed
     def distances(self, objs_idx: Tuple[int, int]):
-        self.ds.compute(objs_idx)
+        ds = DistanceSolver(self.entity_manager)
+        ds.compute(objs_idx)
 
     @delayed
     def force(self, obj_idx: int):
-        self.fs.compute(obj_idx)
+        fs = ForceSolver(self.entity_manager)
+        fs.compute(obj_idx)
 
     @delayed
     def force_synth(self, obj_idx: int):
-        self.fsy.compute(obj_idx)
+        fsy = ForceSynth(self.entity_manager)
+        fsy.compute(obj_idx)
 
     @delayed
     def collision(self, collision: CollisionData):

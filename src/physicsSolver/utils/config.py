@@ -41,8 +41,9 @@ class ObjectConfig:
     pose_path: str
     static: bool
     ground: bool = False
-    fractured: bool = False
-    shard: Union[bool, np.ndarray] = False # for shards of fractured object
+    is_shard: Union[bool, int] = False
+    fractured: Union[bool, int] = False
+    shard: Union[bool, np.ndarray] = False # for shards of fractured object [obj_idx]
     connected: Union[bool, np.ndarray] = False # for static coupled systems [[obj_idx, coupling_strength]]
     stochastic_variation: bool = False
     acoustic_shader: Optional[AcousticShader] = None

@@ -81,16 +81,21 @@ class EntityManager:
                 self.register('config', config)
 
     # Dispatcher:
-    def register(self, entity: str, obj: Any, idx: int = None) -> None:
+    def register(self, entity: str, obj: Any) -> int:
         if entity in self.sigleton_map and not entity in self._singleton:
             self._singleton[entity] = obj
-        elif entity in self.entities_map.keys() and not idx == None:
+#        elif entity in self.entities_map.keys() and not idx == None: # when entity is unregistered len(List(idx]) != List[idx]
+        elif entity in self.entities_map.keys():
             for key in self.entities_map.keys():
                 if entity in key:
                     for sub in self.entities_map[key]:
                         if sub in str(type(obj)):
                             entities = eval(f"self._{key}")
+                            idx = 0
+                            if not len(entities.keys()) == 0:
+                                idx = list(entities.keys())[-1] + 1
                             entities[idx] = obj
+                            return idx
                
     def get(self, entity: str = None, idx: int = None) -> dict[str, Any]:
         """Get all objects"""
@@ -116,3 +121,4 @@ class EntityManager:
                         entities = eval(f"self._{entity}")
                         if idx in entities.keys():
                             del entities[idx]
+                            return entities

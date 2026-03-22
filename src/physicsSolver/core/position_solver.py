@@ -36,21 +36,23 @@ class PositionSolver:
         fps = config.system.fps
         fps_base = config.system.fps_base
         subframes = config.system.subframes
+        sample_rate = config.system.sample_rate
         sfps = ( fps / fps_base ) * subframes # subframes per seconds
 
         for config_obj in config.objects:
             if config_obj.idx == obj_idx:
                 positions, rotations = _load_pose(config_obj)
 
-        position_intersection = self._intersection(sequence_array=positions, sfps=sfps)
+        position_intersection = self._intersection(sequence_array=positions, sample_rate=sample_rate, sfps=sfps)
 
         for index in range(len(position_intersection)):
             frame, point = position_intersection[index]
             tmp_trajectory_data = tmpTrajectoryData(obj_idx=obj_idx, sfps=sfps, frame=frame, position=point)
-            trajectory_idx = len(self.entity_manager.get('trajectories')) + 1
-            self.entity_manager.register('trajectories', tmp_trajectory_data, trajectory_idx)
+#            trajectory_idx = len(self.entity_manager.get('trajectories')) + 1
+#            self.entity_manager.register('trajectories', tmp_trajectory_data, trajectory_idx)
+            _ = self.entity_manager.register('trajectories', tmp_trajectory_data)
 
-    def _intersection(self, sequence_array: np.ndarray, sfps: int):
+    def _intersection(self, sequence_array: np.ndarray, sample_rate: int, sfps: int):
         intersection_data = []
         intersection_points = []
         position_old = np.array([0,0,0])
@@ -64,7 +66,11 @@ class PositionSolver:
 
         for frame, intersection_point in intersection_points:
             intersection_time = self._intersection_time(motion_path=sequence_array, frame=frame, intersection_point=intersection_point, sfps=sfps)
-            intersection_data.append([intersection_time['absolute_frame'], intersection_point])
+            prev_delta_sample = abs((intersection_time['absolute_frame'] - frame) * sample_rate / sfps)
+            next_delta_sample = abs((intersection_time['absolute_frame'] - frame + 1) * sample_rate / sfps)
+            if prev_delta_sample > 1 and next_delta_sample > 1:
+                intersection_data.append([intersection_time['absolute_frame'], intersection_point])
+#            intersection_data.append([intersection_time['absolute_frame'], intersection_point])
         return intersection_data
 
     def _intersection_time(self, motion_path: np.ndarray, frame: int, intersection_point: np.ndarray, sfps: float) -> Dict:

@@ -42,6 +42,7 @@ class CollisionData:
     threshold: float = None
     distances: Union[float, np.ndarray] = None
     samples: np.ndarray = None
+    valid: bool = True
 
     def update_type(self, collision_type: CollisionType):
         setattr(self, 'type', collision_type)
