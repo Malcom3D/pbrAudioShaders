@@ -39,6 +39,8 @@ from ..lib.force_data import ForceDataSequence
 from ..lib.modal_vertices import ModalVertices
 from ..lib.score_data import ScoreTrack
 
+from ..lib.functions import _update_status
+
 @dataclass
 class physicsEngine:
     entity_manager: EntityManager
@@ -48,11 +50,16 @@ class physicsEngine:
 
     def __post_init__(self):
         config = self.entity_manager.get('config')
+        self.status_dir = f"{config.system.cache_path}/status/{__class__.__name__}"
         self.collisions_dir = f"{config.system.cache_path}/collisions"
         self.trajectories_dir = f"{config.system.cache_path}/trajectories"
         self.forces_dir = f"{config.system.cache_path}/forces_data"
         self.modalvertices_dir = f"{config.system.cache_path}/modalvertices"
         self.scoretracks_dir = f"{config.system.cache_path}/scoretracks"
+
+        # Ensure status directory exists
+        os.makedirs(self.status_dir, exist_ok=True)
+
         obj_static, obj_dyn, obj_pairs = ([] for _ in range(3))
         for config_obj in config.objects:
             if not config_obj.static and not config_obj.idx in obj_dyn:
@@ -64,6 +71,7 @@ class physicsEngine:
                 self.obj_pairs.append([config.objects[i].idx, config.objects[j].idx])
 
     def bake(self):
+        _update_status(f"{self.status_dir}/bake", 0)
 #        self.ps = PositionSolver(self.entity_manager)
 #        self.rs = RotationSolver(self.entity_manager)
 #        self.vs = VertexSolver(self.entity_manager)
@@ -77,34 +85,49 @@ class physicsEngine:
 
         tasks_static = [self.static(obj_idx) for obj_idx in self.obj_static]
         results_static = compute(*tasks_static)
+        _update_status(f"{self.status_dir}/bake", 9)
 
         tasks_pos = [self.position(obj_idx) for obj_idx in self.obj_dyn]
         results_pos = compute(*tasks_pos)
+        _update_status(f"{self.status_dir}/bake", 18)
+
         tasks_rot = [self.rotation(obj_idx) for obj_idx in self.obj_dyn]
         results_rot = compute(*tasks_rot)
+        _update_status(f"{self.status_dir}/bake", 27)
+
         tasks_vertex = [self.vertex(obj_idx) for obj_idx in self.obj_dyn]
         results_vertex = compute(*tasks_vertex)
+        _update_status(f"{self.status_dir}/bake", 36)
+
         tasks_norm = [self.normal(obj_idx) for obj_idx in self.obj_dyn]
         results_norm = compute(*tasks_norm)
+        _update_status(f"{self.status_dir}/bake", 45)
+
         tasks_traj = [self.trajectory(obj_idx) for obj_idx in self.obj_dyn]
         results_traj = compute(*tasks_traj)
+        _update_status(f"{self.status_dir}/bake", 54)
 
         # Remove temporary trajectory data for this object
         for obj_idx in self.obj_dyn + self.obj_static:
             self._cleanup_tmp_trajectories(obj_idx)
+        _update_status(f"{self.status_dir}/bake", 63)
 
         tasks_dists = [self.distances(objs_idx) for objs_idx in self.obj_pairs]
         results_dists = compute(*tasks_dists)
+        _update_status(f"{self.status_dir}/bake", 72)
 
         tasks_force = [self.force(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
         results_force = compute(*tasks_force)
+        _update_status(f"{self.status_dir}/bake", 81)
 
         collisions = self.entity_manager.get('collisions')
         tasks_collision = [self.collision(collisions[collision_idx]) for collision_idx in collisions.keys()]
         results_collision = compute(*tasks_collision)
+        _update_status(f"{self.status_dir}/bake", 90)
 
         tasks_force_synth = [self.force_synth(obj_idx) for obj_idx in self.obj_dyn]
         results_force_synth = compute(*tasks_force_synth)
+        _update_status(f"{self.status_dir}/bake", 99)
 
         # Ensure directory exists
         os.makedirs(self.collisions_dir, exist_ok=True)
@@ -127,6 +150,9 @@ class physicsEngine:
         print('Save score_tracks: ', len(score_tracks))
         for s_idx in score_tracks.keys():
             score_tracks[s_idx].save(f"{self.scoretracks_dir}/{s_idx:05d}.pkl")
+
+        _update_status(f"{self.status_dir}/bake", 100)
+
 
     def _cleanup_tmp_trajectories(self, obj_idx: int):
         """Remove temporary trajectory data for the given object."""

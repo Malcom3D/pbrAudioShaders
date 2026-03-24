@@ -122,10 +122,39 @@ class CollisionSolver:
         if not stop_samples <= total_samples:
             stop_samples = total_samples
 
-        if (not is_shard_frame1 == None and is_shard_frame1 >= start_samples) or (not is_shard_frame2 == None and is_shard_frame2 >= start_samples):
+        fracture_frame1 = None
+        if not config_obj1.fractured == False:
+            if stop_samples >= config_obj1.fractured >= start_samples:
+                fracture_frame1 = config_obj1.fractured
+                fracture_frame1 *= sample_rate / sfps
+
+        fracture_frame2 = None
+        if not config_obj2.fractured == False:
+            if stop_samples >= config_obj2.fractured >= start_samples:
+                fracture_frame2 = config_obj2.fractured
+                fracture_frame2 *= sample_rate / sfps
+
+        is_shard_frame1 = None
+        if not config_obj1.is_shard == False:
+            if stop_samples >= config_obj1.is_shard >= start_samples:
+                is_shard_frame1 = config_obj1.is_shard
+                is_shard_frame1 *= sample_rate / sfps
+
+        is_shard_frame2 = None
+        if not config_obj2.is_shard == False:
+            if stop_samples >= config_obj2.is_shard  >= start_samples:
+                is_shard_frame2 = config_obj2.is_shard
+                is_shard_frame2 *= sample_rate / sfps
+
+        if not is_shard_frame1 == None and not is_shard_frame2 == None:
             start_samples = is_shard_frame1 if is_shard_frame1 > is_shard_frame2 else is_shard_frame2
-        if (not fracture_frame1 == None and stop_samples >= fracture_frame1) or (not fracture_frame2 == None and stop_samples >= fracture_frame2):
+        if (is_shard_frame1 == None and not is_shard_frame2 == None) or (not is_shard_frame1 == None and is_shard_frame2 == None):
+            start_samples = is_shard_frame1 if is_shard_frame2 == None else is_shard_frame2
+
+        if not fracture_frame1 == None and not fracture_frame2 == None:
             stop_samples = fracture_frame1 if fracture_frame1 < fracture_frame2 else fracture_frame2
+        if (fracture_frame1 == None and not fracture_frame2 == None) or (not fracture_frame1 == None and fracture_frame2 == None):
+            stop_samples = fracture_frame1 if fracture_frame2 == None else fracture_frame2
 
         # Load pre-computed distance data
         distances_dir = f"{config.system.cache_path}/distances"
@@ -185,6 +214,7 @@ class CollisionSolver:
                 tree2 = cKDTree(mesh2_vertices)
 
                 # Get contact type
+                # PUT THIS IN ForceDataSequence lib/force_data.py get_contact_type
                 force_frames = force.frames
                 ctf = force_frames[np.where(force_frames <= sample_idx)]
                 if not ctf.shape[0] == 0 and not ctf[-1] == force_frames[-1]:

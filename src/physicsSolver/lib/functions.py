@@ -164,3 +164,8 @@ def _parse_lib(lib_content: str):
         'gains': np.hsplit(np.array(gains), len(gains)/len(frequencies)),
         'nModes': len(frequencies)
     }
+
+def _update_status(file_path: str, progress: Optional[int] = None):
+    with open(file_path, 'w') as file:
+        if not progress == None:
+            file.write(f"{progress}")

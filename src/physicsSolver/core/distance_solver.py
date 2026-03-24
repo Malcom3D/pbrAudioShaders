@@ -69,7 +69,7 @@ class DistanceSolver:
 
         frames = np.unique(np.sort(np.concatenate((frames[0], frames[1]))))
 
-        if isinstance(config_objs[1].connected, np.ndarray) and objs_idx[0] in objs_idx[1].connected[:,0] and isinstance(config_objs[0].connected, np.ndarray) and objs_idx[1] in config_objs[0].connected[:,0]:
+        if isinstance(config_objs[1].connected, np.ndarray) and objs_idx[0] in config_objs[1].connected[:,0] and isinstance(config_objs[0].connected, np.ndarray) and objs_idx[1] in config_objs[0].connected[:,0]:
             frame = sample_rate / sfps
             distance, closest_points = self._distance(config_objs=config_objs, trajectory1=trajectory1, trajectory2=trajectory2, frame=frame, sfps=sfps, sample_rate=sample_rate, collision_margin=collision_margin)
             distances = np.array(distance)

@@ -30,6 +30,8 @@ from ..lib.fracture_data import FractureEvent, FractureType, FragmentData
 from ..lib.fracture_modal import FractureModalModel
 from ..lib.fracture_synth import FractureSynth
 
+from ..lib.functions import _update_status
+
 @dataclass
 class fractureEngine:
     """Main engine for fracture sound synthesis."""
@@ -39,10 +41,12 @@ class fractureEngine:
     
     def __post_init__(self):
         config = self.entity_manager.get('config')
+        self.status_dir = f"{config.system.cache_path}/status/{__class__.__name__}"
         self.fracture_dir = f"{config.system.cache_path}/fracture"
         self.fracture_modal_dir = f"{config.system.cache_path}/fracture_modal"
         self.fracture_audio_dir = f"{config.system.cache_path}/fracture_audio"
         
+        os.makedirs(self.status_dir, exist_ok=True)
         os.makedirs(self.fracture_dir, exist_ok=True)
         os.makedirs(self.fracture_modal_dir, exist_ok=True)
         os.makedirs(self.fracture_audio_dir, exist_ok=True)

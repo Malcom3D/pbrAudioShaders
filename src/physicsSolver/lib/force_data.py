@@ -202,7 +202,7 @@ class ForceDataSequence:
             'contact_pressure': self.contact_pressure,
             'penetration_depth': self.penetration_depth,
             'coupling_strength': self.coupling_strength,
-            '_format': 'TrajectoryData_v1_pickle'
+            '_format': 'ForceDataSequence_v1_pickle'
         }
 
         # Save the object using pickle
@@ -239,7 +239,7 @@ class ForceDataSequence:
             data = pickle.load(f)
 
         # Check format
-        if '_format' not in data or data['_format'] != 'TrajectoryData_v1_pickle':
+        if '_format' not in data or data['_format'] != 'ForceDataSequence_v1_pickle':
             raise ValueError("Invalid file format or version")
 
         # Reconstruct the object

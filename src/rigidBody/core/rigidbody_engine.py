@@ -31,6 +31,8 @@ from ..core.modal_player import ModalPlayer
 from ..lib.sample_counter import SampleCounter
 from ..lib.connected_buffer import ConnectedBuffer
 
+from ..lib.functions import _update_status
+
 @dataclass
 class rigidBodyEngine:
     entity_manager: EntityManager
@@ -40,11 +42,16 @@ class rigidBodyEngine:
 
     def __post_init__(self):
         config = self.entity_manager.get('config')
+        self.status_dir = f"{config.system.cache_path}/status/{__class__.__name__}"
         self.collisions_dir = f"{config.system.cache_path}/collisions"
         self.trajectories_dir = f"{config.system.cache_path}/trajectories"
         self.forces_dir = f"{config.system.cache_path}/forces_data"
         self.modalvertices_dir = f"{config.system.cache_path}/modalvertices"
         self.scoretracks_dir = f"{config.system.cache_path}/scoretracks"
+
+        # Ensure status directory exists
+        os.makedirs(self.status_dir, exist_ok=True)
+
         obj_static, obj_dyn, obj_pairs = ([] for _ in range(3))
         for config_obj in config.objects:
             if not config_obj.static and not config_obj.idx in obj_dyn:
@@ -111,12 +118,16 @@ class rigidBodyEngine:
 #                    scoretracks_idx += 1
 
     def prebake(self):
+        _update_status(f"{self.status_dir}/prebake", 0)
+
         tasks_modal = [self.prebake_modal(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
         results_modal = compute(*tasks_modal)
+        _update_status(f"{self.status_dir}/prebake", 45)
 
         collisions = self.entity_manager.get('collisions')
         tasks_composer = [self.prebake_composer(collisions[collision_idx]) for collision_idx in collisions.keys()]
         results_composer = compute(*tasks_composer)
+        _update_status(f"{self.status_dir}/prebake", 90)
 
         # Save modal vertices and score tracks data
         modal_vertices = self.entity_manager.get('modal_vertices')
@@ -129,10 +140,14 @@ class rigidBodyEngine:
         for s_idx in score_tracks.keys():
             score_tracks[s_idx].save(f"{self.scoretracks_dir}/{s_idx:05d}.pkl")
 
+        _update_status(f"{self.status_dir}/prebake", 100)
+
     def bake(self):
+        _update_status(f"{self.status_dir}/bake", 0)
+
         connected_buffer = ConnectedBuffer()
         self.entity_manager.register('connected_buffer', connected_buffer)
-        sample_counter = SampleCounter()
+        sample_counter = SampleCounter(status_dir=self.status_dir)
         trajectories = self.entity_manager.get('trajectories')
         if len(trajectories) == 0: 
             if os.path.exists(self.trajectories_dir):
@@ -152,13 +167,17 @@ class rigidBodyEngine:
 
         tasks_luthier = [self.bake_luthier(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
         results_luthier = compute(*tasks_luthier)
+        _update_status(f"{self.status_dir}/bake", 10)
 
         self.players = [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
         tasks_player = [self.bake_player(player) for player in self.players]
         results_player = compute(*tasks_player)
+        _update_status(f"{self.status_dir}/bake", 90)
 
         tasks_save = [self.bake_save(player) for player in self.players]
         results_save = compute(*tasks_save)
+
+        _update_status(f"{self.status_dir}/bake", 100)
 
     @delayed
     def prebake_modal(self, obj_idx: int):

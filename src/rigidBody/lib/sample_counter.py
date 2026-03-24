@@ -20,6 +20,8 @@ import threading
 from dataclasses import dataclass, field
 from typing import Optional, List
 
+from ..lib.functions import _update_status
+
 class FunctionLocker:
     def __init__(self):
         self.condition = threading.Condition()
@@ -48,6 +50,7 @@ locker = FunctionLocker()
 
 @dataclass
 class SampleCounter:
+    status_dir: str = None
     total_samples: int = None
     current_sample: int = 0
     num_players: int = 0
@@ -93,11 +96,13 @@ class SampleCounter:
             # Increment the sample counter
                 if self.current_sample < self.total_samples - 1:
                     self.current_sample += 1
+                    if self.current_sample % int(self.total_samples/100) == 0:
+                       _update_status(f"{status_dir}/sample_counter", int(self.get_progress()))
                 # Reset ready counter
                 self.players_ready = []
                 locker.signal_ready() 
             else:
-                print('SampleCounter: ', self.current_sample, self.total_samples)
+#                print('SampleCounter: ', self.current_sample, self.total_samples)
 #                print(self.num_players, self.players_ready)
                 self._locked_next()
 
