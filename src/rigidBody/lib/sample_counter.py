@@ -57,28 +57,33 @@ class SampleCounter:
     num_players: int = 0
     players_ready: List[int] = field(default_factory=list)
     players_registered: List[int] = field(default_factory=list)
+    soft_players_registered: List[int] = field(default_factory=list)
 
-    def register_player(self, player_id: int) -> None:
+    def register_player(self, player_id: int, soft: bool = False) -> None:
         """Register a ModalPlayer instance."""
         if player_id not in self.players_registered:
             self.players_registered.append(player_id)
             self.num_players += 1
             print(f"Player {player_id} registered. Total players: {self.num_players}")
+            if soft and player_id not in self.soft_players_registered:
+                self.soft_players_registered.append(player_id)
     
-    def unregister_player(self, player_id: int, all: str = None) -> None:
+    def unregister_player(self, player_id: int, all: bool = None) -> None:
         """Unregister a ModalPlayer instance."""
         if player_id in self.players_registered:
             self.players_registered.remove(player_id)
             self.num_players -= 1
+            if player_id in self.soft_players_registered:
+                self.soft_players_registered.remove(player_id)
             print(f"Player {player_id} unregistered. Total players: {self.num_players}")
-#            if self.current_sample == self.total_samples - 1 and self.num_players > 0 and not all == 'ALL':
-#                self.unregister_all_player()
+            if not all and len(self.soft_players_registered) == self.num_players and self.soft_players_registered == self.players_registered:
+                self.unregister_all_soft_player()
 
-    def unregister_all_player(self) -> None:
-        """Force unregister of all ModalPlayer instance."""
-        print(f"Unregister all player")
-        for player_id in self.players_registered:
-            self.unregister_player(player_id, 'ALL')
+    def unregister_all_soft_player(self) -> None:
+        """Unregister of all soft ModalPlayer instance."""
+        print(f"Unregister all soft player")
+        for player_id in self.soft_players_registered:
+            self.unregister_player(player_id, True)
     
     def get_current(self) -> int:
         """Get the current sample index."""

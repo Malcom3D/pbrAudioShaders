@@ -4,7 +4,8 @@ import random
 import string
 import trimesh
 import numpy as np
-from typing import Any, Tuple, Optional
+import numba as nb
+from typing import Any, Tuple, Optional, List, Union, Dict
 
 def _soxel_grid_shape(grid_geometry, voxel_size):
     pass
@@ -169,3 +170,125 @@ def _update_status(file_path: str, progress: Optional[int] = None):
     with open(file_path, 'w') as file:
         if not progress == None:
             file.write(f"{progress}")
+
+def _cartesian_to_spherical(x: float, y: float, z: float) -> Tuple[float, float, float]:
+    """
+    Convert cartesian coordinates to spherical coordinates.
+
+    Args:
+        x, y, z: Cartesian coordinates
+
+    Returns:
+        (azimuth, elevation, radius) in degrees and units
+    """
+    radius = np.sqrt(x*x + y*y + z*z)
+
+    if radius == 0:
+        return 0.0, 0.0, 0.0
+
+    azimuth = np.arctan2(y, x)
+    elevation = np.arcsin(z / radius)
+
+    return azimuth, elevation, radius
+
+@nb.jit(nopython=True)
+def _trilinear_interpolate(field: np.ndarray, position: Tuple[float, float, float]) -> float:
+    """Fast trilinear interpolation using numba"""
+    i, j, k = position
+   
+    i0, j0, k0 = int(np.floor(i)), int(np.floor(j)), int(np.floor(k))
+    i1, j1, k1 = i0 + 1, j0 + 1, k0 + 1
+   
+    # Check bounds
+    if (i0 < 0 or i1 >= field.shape[0] or
+        j0 < 0 or j1 >= field.shape[1] or
+        k0 < 0 or k1 >= field.shape[2]):
+        return 0.0
+   
+    # Calculate interpolation weights
+    di, dj, dk = i - i0, j - j0, k - k0
+    di1, dj1, dk1 = 1.0 - di, 1.0 - dj, 1.0 - dk
+
+    # Get the 8 corner values
+    v000 = field[i0, j0, k0]
+    v001 = field[i0, j0, k1]
+    v010 = field[i0, j1, k0]
+    v011 = field[i0, j1, k1]
+    v100 = field[i1, j0, k0]
+    v101 = field[i1, j0, k1]
+    v110 = field[i1, j1, k0]
+    v111 = field[i1, j1, k1]
+
+    # Trilinear interpolation
+    c00 = v000 * di1 + v100 * di
+    c01 = v001 * di1 + v101 * di
+    c10 = v010 * di1 + v110 * di
+    c11 = v011 * di1 + v111 * di
+
+    c0 = c00 * dj1 + c10 * dj
+    c1 = c01 * dj1 + c11 * dj
+
+    value = c0 * dk1 + c1 * dk
+
+    return value
+
+def _degrees_to_radians(phase_coeffs, input_unit='auto'):
+    """
+    Verify if phase coefficients are in normalized radians and convert if needed.
+
+    Parameters:
+    -----------
+    phase_coeffs : np.array
+        Array of phase coefficients
+    input_unit : str, optional
+        Input unit type: 'radians', 'degrees', 'gradians', or 'auto' (default)
+        If 'auto', the function will attempt to detect the unit
+
+    Returns:
+    --------
+    normalized_phase : np.array
+        normalized_phase : phase coefficients in normalized radians [-π, π]
+    """
+    # Make a copy to avoid modifying the original array
+    phase = phase_coeffs.copy()
+    was_normalized = False
+
+    if input_unit == 'auto':
+        # Auto-detection logic
+        max_abs = np.max(np.abs(phase))
+
+        if max_abs <= np.pi:
+            # Likely already in radians
+            original_unit = 'radians'
+        elif max_abs <= 180:
+            # Likely in degrees
+            original_unit = 'degrees'
+            was_normalized = True
+        elif max_abs > 180:
+            # Likely in gradians
+            original_unit = 'gradians'
+            was_normalized = True
+        else:
+            # Default to radians if uncertain
+            original_unit = 'radians'
+            print("Error: Could not auto-detect unit with certainty.")
+            return None
+    else:
+        original_unit = input_unit
+        was_normalized = (input_unit != 'radians')
+
+    # Perform conversion if needed
+    if original_unit == 'degrees':
+        # Convert degrees to radians
+        phase = np.deg2rad(phase)
+        was_normalized = True
+    elif original_unit == 'gradians':
+        # Convert gradians to radians (200 gradians = 180 degrees = π radians)
+        phase = phase * (np.pi / 200)
+        was_normalized = True
+
+    # Normalize to [-π, π] range
+    if was_normalized or input_unit == 'radians':
+        phase = np.mod(phase + np.pi, 2 * np.pi) - np.pi
+
+    return phase

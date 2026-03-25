@@ -56,10 +56,6 @@ class ModalPlayer:
         if self.player_id is None:
             self.player_id = id(self)
         
-        # Register with sample counter
-        print('Register with sample counter', self.obj_idx)
-        self.sample_counter.register_player(self.player_id)
-
 #        self.synth_track = np.zeros(self.sample_counter.total_samples)
         self.rigidbody_synth_track = np.zeros(self.sample_counter.total_samples)
         self.resonance_synth_track = np.zeros(self.sample_counter.total_samples)
@@ -99,6 +95,14 @@ class ModalPlayer:
                 self.begin_idx = min(sample_indices) if not len(sample_indices) == 0 else 0
                 end_idx = self.t60_samples + (max(sample_indices) if not len(sample_indices) == 0 else self.sample_counter.total_samples)
                 self.end_idx = end_idx if end_idx < self.sample_counter.total_samples else self.sample_counter.total_samples
+
+        # Register with sample counter
+        print('Register with sample counter', self.obj_idx)
+        if not config_obj.static:
+            self.sample_counter.register_player(self.player_id)
+        else:
+            self.sample_counter.register_player(self.player_id, soft=True)
+
                 print('ModalPlayer init end: ', self.obj_idx)
 
     def compute(self) -> None:
