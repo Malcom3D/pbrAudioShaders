@@ -80,7 +80,11 @@ class SampleCounter:
                 # Reset ready counter
                 self.players_ready = []
                 locker.signal_ready() 
-                self.unregister_all_soft_player()
+                if self.current_sample < self.total_samples - 1:
+                    self.current_sample += 1
+                    if self.current_sample % int(self.total_samples/100) == 0:
+                       _update_status(self.status_file, int(self.get_progress()))
+#                self.unregister_all_soft_player()
 
     def unregister_all_soft_player(self) -> None:
         """Unregister of all soft ModalPlayer instance."""
