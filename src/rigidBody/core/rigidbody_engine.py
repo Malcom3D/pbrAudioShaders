@@ -140,14 +140,14 @@ class rigidBodyEngine:
         for s_idx in score_tracks.keys():
             score_tracks[s_idx].save(f"{self.scoretracks_dir}/{s_idx:05d}.pkl")
 
-        _update_status(f"{self.status_dir}/prebake", 100)
+        _update_status(f"{self.status_dir}/prebake", 99)
 
     def bake(self):
         _update_status(f"{self.status_dir}/bake", 0)
 
         connected_buffer = ConnectedBuffer()
         self.entity_manager.register('connected_buffer', connected_buffer)
-        sample_counter = SampleCounter(status_dir=self.status_dir)
+        sample_counter = SampleCounter(status_file=f"{self.status_dir}/bake")
         trajectories = self.entity_manager.get('trajectories')
         if len(trajectories) == 0: 
             if os.path.exists(self.trajectories_dir):
@@ -177,7 +177,7 @@ class rigidBodyEngine:
         tasks_save = [self.bake_save(player) for player in self.players]
         results_save = compute(*tasks_save)
 
-        _update_status(f"{self.status_dir}/bake", 100)
+        _update_status(f"{self.status_dir}/bake", 99)
 
     @delayed
     def prebake_modal(self, obj_idx: int):

@@ -18,7 +18,6 @@
 
 import os, sys
 import json
-import resampy
 import math
 import numpy as np
 import soundfile as sf
@@ -194,8 +193,8 @@ class ForceSynth:
                 impact_samples[idx] = force_envelope[force_idx]
                 coupling_strength[idx] = force.get_coupling_strength(idx)
         
-        # Normalize signal
-        impact_samples = impact_samples / np.max(np.abs(impact_samples))
+#        # Normalize signal
+#        impact_samples = impact_samples / np.max(np.abs(impact_samples))
 
         # Create tracks
         result = {
@@ -357,8 +356,9 @@ class ForceSynth:
                 spike_scale = tangential_forces[spike_pos] / np.max(tangential_forces + 1e-10)
                 total_noise[spike_start:spike_end] += spike_signal * spike_scale * 2.0
     
-        # Normalize signal
-        scraping_sound = total_noise / np.max(np.abs(total_noise))
+#        # Normalize signal
+#        scraping_sound = total_noise / np.max(np.abs(total_noise))
+        scraping_sound = total_noise
 
         """Generate scraping vibration signal."""
         # Base frequency depends on velocity and roughness
@@ -470,8 +470,9 @@ class ForceSynth:
         amplitude = np.sqrt(np.abs(contact_velocities) * normal_forces)
         total_noise[start_idx:stop_idx] += resonant_noises * amplitude
 
-        # Normalize signal
-        sliding_sound = total_noise / np.max(np.abs(total_noise))
+#        # Normalize signal
+#        sliding_sound = total_noise / np.max(np.abs(total_noise))
+        sliding_sound = total_noise
 
         """Generate sliding vibration signal."""
         # Base frequency depends on velocity
@@ -658,8 +659,8 @@ class ForceSynth:
         envelope = signal.windows.tukey(n_samples, alpha=0.3)
         rolling_sound *= envelope
     
-        # Normalize
-        rolling_sound = rolling_sound / np.max(np.abs(rolling_sound))
+#        # Normalize
+#        rolling_sound = rolling_sound / np.max(np.abs(rolling_sound))
 
         # Add rolling_sound to empty track
         start_idx = int(sample_idx)
@@ -795,10 +796,10 @@ class ForceSynth:
         envelope = signal.windows.tukey(n_samples, alpha=0.4)
         vibration *= envelope
     
-        # Normalize
-        max_val = np.max(np.abs(vibration))
-        if max_val > 0:
-            vibration = vibration / max_val * 0.8
+#        # Normalize
+#        max_val = np.max(np.abs(vibration))
+#        if max_val > 0:
+#            vibration = vibration / max_val * 0.8
     
         return vibration
 

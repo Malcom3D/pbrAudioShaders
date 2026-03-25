@@ -42,5 +42,5 @@ class ConnectedBuffer:
         return sample_value
 
     def write_to_obj(self, obj_idx: int, synth_type: int, sample_value: float):
-        print('ConnectedBuffer: ', obj_idx, synth_type, sample_value)
+#        print('ConnectedBuffer: ', obj_idx, synth_type, sample_value)
         self.objs_buffer[obj_idx][synth_type] += sample_value

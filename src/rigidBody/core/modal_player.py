@@ -241,6 +241,8 @@ class ModalPlayer:
                 config_obj = conf_obj
 
         sample_rate = config.system.sample_rate
+        bit_depth = config.system.bit_depth
+        file_format = config.system.file_format
 
         project_data = {
             'object_name': config_obj.name,
@@ -250,9 +252,31 @@ class ModalPlayer:
         }
 
         track_name = config_obj.name
-        track_file = f"{track_name}_{suffix}.raw"
+        if file_format == 'RAW':
+            track_file = f"{track_name}_{suffix}.raw"
+        elif file_format == 'FLAC':
+            track_file = f"{track_name}_{suffix}.raw"
+        else:
+            track_file = f"{track_name}_{suffix}.wav"
+
+        if file_format == 'FLAC' and bit_depth in ['FLOAT', 'DOUBLE', '32']:
+            subtype = 'PCM_24'
+        elif file_format == 'FLAC' and bit_depth in ['24', '16']:
+            subtype = 'PCM_'
+            subtype += bit_depth
+        elif bit_depth in ['FLOAT', 'DOUBLE']:
+            subtype = bit_depth
+        elif bit_depth in ['32', '24', '16']:
+            subtype = 'PCM_'
+            subtype += bit_depth
+
+        # Normalize between -1.0 and 1.0 for PCM_
+        if bit_depth in ['32', '24', '16']:
+            track /= np.max(abs(track))
+            track *= int((2**int(bit_depth))/2) - 1
+            
         wave_file = f"{self.output_dir}/{track_file}"
-        sf.write(wave_file, track, sample_rate, subtype='FLOAT')
+        sf.write(wave_file, track, sample_rate, subtype=subtype)
         project_data['tracks'].append({
             'name': track_name,
             'file': track_file,

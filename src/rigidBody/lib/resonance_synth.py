@@ -63,7 +63,7 @@ class ResonanceSynth:
             for other_idx in range(len(other_objs)):
                 other_obj_idx, coupling_strength = other_objs[other_idx]
                 #print('ResonanceSynth: ', self.obj_idx, output_banks, coupling_strength * output_banks)
-                self.connected_buffer.write_to_obj(int(other_obj_idx), synth_type, coupling_strength * output_banks)
+                self.connected_buffer.write_to_obj(int(other_obj_idx), synth_type, coupling_strength * excitation)
         return output_banks
 
     def get_banks_state(self) -> List[Union[int, Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]]]:

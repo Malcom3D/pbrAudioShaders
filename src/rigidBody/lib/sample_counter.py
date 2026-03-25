@@ -16,6 +16,7 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import os
 import threading
 from dataclasses import dataclass, field
 from typing import Optional, List
@@ -50,13 +51,13 @@ locker = FunctionLocker()
 
 @dataclass
 class SampleCounter:
-    status_dir: str = None
+    status_file: str = None
     total_samples: int = None
     current_sample: int = 0
     num_players: int = 0
     players_ready: List[int] = field(default_factory=list)
     players_registered: List[int] = field(default_factory=list)
-    
+
     def register_player(self, player_id: int) -> None:
         """Register a ModalPlayer instance."""
         if player_id not in self.players_registered:
@@ -97,12 +98,12 @@ class SampleCounter:
                 if self.current_sample < self.total_samples - 1:
                     self.current_sample += 1
                     if self.current_sample % int(self.total_samples/100) == 0:
-                       _update_status(f"{status_dir}/sample_counter", int(self.get_progress()))
+                       _update_status(self.status_file, int(self.get_progress()))
                 # Reset ready counter
                 self.players_ready = []
                 locker.signal_ready() 
             else:
-#                print('SampleCounter: ', self.current_sample, self.total_samples)
+                print('SampleCounter: ', self.current_sample, self.total_samples)
 #                print(self.num_players, self.players_ready)
                 self._locked_next()
 
@@ -120,5 +121,6 @@ class SampleCounter:
     def get_progress(self) -> float:
         """Get progress as a percentage."""
         if self.total_samples and self.total_samples > 0:
-            return (self.current_sample / self.total_samples - 1) * 100.0
+#            return (self.current_sample * 80) / (self.total_samples - 1)
+            return 10 + (self.current_sample * 80) / (self.total_samples - 1) # 10 + for rigidboy bake with 80 as 100 in range 10-90
         return 0.0

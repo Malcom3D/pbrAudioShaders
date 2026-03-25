@@ -29,6 +29,7 @@ class SystemConfig:
     bit_depth: int = 32
     fps: int = 24 # video fps
     fps_base: int = 1
+    file_format: str = 'RAW'
     subframes: int = 1 # video subframes
     collision_margin: float = 0.05
     cache_path: str = "./pbrAudioCache/"

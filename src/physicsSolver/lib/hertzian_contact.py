@@ -469,14 +469,12 @@ class HertzianContact:
         angular_speed2 = np.linalg.norm(omega2)
         
         # Check for static contact
-        if (angular_speed1 == 0.0 or angular_speed2 == 0.0) and relative_velocity == 0.0:  # No movement
+        if math.isclose(angular_speed1, 0.0) or math.isclose(angular_speed2, 0.0) and math.isclose(relative_velocity, 0.0):  # No movement
             return ContactType.STATIC
         
         # Rolling condition: tangential velocity matches angular velocity * radius
         rolling_speed1 = R1 * angular_speed1 / 2
         rolling_speed2 = R2 * angular_speed2 / 2
-#        print('R1: ', R1, 'rolling_speed1: ', rolling_speed1, 'relative_velocity: ', relative_velocity, 'tangential_velocity: ', tangential_velocity)
-#        print('R2: ', R2, 'rolling_speed2: ', rolling_speed2, 'relative_velocity: ', relative_velocity, 'tangential_velocity: ', tangential_velocity)
         if math.isclose(rolling_speed1, relative_velocity, rel_tol=0.2) or math.isclose(rolling_speed2, relative_velocity, rel_tol=0.2):
             return ContactType.ROLLING
 #        if (0.01 <= angular_speed1 or 0.01 <= angular_speed2) and tangential_velocity < 0.01:
@@ -495,7 +493,7 @@ class HertzianContact:
         
         if force_ratio > 0.8 and roughness_avg > 0.3:
             return ContactType.SCRAPING
-        elif tangential_velocity > 0.01:
+        elif 0.01 < force_ratio < 0.8:
             return ContactType.SLIDING
         else:
             return ContactType.STATIC
