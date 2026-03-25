@@ -102,8 +102,7 @@ class ModalPlayer:
             self.sample_counter.register_player(self.player_id)
         else:
             self.sample_counter.register_player(self.player_id, soft=True)
-
-                print('ModalPlayer init end: ', self.obj_idx)
+        print('ModalPlayer init end: ', self.obj_idx)
 
     def compute(self) -> None:
         config = self.entity_manager.get('config')
