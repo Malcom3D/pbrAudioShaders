@@ -239,9 +239,11 @@ class ForceSynth:
                 other_trajectory = trajectories[t_idx]
 
         tangential_velocity = force.get_tangential_velocity(sample_idx)
-        tangential_force = force.get_tangential_force(sample_idx)
+        tangential_velocity = np.linalg.norm(tangential_velocity)
+        tangential_force_magnitude = force.get_tangential_force_magnitude(sample_idx)
         relative_velocity = force.get_relative_velocity(sample_idx)
-        normal_force = force.get_normal_force(sample_idx)
+        relative_velocity = np.linalg.norm(relative_velocity)
+        normal_force_magnitude = force.get_normal_force_magnitude(sample_idx)
 
         vertices1 = trajectory.get_vertices(sample_idx)
         vertices2 = other_trajectory.get_vertices(sample_idx)
@@ -256,7 +258,7 @@ class ForceSynth:
 
         # Analyzes mixed contact HertzianContact lib.
         hertzian_contact = HertzianContact(self.entity_manager)
-        mixed_factor = hertzian_contact.get_mixed_factor(relative_velocity, tangential_velocity, normal_force, tangential_force, omega1, omega2, roughness1, roughness2, friction1, friction2, vertices1, vertices2)
+        mixed_factor = hertzian_contact.get_mixed_factor(relative_velocity, tangential_velocity, normal_force_magnitude, tangential_force_magnitude, omega1, omega2, roughness1, roughness2, friction1, friction2, vertices1, vertices2)
         if mixed_factor['static_factor'] == 1:
             tmp_config_obj = config_obj
             config_obj = other_config_obj
