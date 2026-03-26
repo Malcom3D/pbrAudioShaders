@@ -33,7 +33,9 @@ class ContactType(IntEnum):
     SCRAPING = 2
     SLIDING = 3
     ROLLING = 4
-    STATIC = 5
+    MIXED = 5 # ROLLING and (SLIDING or SCRAPPING or STATIC)
+    STATIC = 6
+#    STATIC = 5
 
 @dataclass
 class ForceData:

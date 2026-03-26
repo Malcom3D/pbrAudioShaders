@@ -184,13 +184,13 @@ class CollisionSolver:
                    score_track2 = score_tracks[st_idx]
 
             if score_track1 == None:
-                score_track1 = ScoreTrack(obj_idx=obj1_idx, obj_name=config_obj1)
+                score_track1 = ScoreTrack(obj_idx=obj1_idx, obj_name=config_obj1.name)
 #                score_track_idx = len(self.entity_manager.get('score_tracks')) + 1
 #                self.entity_manager.register('score_tracks', score_track1, score_track_idx)
                 score_track_idx = self.entity_manager.register('score_tracks', score_track1)
                 score_track1 = self.entity_manager.get('score_tracks', score_track_idx)
             if score_track2 == None:
-                score_track2 = ScoreTrack(obj_idx=obj2_idx, obj_name=config_obj1)
+                score_track2 = ScoreTrack(obj_idx=obj2_idx, obj_name=config_obj2.name)
 #                score_track_idx = len(self.entity_manager.get('score_tracks')) + 1
 #                self.entity_manager.register('score_tracks', score_track2, score_track_idx)
                 score_track_idx = self.entity_manager.register('score_tracks', score_track2)

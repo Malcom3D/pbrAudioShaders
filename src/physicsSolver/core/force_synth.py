@@ -27,6 +27,7 @@ from typing import List, Dict, Tuple, Optional, Any
 
 from ..core.entity_manager import EntityManager
 from ..lib.force_data import ContactType
+from ..lib.hertzian_contact import HertzianContact
 
 @dataclass
 class ForceSynth:
@@ -222,7 +223,62 @@ class ForceSynth:
             return self._synthesize_sliding(trajectory=trajectory, force=force, collision=collision, config_obj=config_obj, other_config_obj=other_config_obj, sample_idx=sample_idx, total_samples=total_samples, sample_rate=sample_rate)
         elif force.get_contact_type(sample_idx) == ContactType.SCRAPING.value:
             return self._synthesize_scraping(trajectory=trajectory, force=force, collision=collision, config_obj=config_obj, other_config_obj=other_config_obj, sample_idx=sample_idx, total_samples=total_samples, sample_rate=sample_rate)
+        elif force.get_contact_type(sample_idx) == ContactType.MIXED.value:
+            return self._synthesize_mixed(trajectory=trajectory, force=force, collision=collision, config_obj=config_obj, other_config_obj=other_config_obj, sample_idx=sample_idx, total_samples=total_samples, sample_rate=sample_rate)
 
+    def _synthesize_mixed(self, trajectory: Any, force: Any, collision: Any, config_obj: Any, other_config_obj: Any, sample_idx: float, total_samples: int, sample_rate: int):
+        """Synthesize mixed contact audio-forces (rolling with scraping or sliding or static)."""
+        mixed_tracks = self._create_empty_tracks(total_samples)
+        rolling_tracks = self._create_empty_tracks(total_samples)
+        scraping_tracks = self._create_empty_tracks(total_samples)
+        sliding_tracks = self._create_empty_tracks(total_samples)
+
+        for t_idx in trajectories.keys():
+            if trajectories[t_idx].obj_idx == other_config_obj.idx:
+                other_trajectory = trajectories[t_idx]
+
+        tangential_velocity = force.get_tangential_velocity(sample_idx)
+        tangential_force = force.get_tangential_force(sample_idx)
+        relative_velocity = force.get_relative_velocity(sample_idx)
+        normal_force = force.get_normal_force(sample_idx)
+
+        vertices1 = trajectory.get_vertices(sample_idx)
+        vertices2 = other_trajectory.get_vertices(sample_idx)
+        omega1 = trajectory.get_angular_velocity(sample_idx)
+        omega2 = other_trajectory.get_angular_velocity(sample_idx)
+
+        # Get material properties
+        roughness1 = config_obj.acoustic_shader.roughness
+        roughness2 = other_config_obj.acoustic_shader.roughness
+        friction1 = config_obj.acoustic_shader.friction
+        friction2 = other_config_obj.acoustic_shader.friction
+
+        # Analyzes mixed contact HertzianContact lib.
+        hertzian_contact = HertzianContact(self.entity_manager)
+        mixed_factor = hertzian_contact.get_mixed_factor(relative_velocity, tangential_velocity, normal_force, tangential_force, omega1, omega2, roughness1, roughness2, friction1, friction2, vertices1, vertices2)
+        if mixed_factor['static_factor'] == 1:
+            tmp_config_obj = config_obj
+            config_obj = other_config_obj
+            other_config_obj = tmp_config_obj
+            trajectory = other_trajectory
+            if mixed_factor['sliding_factor'] == 1:
+                sliding_tracks = self._synthesize_sliding(trajectory=trajectory, force=force, collision=collision, config_obj=config_obj, other_config_obj=other_config_obj, sample_idx=sample_idx, total_samples=total_samples, sample_rate=sample_rate)
+            elif mixed_factor['scraping_factor'] == 1:
+                scraping_tracks = self._synthesize_scraping(trajectory=trajectory, force=force, collision=collision, config_obj=config_obj, other_config_obj=other_config_obj, sample_idx=sample_idx, total_samples=total_samples, sample_rate=sample_rate)
+        else:
+            mixed_tracks = self._synthesize_rolling(trajectory=trajectory, force=force, collision=collision, config_obj=config_obj, other_config_obj=other_config_obj, sample_idx=sample_idx, total_samples=total_samples, sample_rate=sample_rate)
+            if mixed_factor['sliding_factor'] > 0:
+                sliding_tracks = self._synthesize_sliding(trajectory=trajectory, force=force, collision=collision, config_obj=config_obj, other_config_obj=other_config_obj, sample_idx=sample_idx, total_samples=total_samples, sample_rate=sample_rate)
+            elif mixed_factor['scraping_factor'] > 0:
+                scraping_tracks = self._synthesize_scraping(trajectory=trajectory, force=force, collision=collision, config_obj=config_obj, other_config_obj=other_config_obj, sample_idx=sample_idx, total_samples=total_samples, sample_rate=sample_rate)
+
+        for key in mixed_tracks.keys():
+            mixed_tracks[key] += rolling_tracks[key] * mixed_factor['rolling_factor']
+            mixed_tracks[key] += sliding_tracks[key] * mixed_factor['sliding_factor']
+            mixed_tracks[key] += scraping_tracks[key] * mixed_factor['scraping_factor']
+
+        return mixed_tracks
+        
     def _synthesize_non_collision(self, force: Any, config_obj: Any, sample_idx: float, total_samples: int, sample_rate: int):
         """Synthesize non-collision audio-forces (air resistance, etc.)."""
         # Create tracks

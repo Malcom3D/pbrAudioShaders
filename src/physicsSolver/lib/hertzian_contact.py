@@ -433,7 +433,107 @@ class HertzianContact:
         
         # Midpoint
         return (point1 + point2) / 2
-    
+
+    def get_mixed_factor(self, relative_velocity: float, tangential_velocity: float, normal_force: float, tangential_force: float, omega1: np.ndarray, omega2: np.ndarray, roughness1: float, roughness2: float, friction1: float, friction2: float, vertices1: float, vertices1: float) -> Dict[str, float]:
+        """
+        Compute mixed continuous contact factor.
+
+        Parameters:
+        -----------
+        relative_velocity : float
+            Magnitude of relative velocity
+        tangential_velocity : float
+            Magnitude of tangential velocity
+        normal_force : float
+            Normal force magnitude
+        tangential_force : float
+            Tangential force magnitude
+        omega1, omega2 : np.ndarray
+            Angular velocities
+        roughness1, roughness2 : float
+            Surface roughness
+        friction1, friction2 : float
+            Friction coefficients
+        R1, R2 : float
+            Mean radius
+
+        Returns:
+        --------
+        Dict containing:
+            - rolling_fator: Effective radius of curvature (m)
+            - sliding_fator: Effective radius of curvature (m)
+            - scraping_fator: Effective radius of curvature (m)
+            - static_fator: Effective radius of curvature (m)
+        """
+        # Average friction
+        friction = (friction1 + friction2) / 2 if friction1 and friction2 else 0.3
+
+        # Check for rolling
+        angular_speed1 = np.linalg.norm(omega1)
+        angular_speed2 = np.linalg.norm(omega2)
+
+        # Compute effective radius
+        R1 = self._compute_effective_radius(vertices1)
+        R2 = self._compute_effective_radius(vertices2)
+
+        # Rolling condition: tangential velocity matches angular velocity * radius
+        rolling_speed1 = R1 * angular_speed1 / 2
+        rolling_speed2 = R2 * angular_speed2 / 2
+
+        # Check friction condition for sliding vs scraping
+        max_friction_force = friction * normal_force
+        force_ratio = tangential_force / max_friction_force if max_friction_force > 0 else 1.0 
+
+        # Average roughness
+        roughness_avg = (roughness1 + roughness2) / 2 if roughness1 and roughness2 else 0.5 
+
+        is_sliding, is_scraping = (False for _ in range(2))
+        # High roughness and high force ratio indicates scraping
+        if force_ratio > 0.8 and roughness_avg > 0.3:
+            is_scraping = True
+        else:
+            is_sliding = True
+
+        # Mixed condition
+        # angular_speed and not rolling_speed and not relative_velocity
+        if (angular_speed1 > 0 and math.isclose(rolling_speed1, 0, rel_tol=0.2) and math.isclose(relative_velocity, 0, rel_tol=0.2)) or (angular_speed2 > 0 and math.isclose(rolling_speed2, 0, rel_tol=0.2) and math.isclose(relative_velocity, 0, rel_tol=0.2)):
+            # rolling sul posto o reverse rolling -> sliding/scraping sulla superfice che rotola
+            rolling_factor = 0
+            sliding_factor = 0 if is_scraping else 1
+            scraping_factor = 1 if is_scraping else 0
+            static_factor = 1
+
+        # rolling_speed is > relative_velocity and not close
+        elif (not math.isclose(rolling_speed1, relative_velocity, rel_tol=0.2) and (rolling_speed1 > relative_velocity) or (not math.isclose(rolling_speed2, relative_velocity, rel_tol=0.2) and (rolling_speed2 > relative_velocity):
+            # more rolling less sliding/scraping
+            delta_speed1 = (rolling_speed1 - relative_velocity) if rolling_speed1 > relative_velocity else 0
+            delta_speed2 = (rolling_speed2 - relative_velocity) if rolling_speed2 > relative_velocity else 0
+            delta_speed = (delta_speed1 + delta_speed2)/2
+            factor = relative_velocity / (relative_velocity + delta_speed)
+            rolling_factor = 0.5 + factor / 2
+            sliding_factor = (0.5 - factor / 2) if is_scraping else 0
+            scraping_factor = (0.5 - factor / 2) if is_scraping else 0
+            static_factor = 0
+
+        # rolling_speed is < relative_velocity and not close
+        elif (not math.isclose(rolling_speed1, relative_velocity, rel_tol=0.2) and (0 < rolling_speed1 < relative_velocity)) or (not math.isclose(rolling_speed2, relative_velocity, rel_tol=0.2) and (0 < rolling_speed2 < relative_velocity):
+            # less rolling more sliding/scraping
+            delta_speed1 = (relative_velocity - rolling_speed1) if relative_velocity > rolling_speed1 else 0
+            delta_speed2 = (relative_velocity - rolling_speed2) if relative_velocity > rolling_speed2 else 0
+            delta_speed = (delta_speed1 + delta_speed2)/2
+            factor = (relative_velocity - delta_speed) / relative_velocity
+            rolling_factor = 0.5 - factor / 2
+            sliding_factor = (0.5 + factor / 2) if is_scraping else 0
+            scraping_factor = (0.5 + factor / 2) if is_scraping else 0
+            static_factor = 0
+
+        return {
+            'rolling_factor': rolling_factor,
+            'sliding_factor': sliding_factor,
+            'scraping_factor': scraping_factor,
+            'static_factor': static_factor
+        }
+
     def _classify_contact_type(self, relative_velocity: float, tangential_velocity: float, normal_force: float, tangential_force: float, omega1: np.ndarray, omega2: np.ndarray, roughness1: float, roughness2: float, friction1: float, friction2: float, R1: float, R2: float) -> ContactType:
         """
         Classify the type of continuous contact.
@@ -477,26 +577,36 @@ class HertzianContact:
         rolling_speed2 = R2 * angular_speed2 / 2
         if math.isclose(rolling_speed1, relative_velocity, rel_tol=0.2) or math.isclose(rolling_speed2, relative_velocity, rel_tol=0.2):
             return ContactType.ROLLING
+
+        # Mixed condition
+        # angular_speed and not rolling_speed and not relative_velocity
+        if (angular_speed1 > 0 and math.isclose(rolling_speed1, 0, rel_tol=0.2) and math.isclose(relative_velocity, 0, rel_tol=0.2)) or (angular_speed2 > 0 and math.isclose(rolling_speed2, 0, rel_tol=0.2) and math.isclose(relative_velocity, 0, rel_tol=0.2)):
+            return ContactType.MIXED
+        # rolling_speed is > or < relative_velocity and not close
+        elif (not math.isclose(rolling_speed1, relative_velocity, rel_tol=0.2) and (0 < rolling_speed1 < relative_velocity or 0 < relative_velocity < rolling_speed1) or (not math.isclose(rolling_speed2, relative_velocity, rel_tol=0.2) and (0 < rolling_speed2 < relative_velocity or 0 < relative_velocity < rolling_speed2):
+            return ContactType.MIXED
+
 #        if (0.01 <= angular_speed1 or 0.01 <= angular_speed2) and tangential_velocity < 0.01:
 #            return ContactType.ROLLING
+
+        # Sliding or scraping condition
+        if math.isclose(rolling_speed1, 0, rel_tol=0.2) or math.isclose(rolling_speed2, 0, rel_tol=0.2):
+            # Check friction condition for sliding vs scraping
+            max_friction_force = friction * normal_force
+
+            if tangential_force > 0:
+                force_ratio = tangential_force / max_friction_force if max_friction_force > 0 else 1.0
+            else:
+                return ContactType.STATIC
         
-        # Check friction condition for sliding vs scraping
-        max_friction_force = friction * normal_force
+            # Average roughness
+            roughness_avg = (roughness1 + roughness2) / 2 if roughness1 and roughness2 else 0.5
         
-        if tangential_force > 0:
-            force_ratio = tangential_force / max_friction_force if max_friction_force > 0 else 1.0
-        else:
-            force_ratio = 0
-        
-        # High roughness and high force ratio indicates scraping
-        roughness_avg = (roughness1 + roughness2) / 2 if roughness1 and roughness2 else 0.5
-        
-        if force_ratio > 0.8 and roughness_avg > 0.3:
-            return ContactType.SCRAPING
-        elif 0.01 < force_ratio < 0.8:
-            return ContactType.SLIDING
-        else:
-            return ContactType.STATIC
+            # High roughness and high force ratio indicates scraping
+            if force_ratio > 0.8 and roughness_avg > 0.3:
+                return ContactType.SCRAPING
+            else:
+                return ContactType.ROLLING
 
     def _compute_coupling_strength(self, config_obj1: Any, config_obj2: Any, force: float, contact_radius: float, velocity: float, is_continuous: bool = False, contact_type: ContactType = None) -> float:
         """
@@ -573,6 +683,8 @@ class HertzianContact:
                 type_factor = 0.8
             elif contact_type == ContactType.SLIDING:
                 type_factor = 0.6
+            elif contact_type == ContactType.MIXED: ##################################### <- To Be Reviewd (more rolling or (scraping or sliding or static)?)
+                type_factor = 0.5
             elif contact_type == ContactType.ROLLING:
                 type_factor = 0.4
             elif contact_type == ContactType.STATIC:
