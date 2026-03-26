@@ -122,11 +122,7 @@ class ModalPlayer:
         print('ModalPlayer compute: ', self.obj_idx)
         sample_idx = self.sample_counter.get_current()
         while not sample_idx == self.end_idx - 1:
-            rigidbody_output = 0
-            resonance_output = 0
-            sliding_output = 0
-            scraping_output = 0
-            rolling_output = 0
+            rigidbody_output, resonance_output, sliding_output, scraping_output, rolling_output = (0 for _ in range(5))
             if self.begin_idx <= sample_idx and (is_shard_frame == None or is_shard_frame <= sample_idx) and (fracture_frame == None or sample_idx <= fracture_frame):
                 events = []
                 for score_idx in range(len(self.score)):
@@ -181,11 +177,11 @@ class ModalPlayer:
 #                                self.rigidbody_synth.set_banks_state(banks_state)
 #                        self.rigidbody_synth.set_banks_state(new_banks_state)
                 elif len(events) == 0:
+                    rigidbody_output = self.rigidbody_synth.process(1, [], 0.0, 0, coupling_strength)
+                    print('rigidbody_synth.process: ', self.obj_idx, 'static', rigidbody_output)
                     for synth_type in [2,3,4]:
                         resonance_output += self.resonance_synth.process(synth_type, [], 0.0, 0, coupling_strength)
-                        #print('resonance_synth.process: ', self.obj_idx, 'static', resonance_output)
-                    rigidbody_output = self.rigidbody_synth.process(1, [], 0.0, 0, coupling_strength)
-                    #print('rigidbody_synth.process: ', self.obj_idx, 'static', rigidbody_output)
+                        print('resonance_synth.process: ', self.obj_idx, 'static', resonance_output)
 
             self.rigidbody_synth_track[sample_idx] = rigidbody_output if not np.isnan(rigidbody_output) else 0
             self.resonance_synth_track[sample_idx] = resonance_output if not np.isnan(resonance_output) else 0
