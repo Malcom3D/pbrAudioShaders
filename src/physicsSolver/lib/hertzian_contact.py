@@ -504,7 +504,7 @@ class HertzianContact:
             static_factor = 1
 
         # rolling_speed is > relative_velocity and not close
-        elif (not math.isclose(rolling_speed1, relative_velocity, rel_tol=0.2) and (rolling_speed1 > relative_velocity) or (not math.isclose(rolling_speed2, relative_velocity, rel_tol=0.2) and (rolling_speed2 > relative_velocity):
+        elif (not math.isclose(rolling_speed1, relative_velocity, rel_tol=0.2) and (rolling_speed1 > relative_velocity)) or (not math.isclose(rolling_speed2, relative_velocity, rel_tol=0.2) and (rolling_speed2 > relative_velocity)):
             # more rolling less sliding/scraping
             delta_speed1 = (rolling_speed1 - relative_velocity) if rolling_speed1 > relative_velocity else 0
             delta_speed2 = (rolling_speed2 - relative_velocity) if rolling_speed2 > relative_velocity else 0
@@ -516,7 +516,7 @@ class HertzianContact:
             static_factor = 0
 
         # rolling_speed is < relative_velocity and not close
-        elif (not math.isclose(rolling_speed1, relative_velocity, rel_tol=0.2) and (0 < rolling_speed1 < relative_velocity)) or (not math.isclose(rolling_speed2, relative_velocity, rel_tol=0.2) and (0 < rolling_speed2 < relative_velocity):
+        elif (not math.isclose(rolling_speed1, relative_velocity, rel_tol=0.2) and (0 < rolling_speed1 < relative_velocity)) or (not math.isclose(rolling_speed2, relative_velocity, rel_tol=0.2) and (0 < rolling_speed2 < relative_velocity)):
             # less rolling more sliding/scraping
             delta_speed1 = (relative_velocity - rolling_speed1) if relative_velocity > rolling_speed1 else 0
             delta_speed2 = (relative_velocity - rolling_speed2) if relative_velocity > rolling_speed2 else 0
