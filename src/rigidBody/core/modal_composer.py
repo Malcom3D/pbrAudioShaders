@@ -82,7 +82,7 @@ class ModalComposer:
                                 force = float(force) if not np.isnan(force) or not force == None else 0.0
                                 coupling_data1 = coupling_strength1[index] if not np.isnan(coupling_strength1[index]) else 0.0
                                 coupling_data = np.array([[obj2_idx, coupling_data1]])
-                                score_track1.add_event(ScoreEvent(type=np.array([force_type]), sample_idx=sample_idx, contact_area=contact_area, force=force, vertex_ids=vertex_ids, coupling_data=coupling_data))
+                                score_track1[score_idx].add_event(ScoreEvent(type=np.array([force_type]), sample_idx=sample_idx, contact_area=contact_area, force=force, vertex_ids=vertex_ids, coupling_data=coupling_data))
                     else:
                         force_type = int(events[e_idx].type)
                         force = np.divide(force1[force_type][index], events[e_idx].vertex_ids.shape[0], out=np.zeros_like(force1[force_type][index]), where=events[e_idx].vertex_ids.shape[0] != 0)
@@ -108,7 +108,7 @@ class ModalComposer:
                                 force = float(force) if not np.isnan(force) or not force == None else 0.0
                                 coupling_data2 = coupling_strength2[index] if not np.isnan(coupling_strength2[index]) else 0.0
                                 coupling_data = np.array([[obj1_idx, coupling_data2]])
-                                score_track2.add_event(ScoreEvent(type=np.array([force_type]), sample_idx=sample_idx, contact_area=contact_area, force=force, vertex_ids=vertex_ids, coupling_data=coupling_data))
+                                score_track2[score_idx].add_event(ScoreEvent(type=np.array([force_type]), sample_idx=sample_idx, contact_area=contact_area, force=force, vertex_ids=vertex_ids, coupling_data=coupling_data))
                     else:
                         force_type = int(events[e_idx].type)
                         force = np.divide(force2[force_type][index], events[e_idx].vertex_ids.shape[0], out=np.zeros_like(force2[force_type][index]), where=events[e_idx].vertex_ids.shape[0] != 0)
