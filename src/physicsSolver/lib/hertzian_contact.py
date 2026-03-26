@@ -434,7 +434,7 @@ class HertzianContact:
         # Midpoint
         return (point1 + point2) / 2
 
-    def get_mixed_factor(self, relative_velocity: float, tangential_velocity: float, normal_force: float, tangential_force: float, omega1: np.ndarray, omega2: np.ndarray, roughness1: float, roughness2: float, friction1: float, friction2: float, vertices1: float, vertices1: float) -> Dict[str, float]:
+    def get_mixed_factor(self, relative_velocity: float, tangential_velocity: float, normal_force: float, tangential_force: float, omega1: np.ndarray, omega2: np.ndarray, roughness1: float, roughness2: float, friction1: float, friction2: float, vertices1: np.ndarray, vertices2: np.ndarray) -> Dict[str, float]:
         """
         Compute mixed continuous contact factor.
 
