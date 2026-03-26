@@ -583,7 +583,7 @@ class HertzianContact:
         if (angular_speed1 > 0 and math.isclose(rolling_speed1, 0, rel_tol=0.2) and math.isclose(relative_velocity, 0, rel_tol=0.2)) or (angular_speed2 > 0 and math.isclose(rolling_speed2, 0, rel_tol=0.2) and math.isclose(relative_velocity, 0, rel_tol=0.2)):
             return ContactType.MIXED
         # rolling_speed is > or < relative_velocity and not close
-        elif (not math.isclose(rolling_speed1, relative_velocity, rel_tol=0.2) and (0 < rolling_speed1 < relative_velocity or 0 < relative_velocity < rolling_speed1) or (not math.isclose(rolling_speed2, relative_velocity, rel_tol=0.2) and (0 < rolling_speed2 < relative_velocity or 0 < relative_velocity < rolling_speed2):
+        elif (not math.isclose(rolling_speed1, relative_velocity, rel_tol=0.2) and (0 < rolling_speed1 < relative_velocity or 0 < relative_velocity < rolling_speed1)) or (not math.isclose(rolling_speed2, relative_velocity, rel_tol=0.2) and (0 < rolling_speed2 < relative_velocity or 0 < relative_velocity < rolling_speed2)):
             return ContactType.MIXED
 
 #        if (0.01 <= angular_speed1 or 0.01 <= angular_speed2) and tangential_velocity < 0.01:
