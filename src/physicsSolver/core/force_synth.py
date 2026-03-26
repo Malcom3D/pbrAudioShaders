@@ -233,6 +233,7 @@ class ForceSynth:
         scraping_tracks = self._create_empty_tracks(total_samples)
         sliding_tracks = self._create_empty_tracks(total_samples)
 
+        trajectories = self.entity_manager.get('trajectories')
         for t_idx in trajectories.keys():
             if trajectories[t_idx].obj_idx == other_config_obj.idx:
                 other_trajectory = trajectories[t_idx]

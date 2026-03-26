@@ -83,7 +83,7 @@ class ModalPlayer:
                         break
                 for re_key in resonance_synth.keys():
                     if resonance_synth[re_key].obj_idx == self.obj_idx:
-                        self.resonance_synth = resonance_synth[rb_key]
+                        self.resonance_synth = resonance_synth[re_key]
                         break
                 print('ModalPlayer get score_tracks: ', self.obj_idx)
                 score_tracks = self.entity_manager.get('score_tracks')
@@ -93,8 +93,8 @@ class ModalPlayer:
                         for event in score_tracks[idx].events:
                             sample_indices.append(event.sample_idx)
                 self.begin_idx = min(sample_indices) if not len(sample_indices) == 0 else 0
-                end_idx = self.t60_samples + (max(sample_indices) if not len(sample_indices) == 0 else self.sample_counter.total_samples)
-                self.end_idx = end_idx if end_idx < self.sample_counter.total_samples else self.sample_counter.total_samples
+                end_idx = (self.t60_samples + max(sample_indices) if not len(sample_indices) == 0 else self.sample_counter.total_samples)
+                self.end_idx = end_idx if end_idx <= self.sample_counter.total_samples else self.sample_counter.total_samples
 
         # Register with sample counter
         print('Register with sample counter', self.obj_idx)

@@ -76,15 +76,16 @@ class SampleCounter:
             if player_id in self.soft_players_registered:
                 self.soft_players_registered.remove(player_id)
             print(f"Player {player_id} unregistered. Total players: {self.num_players}")
-#            if not all and len(self.soft_players_registered) == self.num_players and self.soft_players_registered == self.players_registered:
-#                    # Reset ready counter
-#                    self.players_ready = []
-#                    locker.signal_ready() 
-#                    if self.current_sample < self.total_samples - 1:
-#                        self.current_sample += 1
-#                        print('SampleCounter: ', self.current_sample, self.total_samples)
-#                        if self.current_sample % int(self.total_samples/100) == 0:
-#                           _update_status(self.status_file, int(self.get_progress()))
+            if not all and len(self.soft_players_registered) == self.num_players and self.soft_players_registered == self.players_registered:
+                for _ in range(self.current_sample, self.total_samples):
+                    # Reset ready counter
+                    self.players_ready = []
+                    locker.signal_ready() 
+                    if self.current_sample < self.total_samples - 1:
+                        self.current_sample += 1
+                        print('SampleCounter: soft', self.current_sample, self.total_samples)
+                        if self.current_sample % int(self.total_samples/100) == 0:
+                           _update_status(self.status_file, int(self.get_progress()))
 #                self.unregister_all_soft_player()
 
     def unregister_all_soft_player(self) -> None:

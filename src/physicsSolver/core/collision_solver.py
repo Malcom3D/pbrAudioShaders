@@ -226,7 +226,7 @@ class CollisionSolver:
 
                 # Find vertices within collision margin of the closest points
                 radius = collision_margin * 2.0  # Use slightly larger radius to capture nearby faces
-                if contact_type == 4:
+                if contact_type in [4, 5]:
                     radius = collision_margin * 4.0  # Use slightly larger radius to capture nearby rolling faces
 
                 # Query for vertices near the closest closest point on each mesh

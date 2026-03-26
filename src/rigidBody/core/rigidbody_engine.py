@@ -174,6 +174,7 @@ class rigidBodyEngine:
         results_player = compute(*tasks_player)
         _update_status(f"{self.status_dir}/bake", 90)
 
+        print('rigidBodyEngine: Save player')
         tasks_save = [self.bake_save(player) for player in self.players]
         results_save = compute(*tasks_save)
 
