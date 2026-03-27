@@ -86,13 +86,13 @@ class SampleCounter:
                         print('SampleCounter: soft', self.current_sample, self.total_samples)
                         if self.current_sample % int(self.total_samples/100) == 0:
                            _update_status(self.status_file, int(self.get_progress()))
-                self.unregister_all_soft_player()
-
-    def unregister_all_soft_player(self) -> None:
-        """Unregister of all soft ModalPlayer instance."""
-        print(f"Unregister all soft player")
-        for player_id in self.soft_players_registered:
-            self.unregister_player(player_id, True)
+#                self.unregister_all_soft_player()
+#
+#    def unregister_all_soft_player(self) -> None:
+#        """Unregister of all soft ModalPlayer instance."""
+#        print(f"Unregister all soft player")
+#        for player_id in self.soft_players_registered:
+#            self.unregister_player(player_id, True)
     
     def get_current(self) -> int:
         """Get the current sample index."""

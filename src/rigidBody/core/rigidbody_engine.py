@@ -169,13 +169,16 @@ class rigidBodyEngine:
         results_luthier = compute(*tasks_luthier)
         _update_status(f"{self.status_dir}/bake", 10)
 
-        self.players = [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
-        tasks_player = [self.bake_player(player) for player in self.players]
+#        self.players = [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
+#        tasks_player = [self.bake_player(player) for player in self.players]
+        players = [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
+        tasks_player = [self.bake_player(player) for player in players]
         results_player = compute(*tasks_player)
         _update_status(f"{self.status_dir}/bake", 90)
 
         print('rigidBodyEngine: Save player')
-        tasks_save = [self.bake_save(player) for player in self.players]
+#        tasks_save = [self.bake_save(player) for player in self.players]
+        tasks_save = [self.bake_save(player) for player in players]
         results_save = compute(*tasks_save)
 
         _update_status(f"{self.status_dir}/bake", 99)
