@@ -31,6 +31,8 @@ class SystemConfig:
     fps_base: int = 1
     file_format: str = 'RAW'
     subframes: int = 1 # video subframes
+    modes: int = 20
+    resonance_modes: int = 20
     collision_margin: float = 0.05
     cache_path: str = "./pbrAudioCache/"
 

@@ -122,7 +122,7 @@ class ModalPlayer:
                 
         print('ModalPlayer compute: ', self.obj_idx)
         sample_idx = self.sample_counter.get_current()
-        while not sample_idx == self.end_idx - 1:
+        while sample_idx < self.end_idx:
             rigidbody_output, resonance_output, sliding_output, scraping_output, rolling_output = (0 for _ in range(5))
             if self.begin_idx <= sample_idx and (is_shard_frame == None or is_shard_frame <= sample_idx) and (fracture_frame == None or sample_idx <= fracture_frame):
                 events = []
