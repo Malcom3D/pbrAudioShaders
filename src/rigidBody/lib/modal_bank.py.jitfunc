@@ -1,0 +1,139 @@
+# Copyright (C) 2025 Malcom3D <malcom3d.gpl@gmail.com>
+#
+# This file is part of pbrAudio.
+#
+# pbrAudio is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# pbrAudio is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+import numpy as np
+from numba import jit, float32, int32
+from numba.experimental import jitclass
+
+@jit(nopython=True)
+def calculate_coefficients(frequencies, gains, t60s, sample_rate):
+    """Calculate coefficients for all modes"""
+    num_modes = len(frequencies)
+    r = np.zeros(num_modes, dtype=np.float32)
+    c = np.zeros(num_modes, dtype=np.float32)
+    s = np.zeros(num_modes, dtype=np.float32)
+    g = np.zeros(num_modes, dtype=np.float32)
+    
+    omega = 2.0 * np.pi * frequencies / sample_rate
+    
+    for i in range(num_modes):
+        if t60s[i] > 0:
+            bandwidth = 0.35 / t60s[i]
+            decay_per_sample = np.pi * bandwidth / sample_rate
+            if decay_per_sample < 100:
+                r[i] = np.exp(-decay_per_sample)
+        
+        c[i] = r[i] * np.cos(omega[i])
+        s[i] = r[i] * np.sin(omega[i])
+        
+        if r[i] < 1.0 and r[i] > 0:
+            g[i] = gains[i] * (1.0 - r[i]) * s[i]
+    
+    return r, c, s, g
+
+@jit(nopython=True)
+def process_mode(c, s, g, u1, u2, excitation):
+    """Process a single mode"""
+    u1_new = c * u1 - s * u2 + g * excitation
+    u2_new = s * u1 + c * u2
+    return u1_new, u2_new
+
+class ModalBank:
+    """Wrapper class for Numba-accelerated modal bank"""
+    
+    def __init__(self, frequencies: np.ndarray, gains: np.ndarray, 
+                 t60s: np.ndarray, sample_rate: int):
+        self.sample_rate = sample_rate
+        self.num_modes = len(frequencies)
+        
+        self.frequencies = np.array(frequencies, dtype=np.float32)
+        self.gains = np.array(gains, dtype=np.float32)
+        self.t60s = np.array(t60s, dtype=np.float32)
+        
+        self.r = np.zeros(self.num_modes, dtype=np.float32)
+        self.c = np.zeros(self.num_modes, dtype=np.float32)
+        self.s = np.zeros(self.num_modes, dtype=np.float32)
+        self.g = np.zeros(self.num_modes, dtype=np.float32)
+        
+        self.u1 = np.zeros(self.num_modes, dtype=np.float32)
+        self.u2 = np.zeros(self.num_modes, dtype=np.float32)
+        
+        self._update_all_coefficients()
+    
+    def _update_all_coefficients(self):
+        """Update all coefficients using Numba function"""
+        self.r, self.c, self.s, self.g = calculate_coefficients(
+            self.frequencies, self.gains, self.t60s, self.sample_rate
+        )
+    
+    def process(self, excitation: float) -> float:
+        """Process one sample through all modes"""
+        output = 0.0
+        
+        for i in range(self.num_modes):
+            u1_new, u2_new = process_mode(
+                self.c[i], self.s[i], self.g[i],
+                self.u1[i], self.u2[i], excitation
+            )
+            self.u1[i] = u1_new
+            self.u2[i] = u2_new
+            output += u2_new
+        
+        return output
+    
+    def reset(self):
+        """Reset all state variables to zero"""
+        self.u1.fill(0.0)
+        self.u2.fill(0.0)
+    
+    def update_frequency(self, mode_idx: int, frequency: float):
+        """Update frequency for a specific mode"""
+        self.frequencies[mode_idx] = frequency
+        self._update_single_mode(mode_idx)
+    
+    def update_gain(self, mode_idx: int, gain: float):
+        """Update gain for a specific mode"""
+        self.gains[mode_idx] = gain
+        self._update_single_mode(mode_idx)
+    
+    def update_t60(self, mode_idx: int, t60: float):
+        """Update T60 for a specific mode"""
+        self.t60s[mode_idx] = t60
+        self._update_single_mode(mode_idx)
+    
+    def _update_single_mode(self, mode_idx: int):
+        """Update coefficients for a single mode"""
+        omega = 2.0 * np.pi * self.frequencies[mode_idx] / self.sample_rate
+        
+        if self.t60s[mode_idx] > 0:
+            bandwidth = 0.35 / self.t60s[mode_idx]
+            decay_per_sample = np.pi * bandwidth / self.sample_rate
+            if decay_per_sample < 100:
+                self.r[mode_idx] = np.exp(-decay_per_sample)
+            else:
+                self.r[mode_idx] = 0.0
+        else:
+            self.r[mode_idx] = 0.0
+        
+        self.c[mode_idx] = self.r[mode_idx] * np.cos(omega)
+        self.s[mode_idx] = self.r[mode_idx] * np.sin(omega)
+        
+        if self.r[mode_idx] < 1.0 and self.r[mode_idx] > 0:
+            self.g[mode_idx] = self.gains[mode_idx] * (1.0 - self.r[mode_idx]) * self.s[mode_idx]
+        else:
+            self.g[mode_idx] = 0.0
