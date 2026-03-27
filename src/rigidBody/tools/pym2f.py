@@ -96,14 +96,14 @@ class Pym2f:
 #            cmd += f"--freqcontrol "
 
         cmd += f"--showfreqs"
-        exit_code = os.system(f"{cmd} --name {output_name} --nsynthmodes {config.system.modes} --infile {obj_file}")
+        exit_code = os.system(f"{cmd} --name {output_name} --nsynthmodes {self.config.system.modes} --infile {obj_file}")
         file_names = []
         if not exit_code == 0:
             raise ValueError(f'Error: {cmd}')
         file_names.append(f"{output_name}.lib")
 
 #        exit_code = os.system(f"{cmd} --name {output_name}_resonance --nsynthmodes 10 --infile {obj_file.removesuffix('.obj')}_resonance.obj")
-        exit_code = os.system(f"{cmd} --name {output_name}_resonance --nsynthmodes {config.system.resonance_modes} --infile {obj_file}")
+        exit_code = os.system(f"{cmd} --name {output_name}_resonance --nsynthmodes {self.config.system.resonance_modes} --infile {obj_file}")
         if not exit_code == 0:
             raise ValueError(f'Error: {cmd}')
         file_names.append(f"{output_name}_resonance.lib")
