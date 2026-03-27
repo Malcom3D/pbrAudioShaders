@@ -108,19 +108,19 @@ class SampleCounter:
             if not player_id in self.players_ready:
                 self.players_ready.append(player_id)
             
-            print('SampleCounter: ', self.current_sample, self.total_samples, self.num_players, self.players_ready)
-            if len(self.players_ready) == self.num_players and self.num_players > 0:
-            # Increment the sample counter
-                if self.current_sample < self.total_samples:
-                    self.current_sample += 1
-                    if self.current_sample % int(self.total_samples/100) == 0:
-                       _update_status(self.status_file, int(self.get_progress()))
-                    # Reset ready counter
-                    locker.signal_ready() 
-                    self.players_ready = []
-            else:
-                print(self.num_players, self.players_ready)
-                self._locked_next()
+                print('SampleCounter: ', self.current_sample, self.total_samples, self.num_players, self.players_ready)
+                if len(self.players_ready) == self.num_players and self.num_players > 0:
+                # Increment the sample counter
+                    if self.current_sample < self.total_samples:
+                        self.current_sample += 1
+                        if self.current_sample % int(self.total_samples/100) == 0:
+                           _update_status(self.status_file, int(self.get_progress()))
+                        # Reset ready counter
+                        locker.signal_ready() 
+                        self.players_ready = []
+                else:
+                    print(self.num_players, self.players_ready)
+                    self._locked_next()
 
         return self.current_sample
 

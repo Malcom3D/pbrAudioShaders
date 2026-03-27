@@ -196,11 +196,12 @@ class ModalPlayer:
                 self.rolling_synth_track[sample_idx] = rolling_output if not np.isnan(rolling_output) else 0
             
             if config_obj.static:
-                print('ModalPlayer: ', config_obj.name, sample_idx, self.end_idx, len(self.score))
+                print('ModalPlayer: ', config_obj.name, sample_idx, self.end_idx, len(self.score), len(events))
             elif len(events) > 1:
                 print('ModalPlayer: ', config_obj.name, sample_idx, self.end_idx, len(events))
 
             # Get next sample (waits for all players to be ready)
+            old_sample_idx = sample_idx
             sample_idx = self.sample_counter.next(self.player_id)
 
         # Unregister when done
