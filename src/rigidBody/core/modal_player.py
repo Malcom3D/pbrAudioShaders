@@ -125,11 +125,12 @@ class ModalPlayer:
         sliding_sound, scraping_sound, rolling_sound = self._load_sound_tracks(sound_path, config_obj.name)
                 
         print('ModalPlayer compute: ', self.obj_idx)
+        old_sample_idx = 0
         sample_idx = self.sample_counter.get_current()
         while sample_idx < self.end_idx:
             rigidbody_output, resonance_output, sliding_output, scraping_output, rolling_output = (0 for _ in range(5))
             events = []
-            if self.begin_idx <= sample_idx and (is_shard_frame == None or is_shard_frame <= sample_idx) and (fracture_frame == None or sample_idx <= fracture_frame):
+            if self.begin_idx <= sample_idx and (is_shard_frame == None or is_shard_frame <= sample_idx) and (fracture_frame == None or sample_idx <= fracture_frame) and not sample_idx == old_sample_idx:
                 for score_idx in range(len(self.score)):
                     events += self.score[score_idx].get_events_at_sample(sample_idx)
 
@@ -188,11 +189,11 @@ class ModalPlayer:
                         resonance_output += self.resonance_synth.process(synth_type, [], 0.0, 0, coupling_strength)
 #                        print('resonance_synth.process: ', self.obj_idx, 'static', sample_idx, resonance_output)
 
-            self.rigidbody_synth_track[sample_idx] = rigidbody_output if not np.isnan(rigidbody_output) else 0
-            self.resonance_synth_track[sample_idx] = resonance_output if not np.isnan(resonance_output) else 0
-            self.sliding_synth_track[sample_idx] = sliding_output if not np.isnan(sliding_output) else 0
-            self.scraping_synth_track[sample_idx] = scraping_output if not np.isnan(scraping_output) else 0
-            self.rolling_synth_track[sample_idx] = rolling_output if not np.isnan(rolling_output) else 0
+                self.rigidbody_synth_track[sample_idx] = rigidbody_output if not np.isnan(rigidbody_output) else 0
+                self.resonance_synth_track[sample_idx] = resonance_output if not np.isnan(resonance_output) else 0
+                self.sliding_synth_track[sample_idx] = sliding_output if not np.isnan(sliding_output) else 0
+                self.scraping_synth_track[sample_idx] = scraping_output if not np.isnan(scraping_output) else 0
+                self.rolling_synth_track[sample_idx] = rolling_output if not np.isnan(rolling_output) else 0
             
             if config_obj.static:
                 print('ModalPlayer: ', config_obj.name, sample_idx, self.end_idx, len(self.score))

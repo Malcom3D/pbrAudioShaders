@@ -31,8 +31,8 @@ class FunctionLocker:
     def wait_for_condition(self):
         """Wait until condition is satisfied"""
         with self.condition:
-            while not self.ready:
-                self.condition.wait()
+#            while not self.ready:
+            self.condition.wait()
     
     def signal_ready(self):
         """Signal that condition is satisfied"""
