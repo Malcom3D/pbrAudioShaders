@@ -148,15 +148,15 @@ class ModalPlayer:
                         #print('ModalPlayer rigidbody_synth.process: ', self.obj_idx, event['type'], event['force'])
                         rigidbody_output = self.rigidbody_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
                 elif len(events) > 1:
-                        old_banks_state = self.rigidbody_synth.get_banks_state()
-                        new_banks_state = []
-                        for i in range(len(old_banks_state)):
-                            new_state = 0
-                            if not isinstance(old_banks_state[i], int):
-                                new_state = []
-                                for l in range(len(old_banks_state[i])):
-                                    new_state += [np.zeros_like(old_banks_state[i][l])]
-                            new_banks_state += [new_state]
+#                        old_banks_state = self.rigidbody_synth.get_banks_state()
+#                        new_banks_state = []
+#                        for i in range(len(old_banks_state)):
+#                            new_state = 0
+#                            if not isinstance(old_banks_state[i], int):
+#                                new_state = []
+#                                for l in range(len(old_banks_state[i])):
+#                                    new_state += [np.zeros_like(old_banks_state[i][l])]
+#                            new_banks_state += [new_state]
                         for idx in range(len(events)):
                             event = events[idx].to_dict()
                             if int(event['type']) in [2,3]:
@@ -194,8 +194,7 @@ class ModalPlayer:
             self.scraping_synth_track[sample_idx] = scraping_output if not np.isnan(scraping_output) else 0
             self.rolling_synth_track[sample_idx] = rolling_output if not np.isnan(rolling_output) else 0
             
-            if config_obj.static:
-                print('ModalPlayer: ', config_obj.name, 'static', sample_idx, self.end_idx)
+            print('ModalPlayer: ', config_obj.name, sample_idx, self.end_idx, len(events))
 
             # Get next sample (waits for all players to be ready)
             sample_idx = self.sample_counter.next(self.player_id)

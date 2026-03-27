@@ -115,8 +115,8 @@ class SampleCounter:
                     if self.current_sample % int(self.total_samples/100) == 0:
                        _update_status(self.status_file, int(self.get_progress()))
                     # Reset ready counter
-                    self.players_ready = []
                     locker.signal_ready() 
+                    self.players_ready = []
             else:
                 print('SampleCounter: ', self.current_sample, self.total_samples, self.num_players, self.players_ready)
 #                print(self.num_players, self.players_ready)
