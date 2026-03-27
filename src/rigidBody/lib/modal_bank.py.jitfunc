@@ -18,7 +18,6 @@
 
 import numpy as np
 from numba import jit, float32, int32
-from numba.experimental import jitclass
 
 @jit(nopython=True)
 def calculate_coefficients(frequencies, gains, t60s, sample_rate):

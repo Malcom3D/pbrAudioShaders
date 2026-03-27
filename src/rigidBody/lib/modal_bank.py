@@ -17,136 +17,107 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import numpy as np
-from numba import float32, int32
-from numba.experimental import jitclass
-from typing import Optional, Tuple
+from numba import jit, float32, int32
 
-# Define the spec for jitclass
-spec = [
-    ('sample_rate', int32),
-    ('num_modes', int32),
-    ('frequencies', float32[:]),
-    ('gains', float32[:]),
-    ('t60s', float32[:]),
-    ('r', float32[:]),
-    ('c', float32[:]),
-    ('s', float32[:]),
-    ('g', float32[:]),
-    ('u1', float32[:]),
-    ('u2', float32[:]),
-]
+@jit(nopython=True)
+def calculate_coefficients(frequencies, gains, t60s, sample_rate):
+    """Calculate coefficients for all modes"""
+    num_modes = len(frequencies)
+    r = np.zeros(num_modes, dtype=np.float32)
+    c = np.zeros(num_modes, dtype=np.float32)
+    s = np.zeros(num_modes, dtype=np.float32)
+    g = np.zeros(num_modes, dtype=np.float32)
+    
+    omega = 2.0 * np.pi * frequencies / sample_rate
+    
+    for i in range(num_modes):
+        if t60s[i] > 0:
+            bandwidth = 0.35 / t60s[i]
+            decay_per_sample = np.pi * bandwidth / sample_rate
+            if decay_per_sample < 100:
+                r[i] = np.exp(-decay_per_sample)
+        
+        c[i] = r[i] * np.cos(omega[i])
+        s[i] = r[i] * np.sin(omega[i])
+        
+        if r[i] < 1.0 and r[i] > 0:
+            g[i] = gains[i] * (1.0 - r[i]) * s[i]
+    
+    return r, c, s, g
 
-@jitclass(spec)
+@jit(nopython=True)
+def process_mode(c, s, g, u1, u2, excitation):
+    """Process a single mode"""
+    u1_new = c * u1 - s * u2 + g * excitation
+    u2_new = s * u1 + c * u2
+    return u1_new, u2_new
+
 class ModalBank:
-    """
-    Fully vectorized modal bank implementation using coupled-form structure
-    for maximum numerical stability and performance.
-    Numba-accelerated version.
-    """
-    def __init__(self, frequencies: np.ndarray, gains: np.ndarray, 
-                 t60s: np.ndarray, sample_rate: int):
+    """Wrapper class for Numba-accelerated modal bank"""
+    
+    def __init__(self, frequencies: np.ndarray, gains: np.ndarray, t60s: np.ndarray, sample_rate: int):
         self.sample_rate = sample_rate
         self.num_modes = len(frequencies)
-
-        # Store parameters
+        
         self.frequencies = np.array(frequencies, dtype=np.float32)
         self.gains = np.array(gains, dtype=np.float32)
         self.t60s = np.array(t60s, dtype=np.float32)
-
-        # Coupled-form coefficients
+        
         self.r = np.zeros(self.num_modes, dtype=np.float32)
         self.c = np.zeros(self.num_modes, dtype=np.float32)
         self.s = np.zeros(self.num_modes, dtype=np.float32)
         self.g = np.zeros(self.num_modes, dtype=np.float32)
-
-        # Coupled-form state variables
+        
         self.u1 = np.zeros(self.num_modes, dtype=np.float32)
         self.u2 = np.zeros(self.num_modes, dtype=np.float32)
-
-        # Calculate initial coefficients
-        self._calculate_all_coefficients()
-
-    def _calculate_all_coefficients(self):
-        """Calculate coupled-form coefficients for all modes"""
-        # Angular frequency
-        omega = 2.0 * np.pi * self.frequencies / self.sample_rate
-
-        # Calculate decay factor r from T60
-        bandwidth = np.zeros(self.num_modes, dtype=np.float32)
-        for i in range(self.num_modes):
-            if self.t60s[i] > 0:
-                bandwidth[i] = 0.35 / self.t60s[i]
-            else:
-                bandwidth[i] = 0.0
-
-        # Decay per sample
-        decay_per_sample = np.pi * bandwidth / self.sample_rate
         
-        # Handle potential NaN/inf values
-        for i in range(self.num_modes):
-            if decay_per_sample[i] < 100:  # Avoid overflow
-                self.r[i] = np.exp(-decay_per_sample[i])
-            else:
-                self.r[i] = 0.0
-            
-            if self.t60s[i] <= 0:
-                self.r[i] = 0.0
-
-        # Coupled-form rotation matrix elements
-        for i in range(self.num_modes):
-            self.c[i] = self.r[i] * np.cos(omega[i])
-            self.s[i] = self.r[i] * np.sin(omega[i])
-            
-            # Gain scaling
-            if self.r[i] < 1.0 and self.r[i] > 0:
-                self.g[i] = self.gains[i] * (1.0 - self.r[i]) * self.s[i]
-            else:
-                self.g[i] = 0.0
-
+        self._update_all_coefficients()
+    
+    def _update_all_coefficients(self):
+        """Update all coefficients using Numba function"""
+        self.r, self.c, self.s, self.g = calculate_coefficients(
+            self.frequencies, self.gains, self.t60s, self.sample_rate
+        )
+    
     def process(self, excitation: float) -> float:
-        """
-        Process one sample through all modes using coupled-form structure.
-        """
+        """Process one sample through all modes"""
         output = 0.0
         
-        # Vectorized update - manually unrolled for Numba
         for i in range(self.num_modes):
-            u1_new = self.c[i] * self.u1[i] - self.s[i] * self.u2[i] + self.g[i] * excitation
-            u2_new = self.s[i] * self.u1[i] + self.c[i] * self.u2[i]
-            
+            u1_new, u2_new = process_mode(
+                self.c[i], self.s[i], self.g[i],
+                self.u1[i], self.u2[i], excitation
+            )
             self.u1[i] = u1_new
             self.u2[i] = u2_new
-            
             output += u2_new
         
         return output
-
+    
     def reset(self):
         """Reset all state variables to zero"""
-        for i in range(self.num_modes):
-            self.u1[i] = 0.0
-            self.u2[i] = 0.0
-
+        self.u1.fill(0.0)
+        self.u2.fill(0.0)
+    
     def update_frequency(self, mode_idx: int, frequency: float):
         """Update frequency for a specific mode"""
         self.frequencies[mode_idx] = frequency
-        self._update_mode_coefficients(mode_idx)
-
+        self._update_single_mode(mode_idx)
+    
     def update_gain(self, mode_idx: int, gain: float):
         """Update gain for a specific mode"""
         self.gains[mode_idx] = gain
-        self._update_mode_coefficients(mode_idx)
-
+        self._update_single_mode(mode_idx)
+    
     def update_t60(self, mode_idx: int, t60: float):
         """Update T60 for a specific mode"""
         self.t60s[mode_idx] = t60
-        self._update_mode_coefficients(mode_idx)
-
-    def _update_mode_coefficients(self, mode_idx: int):
+        self._update_single_mode(mode_idx)
+    
+    def _update_single_mode(self, mode_idx: int):
         """Update coefficients for a single mode"""
         omega = 2.0 * np.pi * self.frequencies[mode_idx] / self.sample_rate
-
-        # Calculate decay factor
+        
         if self.t60s[mode_idx] > 0:
             bandwidth = 0.35 / self.t60s[mode_idx]
             decay_per_sample = np.pi * bandwidth / self.sample_rate
@@ -156,12 +127,10 @@ class ModalBank:
                 self.r[mode_idx] = 0.0
         else:
             self.r[mode_idx] = 0.0
-
-        # Update coupled-form coefficients
+        
         self.c[mode_idx] = self.r[mode_idx] * np.cos(omega)
         self.s[mode_idx] = self.r[mode_idx] * np.sin(omega)
-
-        # Update gain scaling
+        
         if self.r[mode_idx] < 1.0 and self.r[mode_idx] > 0:
             self.g[mode_idx] = self.gains[mode_idx] * (1.0 - self.r[mode_idx]) * self.s[mode_idx]
         else:
