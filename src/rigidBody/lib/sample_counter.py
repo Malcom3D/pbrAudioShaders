@@ -65,16 +65,16 @@ class SampleCounter:
             self.players_registered.append(player_id)
             self.num_players += 1
             print(f"Player {player_id} registered. Total players: {self.num_players}")
-            if soft and player_id not in self.soft_players_registered:
-                self.soft_players_registered.append(player_id)
+#            if soft and player_id not in self.soft_players_registered:
+#                self.soft_players_registered.append(player_id)
     
     def unregister_player(self, player_id: int, all: bool = None) -> None:
         """Unregister a ModalPlayer instance."""
         if player_id in self.players_registered:
             self.players_registered.remove(player_id)
             self.num_players -= 1
-            if player_id in self.soft_players_registered:
-                self.soft_players_registered.remove(player_id)
+#            if player_id in self.soft_players_registered:
+#                self.soft_players_registered.remove(player_id)
             print(f"Player {player_id} unregistered. Total players: {self.num_players}")
 #            if not all and len(self.soft_players_registered) == self.num_players and self.soft_players_registered == self.players_registered:
 #                for _ in range(self.current_sample, self.total_samples):
@@ -105,17 +105,18 @@ class SampleCounter:
         """
         if player_id in self.players_registered:
             # Mark this player as ready to advance
-            self.players_ready.append(player_id)
+            if not player_id in self.players_ready:
+                self.players_ready.append(player_id)
             
             if len(self.players_ready) == self.num_players and self.num_players > 0:
             # Increment the sample counter
-                if self.current_sample < self.total_samples - 1:
+                if self.current_sample < self.total_samples:
                     self.current_sample += 1
                     if self.current_sample % int(self.total_samples/100) == 0:
                        _update_status(self.status_file, int(self.get_progress()))
-                # Reset ready counter
-                self.players_ready = []
-                locker.signal_ready() 
+                    # Reset ready counter
+                    self.players_ready = []
+                    locker.signal_ready() 
             else:
                 print('SampleCounter: ', self.current_sample, self.total_samples, self.num_players, self.players_ready)
 #                print(self.num_players, self.players_ready)
@@ -136,5 +137,5 @@ class SampleCounter:
         """Get progress as a percentage."""
         if self.total_samples and self.total_samples > 0:
 #            return (self.current_sample * 80) / (self.total_samples - 1)
-            return 10 + (self.current_sample * 80) / (self.total_samples - 1) # 10 + for rigidboy bake with 80 as 100 in range 10-90
+            return 10 + ((self.current_sample * 80) / (self.total_samples)) # 10 + for rigidboy bake with 80 as 100 in range 10-90
         return 0.0

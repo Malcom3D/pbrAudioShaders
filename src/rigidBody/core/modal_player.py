@@ -98,27 +98,31 @@ class ModalPlayer:
 
         # Register with sample counter
         print('Register with sample counter', self.obj_idx)
-        if not config_obj.static:
-            self.sample_counter.register_player(self.player_id)
-        else:
-            self.sample_counter.register_player(self.player_id, soft=True)
+        self.sample_counter.register_player(self.player_id)
+#        if not config_obj.static:
+#            self.sample_counter.register_player(self.player_id)
+#        else:
+#            self.sample_counter.register_player(self.player_id, soft=True)
         print('ModalPlayer init end: ', self.obj_idx)
 
     def compute(self) -> None:
         config = self.entity_manager.get('config')
-        coupling_strength = []
-        fracture_frame, is_shard_frame = (None for _ in range(2))
+        sound_path = f"{config.system.cache_path}/audio_force"
         for conf_obj in config.objects:
             if conf_obj.idx == self.obj_idx:
                 config_obj = conf_obj
-                if isinstance(config_obj.connected, np.ndarray):
-                    coupling_strength = config_obj.connected.tolist()
-                if not isinstance(config_obj.fractured, bool):
-                    fracture_frame = config_obj.fractured * sample_rate / sfps
-                if not isinstance(config_obj.is_shard, bool):
-                    is_shard_frame = config_obj.is_shard * sample_rate / sfps
-                sound_path = f"{config.system.cache_path}/audio_force"
-                sliding_sound, scraping_sound, rolling_sound = self._load_sound_tracks(sound_path, config_obj.name)
+
+        coupling_strength = []
+        if isinstance(config_obj.connected, np.ndarray):
+            coupling_strength = config_obj.connected.tolist()
+
+        fracture_frame, is_shard_frame = (None for _ in range(2))
+        if not isinstance(config_obj.fractured, bool):
+            fracture_frame = config_obj.fractured * sample_rate / sfps
+        if not isinstance(config_obj.is_shard, bool):
+            is_shard_frame = config_obj.is_shard * sample_rate / sfps
+
+        sliding_sound, scraping_sound, rolling_sound = self._load_sound_tracks(sound_path, config_obj.name)
                 
         print('ModalPlayer compute: ', self.obj_idx)
         sample_idx = self.sample_counter.get_current()
