@@ -17,7 +17,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import numpy as np
-from numba import float32, int32, jitclass
+from numba import float32, int32
+from numba.experimental import jitclass
 from typing import Optional, Tuple
 
 # Define the spec for jitclass
