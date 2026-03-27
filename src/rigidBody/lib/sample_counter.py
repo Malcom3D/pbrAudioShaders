@@ -108,6 +108,7 @@ class SampleCounter:
             if not player_id in self.players_ready:
                 self.players_ready.append(player_id)
             
+            print('SampleCounter: ', self.current_sample, self.total_samples, self.num_players, self.players_ready)
             if len(self.players_ready) == self.num_players and self.num_players > 0:
             # Increment the sample counter
                 if self.current_sample < self.total_samples:
@@ -118,8 +119,7 @@ class SampleCounter:
                     locker.signal_ready() 
                     self.players_ready = []
             else:
-                print('SampleCounter: ', self.current_sample, self.total_samples, self.num_players, self.players_ready)
-#                print(self.num_players, self.players_ready)
+                print(self.num_players, self.players_ready)
                 self._locked_next()
 
         return self.current_sample
