@@ -128,8 +128,8 @@ class ModalPlayer:
         sample_idx = self.sample_counter.get_current()
         while sample_idx < self.end_idx:
             rigidbody_output, resonance_output, sliding_output, scraping_output, rolling_output = (0 for _ in range(5))
+            events = []
             if self.begin_idx <= sample_idx and (is_shard_frame == None or is_shard_frame <= sample_idx) and (fracture_frame == None or sample_idx <= fracture_frame):
-                events = []
                 for score_idx in range(len(self.score)):
                     events += self.score[score_idx].get_events_at_sample(sample_idx)
 
