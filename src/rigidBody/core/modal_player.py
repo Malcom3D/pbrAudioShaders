@@ -110,14 +110,15 @@ class ModalPlayer:
         fracture_frame, is_shard_frame = (None for _ in range(2))
         for conf_obj in config.objects:
             if conf_obj.idx == self.obj_idx:
-                if isinstance(conf_obj.connected, np.ndarray):
-                    coupling_strength = conf_obj.connected.tolist()
-                if not isinstance(conf_obj.fractured, bool):
-                    fracture_frame = conf_obj.fractured * sample_rate / sfps
-                if not isinstance(conf_obj.is_shard, bool):
-                    is_shard_frame = conf_obj.is_shard * sample_rate / sfps
+                config_obj = conf_obj
+                if isinstance(config_obj.connected, np.ndarray):
+                    coupling_strength = config_obj.connected.tolist()
+                if not isinstance(config_obj.fractured, bool):
+                    fracture_frame = config_obj.fractured * sample_rate / sfps
+                if not isinstance(config_obj.is_shard, bool):
+                    is_shard_frame = config_obj.is_shard * sample_rate / sfps
                 sound_path = f"{config.system.cache_path}/audio_force"
-                sliding_sound, scraping_sound, rolling_sound = self._load_sound_tracks(sound_path, conf_obj.name)
+                sliding_sound, scraping_sound, rolling_sound = self._load_sound_tracks(sound_path, config_obj.name)
                 
         print('ModalPlayer compute: ', self.obj_idx)
         sample_idx = self.sample_counter.get_current()
@@ -178,10 +179,10 @@ class ModalPlayer:
 #                        self.rigidbody_synth.set_banks_state(new_banks_state)
                 elif len(events) == 0:
                     rigidbody_output = self.rigidbody_synth.process(1, [], 0.0, 0, coupling_strength)
-                    print('rigidbody_synth.process: ', self.obj_idx, 'static', sample_idx, rigidbody_output)
+#                    print('rigidbody_synth.process: ', self.obj_idx, 'static', sample_idx, rigidbody_output)
                     for synth_type in [2,3,4]:
                         resonance_output += self.resonance_synth.process(synth_type, [], 0.0, 0, coupling_strength)
-                        print('resonance_synth.process: ', self.obj_idx, 'static', sample_idx, resonance_output)
+#                        print('resonance_synth.process: ', self.obj_idx, 'static', sample_idx, resonance_output)
 
             self.rigidbody_synth_track[sample_idx] = rigidbody_output if not np.isnan(rigidbody_output) else 0
             self.resonance_synth_track[sample_idx] = resonance_output if not np.isnan(resonance_output) else 0
@@ -189,6 +190,9 @@ class ModalPlayer:
             self.scraping_synth_track[sample_idx] = scraping_output if not np.isnan(scraping_output) else 0
             self.rolling_synth_track[sample_idx] = rolling_output if not np.isnan(rolling_output) else 0
             
+            if config_obj.static:
+                print('ModalPlayer: ', config_obj.name, 'static', sample_idx, self.end_idx)
+
             # Get next sample (waits for all players to be ready)
             sample_idx = self.sample_counter.next(self.player_id)
 

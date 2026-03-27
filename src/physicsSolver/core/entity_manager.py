@@ -74,10 +74,6 @@ class EntityManager:
                 }
 
                 config = Config(config)
-#                ad = config.acoustic_domain
-#                voxel_size = ad.voxel_size
-#                grid_geometry = ad.geometry
-#                ad.shape = _soxel_grid_shape(grid_geometry, voxel_size)
                 self.register('config', config)
 
     # Dispatcher:
