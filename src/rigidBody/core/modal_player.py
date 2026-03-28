@@ -101,12 +101,8 @@ class ModalPlayer:
         # Register with sample counter
         print('Register with sample counter', self.obj_idx)
         self.condiction = self.sample_counter.register_player(self.player_id)
-#        self.sample_counter.register_player(self.player_id)
-#        if not config_obj.static:
-#            self.sample_counter.register_player(self.player_id)
-#        else:
-#            self.sample_counter.register_player(self.player_id, soft=True)
         print('ModalPlayer init end: ', self.obj_idx)
+        print('ModalPlayer t60: ', self.t60_samples)
 
     def compute(self) -> None:
         config = self.entity_manager.get('config')
@@ -138,9 +134,10 @@ class ModalPlayer:
                     events += self.score[score_idx].get_events_at_sample(sample_idx)
 
                 if len(events) == 1:
+                    t60_empty = 0
                     event = events[0].to_dict()
                     if int(event['type']) in [2,3]:
-                        #print('ModalPlayer resonance_synth.process: ', self.obj_idx, event['type'], event['force'])
+#                        print('ModalPlayer resonance_synth.process: ', self.obj_idx, event['type'], event['force'])
                         resonance_output = self.resonance_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
                         sliding_output = sliding_sound[sample_idx] * event['contact_area']
                         scraping_output = scraping_sound[sample_idx] * event['contact_area']
@@ -149,48 +146,51 @@ class ModalPlayer:
                         rigidbody_output = self.rigidbody_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
                         rolling_output = rolling_sound[sample_idx] * event['contact_area']
                     else:
-                        #print('ModalPlayer rigidbody_synth.process: ', self.obj_idx, event['type'], event['force'])
+#                        print('ModalPlayer rigidbody_synth.process: ', self.obj_idx, event['type'], event['force'])
                         rigidbody_output = self.rigidbody_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
                 elif len(events) > 1:
-#                        old_banks_state = self.rigidbody_synth.get_banks_state()
-#                        new_banks_state = []
-#                        for i in range(len(old_banks_state)):
-#                            new_state = 0
-#                            if not isinstance(old_banks_state[i], int):
-#                                new_state = []
-#                                for l in range(len(old_banks_state[i])):
-#                                    new_state += [np.zeros_like(old_banks_state[i][l])]
-#                            new_banks_state += [new_state]
-                        for idx in range(len(events)):
-                            event = events[idx].to_dict()
-                            if int(event['type']) in [2,3]:
-                                #print('ModalPlayer resonance_synth.process: ', self.obj_idx, event['type'], event['force'])
-                                resonance_output += self.resonance_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
-                                sliding_output += sliding_sound[sample_idx] * event['contact_area']
-                                scraping_output += scraping_sound[sample_idx] * event['contact_area']
-                                banks_state = self.resonance_synth.get_banks_state()
-#                                self.resonance_synth.set_banks_state(banks_state)
-                            elif int(event['type']) == 4:
-#                                resonance_output += self.resonance_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
-                                rigidbody_output += self.rigidbody_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
-                                rolling_output += rolling_sound[sample_idx] * event['contact_area']
-                            else:
-                                #print('ModalPlayer rigidbody_synth.process: ', self.obj_idx, event['type'], event['force'])
-                                rigidbody_output += self.rigidbody_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
-                                banks_state = self.rigidbody_synth.get_banks_state()
-#                                for banks_idx in range(len(banks_state)):
-#                                    if not isinstance(banks_state[banks_idx], int):
-#                                        new_banks_state[banks_idx][0] += banks_state[banks_idx][0] - old_banks_state[banks_idx][0] # ToBe halfed?
-#                                        new_banks_state[banks_idx][1] += banks_state[banks_idx][1] - old_banks_state[banks_idx][1] # ToBe halfed?
-#                                self.rigidbody_synth.set_banks_state(old_banks_state)
-#                                self.rigidbody_synth.set_banks_state(banks_state)
-#                        self.rigidbody_synth.set_banks_state(new_banks_state)
+                    t60_empty = 0
+#                    old_banks_state = self.rigidbody_synth.get_banks_state()
+#                    new_banks_state = []
+#                    for i in range(len(old_banks_state)):
+#                        new_state = 0
+#                        if not isinstance(old_banks_state[i], int):
+#                            new_state = []
+#                            for l in range(len(old_banks_state[i])):
+#                                new_state += [np.zeros_like(old_banks_state[i][l])]
+#                        new_banks_state += [new_state]
+                    for idx in range(len(events)):
+                        event = events[idx].to_dict()
+                        if int(event['type']) in [2,3]:
+                            #print('ModalPlayer resonance_synth.process: ', self.obj_idx, event['type'], event['force'])
+                            resonance_output += self.resonance_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
+                            sliding_output += sliding_sound[sample_idx] * event['contact_area']
+                            scraping_output += scraping_sound[sample_idx] * event['contact_area']
+                            banks_state = self.resonance_synth.get_banks_state()
+#                            self.resonance_synth.set_banks_state(banks_state)
+                        elif int(event['type']) == 4:
+#                            resonance_output += self.resonance_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
+                            rigidbody_output += self.rigidbody_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
+                            rolling_output += rolling_sound[sample_idx] * event['contact_area']
+                        else:
+                            #print('ModalPlayer rigidbody_synth.process: ', self.obj_idx, event['type'], event['force'])
+                            rigidbody_output += self.rigidbody_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
+                            banks_state = self.rigidbody_synth.get_banks_state()
+#                            for banks_idx in range(len(banks_state)):
+#                                if not isinstance(banks_state[banks_idx], int):
+#                                    new_banks_state[banks_idx][0] += banks_state[banks_idx][0] - old_banks_state[banks_idx][0] # ToBe halfed?
+#                                    new_banks_state[banks_idx][1] += banks_state[banks_idx][1] - old_banks_state[banks_idx][1] # ToBe halfed?
+#                            self.rigidbody_synth.set_banks_state(old_banks_state)
+#                            self.rigidbody_synth.set_banks_state(banks_state)
+#                    self.rigidbody_synth.set_banks_state(new_banks_state)
                 elif len(events) == 0:
-                    rigidbody_output = self.rigidbody_synth.process(1, [], 0.0, 0, coupling_strength)
-#                    print('rigidbody_synth.process: ', self.obj_idx, 'static', sample_idx, rigidbody_output)
-                    for synth_type in [2,3,4]:
-                        resonance_output += self.resonance_synth.process(synth_type, [], 0.0, 0, coupling_strength)
-#                        print('resonance_synth.process: ', self.obj_idx, 'static', sample_idx, resonance_output)
+                    if t60_empty < self.t60_samples:
+                        rigidbody_output = self.rigidbody_synth.process(1, [], 0.0, 0, coupling_strength)
+#                        print('rigidbody_synth.process: ', self.obj_idx, 'static', sample_idx, rigidbody_output)
+                        for synth_type in [2,3,4]:
+                            resonance_output += self.resonance_synth.process(synth_type, [], 0.0, 0, coupling_strength)
+#                            print('resonance_synth.process: ', self.obj_idx, 'static', sample_idx, resonance_output)
+                        t60_empty += 1
 
                 self.rigidbody_synth_track[sample_idx] = rigidbody_output if not np.isnan(rigidbody_output) else 0
                 self.resonance_synth_track[sample_idx] = resonance_output if not np.isnan(resonance_output) else 0
