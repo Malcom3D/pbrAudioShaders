@@ -39,13 +39,11 @@ from .lib.rigidbody_synth import RigidBodySynth
 from .lib.filter import LinkwitzRileyFilter
 from .lib.modal_bank import ModalBank
 from .lib.resonance_synth import ResonanceSynth
-from .lib.sample_counter import FunctionLocker
 from .lib.sample_counter import SampleCounter
 
 __all__ = [
      'Pym2f',
      'FaustRender',
-#     'ForceSynth',
      'rigidBodyEngine',
      'ModalComposer',
      'ModalLuthier',
@@ -56,7 +54,6 @@ __all__ = [
      'LinkwitzRileyFilter',
      'ModalBank',
      'ResonanceSynth',
-     'FunctionLocker',
      'SampleCounter'
 ]
 #from physicsSolver import EntityManager, physicsEngine
