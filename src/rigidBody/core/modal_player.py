@@ -205,7 +205,7 @@ class ModalPlayer:
 
             # Get next sample (waits for all players to be ready)
             old_sample_idx = sample_idx
-            sample_idx = self.sample_counter.next(self.player_id)
+            sample_idx = self.sample_counter.get_next(self.player_id)
             with self.condiction:
                 self.sample_counter.ready(self.player_id)
 
