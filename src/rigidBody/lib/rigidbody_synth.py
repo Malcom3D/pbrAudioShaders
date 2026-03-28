@@ -43,13 +43,13 @@ class RigidBodySynth:
             self.banks[int(self.vertex_list[idx])] = ModalBank(frequencies=self.modal_data['frequencies'], gains=self.modal_data['gains'][int(self.vertex_list[idx])], t60s=self.modal_data['t60s'], sample_rate=self.sample_rate)
         
     def process(self, synth_type: int, vertex_ids: List[int], input_force: float, contact_area: float, other_objs: List[Tuple[float, float]] = None):
-#        banks_tasks = []
+        banks_tasks = []
         output_banks = 0
         input_buffer = self.connected_buffer.read_for_obj(self.obj_idx, synth_type)
         for idx in range(len(vertex_ids)):
-            output_banks += self.banks[vertex_ids[idx]].process(input_force + input_buffer)
-#            banks_tasks += [self.banks[vertex_ids[idx]].process(input_force + input_buffer)]
-#            output_banks = sum(compute(*banks_tasks))
+#            output_banks += self.banks[vertex_ids[idx]].process(input_force + input_buffer)
+            banks_tasks += [self.banks[vertex_ids[idx]].process(input_force + input_buffer)]
+            output_banks = sum(compute(*banks_tasks))
         if isinstance(other_objs, list):
             for other_idx in range(len(other_objs)):
                 other_obj_idx, coupling_strength = other_objs[other_idx]

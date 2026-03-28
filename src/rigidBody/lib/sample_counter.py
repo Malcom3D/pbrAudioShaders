@@ -57,9 +57,7 @@ class SampleCounter:
         return self.current_sample
     
     def get_next(self, player_id: int) -> int:
-        """
-        Returns the next sample index.
-        """
+        """ Returns the next sample index. """
         if player_id in self.players_registered and not player_id in self.players_ready and self.num_players > 0:
             return self.current_sample + 1
 
@@ -71,6 +69,7 @@ class SampleCounter:
             self.players_ready.append(player_id)
             if len(self.players_ready) == len(self.players_registered):
                 if self.current_sample < self.total_samples:
+                    print('SampleCounter: ' self.current_sample, self.total_samples, self.get_progress())
                     self.current_sample += 1
                     if self.current_sample % int(self.total_samples/100) == 0:
                        _update_status(self.status_file, int(self.get_progress()))
