@@ -64,7 +64,10 @@ class Pym2f:
                 filename = filenames[0]
                 if filename.endswith('.npz'):
                     obj_file = f"{self.cache_path}/obj/{filename.removesuffix('npz') + 'obj'}"
-                mesh_obj = _mesh_to_obj(vertices, normals, faces, obj_file)
+                if config_obj.resonance:
+                    mesh_obj = _mesh_to_obj(vertices, normals, faces, obj_file, config_obj.resonance)
+                else:
+                    mesh_obj = _mesh_to_obj(vertices, normals, faces, obj_file)
 
                 young_modulus = config_obj.acoustic_shader.young_modulus
                 poisson_ratio = config_obj.acoustic_shader.poisson_ratio
@@ -92,21 +95,23 @@ class Pym2f:
             for pos in expos:
                 verts += f"{pos} "
             cmd += f"--expos {verts} "
-#        if not config_obj.connected == False:
+#        if isinstance(config_obj.connected, np.ndarray): # ToBeVerified for vibration in force_synth
 #            cmd += f"--freqcontrol "
 
         cmd += f"--showfreqs"
-        exit_code = os.system(f"{cmd} --name {output_name} --nsynthmodes {self.config.system.modes} --infile {obj_file}")
+        exit_code = os.system(f"{cmd} --name {output_name} --nsynthmodes {self.config.system.modal_modes} --infile {obj_file}")
         file_names = []
-        if not exit_code == 0:
+        if exit_code == 0:
+            file_names.append(f"{output_name}.lib")
+        else:
             raise ValueError(f'Error: {cmd}')
-        file_names.append(f"{output_name}.lib")
 
-#        exit_code = os.system(f"{cmd} --name {output_name}_resonance --nsynthmodes 10 --infile {obj_file.removesuffix('.obj')}_resonance.obj")
-        exit_code = os.system(f"{cmd} --name {output_name}_resonance --nsynthmodes {self.config.system.resonance_modes} --infile {obj_file}")
-        if not exit_code == 0:
-            raise ValueError(f'Error: {cmd}')
-        file_names.append(f"{output_name}_resonance.lib")
+        if config_obj.resonance:
+            exit_code = os.system(f"{cmd} --name {output_name}_resonance --nsynthmodes {self.config_obj.resonance_modes} --infile {obj_file.removesuffix('.obj')}_resonance.obj")
+            if exit_code == 0:
+                file_names.append(f"{output_name}_resonance.lib")
+            else:
+                raise ValueError(f'Error: {cmd}')
 
         # remove import(stdfaust.lib)
         for file_name in file_names:

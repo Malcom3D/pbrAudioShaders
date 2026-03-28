@@ -69,6 +69,7 @@ class ModalComposer:
                 events = score_track1[score_idx].get_events_at_sample(sample_idx)
                 for e_idx in range(len(events)):
                     if int(events[e_idx].type) == 5: # rolling with static, sliding or scraping
+                        print('ModalComposer: ', obj1_idx, sample_idx, 'event_type: mixed')
                         for force_type in range(2, 5):
                             contact_area = events[e_idx].contact_area
                             vertex_ids = events[e_idx].vertex_ids
@@ -95,6 +96,7 @@ class ModalComposer:
                 events = score_track2[score_idx].get_events_at_sample(sample_idx)
                 for e_idx in range(len(events)):
                     if int(events[e_idx].type) == 5: # rolling with static, sliding or scraping
+                        print('ModalComposer: ', obj2_idx, sample_idx, 'event_type: mixed')
                         for force_type in range(2, 5):
                             contact_area = events[e_idx].contact_area
                             vertex_ids = events[e_idx].vertex_ids
