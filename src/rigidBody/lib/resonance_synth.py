@@ -17,7 +17,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import numpy as np
-#from dask import compute
+from dask import compute
 from typing import Any, List, Tuple, Dict, Optional, Union
 from dataclasses import dataclass, field
 
