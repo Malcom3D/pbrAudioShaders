@@ -23,111 +23,62 @@ from typing import Optional, List
 
 from ..lib.functions import _update_status
 
-class FunctionLocker:
-    def __init__(self):
-        self.condition = threading.Condition()
-        self.ready = False
-    
-    def wait_for_condition(self):
-        """Wait until condition is satisfied"""
-        with self.condition:
-#            while not self.ready:
-            self.condition.wait()
-    
-    def signal_ready(self):
-        """Signal that condition is satisfied"""
-        with self.condition:
-            self.ready = True
-            self.condition.notify_all()
-    
-    def lock_function(self, func):
-        """Decorator to lock function until condition is satisfied"""
-        def wrapper(*args, **kwargs):
-            self.wait_for_condition()
-            return func(*args, **kwargs)
-        return wrapper
-
-locker = FunctionLocker()
-
 @dataclass
 class SampleCounter:
     status_file: str = None
     total_samples: int = None
     current_sample: int = 0
     num_players: int = 0
+    condiction: threading.Condition = None
     players_ready: List[int] = field(default_factory=list)
     players_registered: List[int] = field(default_factory=list)
     soft_players_registered: List[int] = field(default_factory=list)
 
-    def register_player(self, player_id: int, soft: bool = False) -> None:
+    def __post_init__(self):
+        self.condiction = threading.Condition()
+
+    def register_player(self, player_id: int) -> None:
         """Register a ModalPlayer instance."""
         if player_id not in self.players_registered:
             self.players_registered.append(player_id)
             self.num_players += 1
             print(f"Player {player_id} registered. Total players: {self.num_players}")
-#            if soft and player_id not in self.soft_players_registered:
-#                self.soft_players_registered.append(player_id)
+            return self.condiction
     
-    def unregister_player(self, player_id: int, all: bool = None) -> None:
+    def unregister_player(self, player_id: int) -> None:
         """Unregister a ModalPlayer instance."""
         if player_id in self.players_registered:
             self.players_registered.remove(player_id)
             self.num_players -= 1
-#            if player_id in self.soft_players_registered:
-#                self.soft_players_registered.remove(player_id)
             print(f"Player {player_id} unregistered. Total players: {self.num_players}")
-#            if not all and len(self.soft_players_registered) == self.num_players and self.soft_players_registered == self.players_registered:
-#                for _ in range(self.current_sample, self.total_samples):
-#                    # Reset ready counter
-#                    self.players_ready = []
-#                    locker.signal_ready() 
-#                    if self.current_sample < self.total_samples - 1:
-#                        self.current_sample += 1
-#                        print('SampleCounter: soft', self.current_sample, self.total_samples, self.num_players)
-#                        if self.current_sample % int(self.total_samples/100) == 0:
-#                           _update_status(self.status_file, int(self.get_progress()))
-#                self.unregister_all_soft_player()
-#
-#    def unregister_all_soft_player(self) -> None:
-#        """Unregister of all soft ModalPlayer instance."""
-#        print(f"Unregister all soft player")
-#        for player_id in self.soft_players_registered:
-#            self.unregister_player(player_id, True)
     
     def get_current(self) -> int:
         """Get the current sample index."""
         return self.current_sample
     
-    def next(self, player_id: int) -> int:
+    def get_next(self, player_id: int) -> int:
         """
-        Increment to the next sample when all players are ready.
-        Returns the new current sample index.
+        Returns the next sample index.
         """
-        if player_id in self.players_registered:
-            # Mark this player as ready to advance
-            if not player_id in self.players_ready:
-                self.players_ready.append(player_id)
-            
-                print('SampleCounter: ', self.current_sample, self.total_samples, self.num_players, self.players_ready)
-                if len(self.players_ready) == self.num_players and self.num_players > 0:
-                # Increment the sample counter
-                    if self.current_sample < self.total_samples:
-                        self.current_sample += 1
-                        if self.current_sample % int(self.total_samples/100) == 0:
-                           _update_status(self.status_file, int(self.get_progress()))
-                        # Reset ready counter
-                        self.players_ready = []
-                        locker.signal_ready() 
-                else:
-                    print(self.num_players, self.players_ready)
-                    self._locked_next()
+        if player_id in self.players_registered and not player_id in self.players_ready and self.num_players > 0:
+            return self.current_sample + 1
 
-        return self.current_sample
+    def ready(self, player_id):
+        """
+        wait until all players are ready.
+        """
+        if player_id in self.players_registered and not player_id in self.players_ready:
+            self.players_ready.append(player_id)
+            if len(self.players_ready) == len(self.players_registered):
+                if self.current_sample < self.total_samples:
+                    self.current_sample += 1
+                    if self.current_sample % int(self.total_samples/100) == 0:
+                       _update_status(self.status_file, int(self.get_progress()))
+                self.players_ready = []
+                self.condiction.notify_all()
+            else:
+                self.condiction.wait()
 
-    @locker.lock_function
-    def _locked_next(self):
-        pass
-    
     def set_total_samples(self, total_samples: int) -> None:
         """Set the total number of samples."""
         self.total_samples = total_samples

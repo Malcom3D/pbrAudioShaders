@@ -34,6 +34,7 @@ class ModalPlayer:
     end_idx: int = 0
     player_id: int = None
     score: List = field(default_factory=list)
+    condiction: threading.Condition = None
 
     def __post_init__(self):
         print('ModalPlayer init: ', self.obj_idx)
@@ -98,7 +99,8 @@ class ModalPlayer:
 
         # Register with sample counter
         print('Register with sample counter', self.obj_idx)
-        self.sample_counter.register_player(self.player_id)
+        self.condiction = self.sample_counter.register_player(self.player_id)
+#        self.sample_counter.register_player(self.player_id)
 #        if not config_obj.static:
 #            self.sample_counter.register_player(self.player_id)
 #        else:
@@ -203,6 +205,8 @@ class ModalPlayer:
             # Get next sample (waits for all players to be ready)
             old_sample_idx = sample_idx
             sample_idx = self.sample_counter.next(self.player_id)
+            with self.condiction:
+                self.sample_counter.ready(self.player_id)
 
         # Unregister when done
         self.sample_counter.unregister_player(self.player_id)
