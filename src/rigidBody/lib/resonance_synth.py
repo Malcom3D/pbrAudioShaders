@@ -17,6 +17,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import numpy as np
+from dask import compute
 from typing import Any, List, Tuple, Dict, Optional, Union
 from dataclasses import dataclass, field
 
@@ -50,6 +51,7 @@ class ResonanceSynth:
             5: 1.0 # "static" 
         }
         type_scale = type_scales.get(synth_type)
+        banks_tasks = []
         output_banks = 0
         input_buffer = self.connected_buffer.read_for_obj(self.obj_idx, synth_type)
         for idx in range(self.banks.shape[0]):
@@ -58,7 +60,9 @@ class ResonanceSynth:
             else:
                 contact_area_scale = self.contact_area_scale if not self.contact_area_scale == None else contact_area * len(vertex_ids)
                 excitation = vibration_signal * contact_area_scale * type_scale
-            output_banks += self.banks[idx].process(excitation + input_buffer)
+#            output_banks += self.banks[idx].process(excitation + input_buffer)
+            banks_tasks += [self.banks[idx].process(excitation + input_buffer)]
+            output_banks = sum(compute(*banks_tasks))
         if isinstance(other_objs, list):
             for other_idx in range(len(other_objs)):
                 other_obj_idx, coupling_strength = other_objs[other_idx]

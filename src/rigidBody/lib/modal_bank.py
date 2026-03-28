@@ -17,6 +17,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import numpy as np
+from dask import delayed
 from numba import jit, float32, int32
 
 @jit(nopython=True)
@@ -78,7 +79,8 @@ class ModalBank:
         self.r, self.c, self.s, self.g = calculate_coefficients(
             self.frequencies, self.gains, self.t60s, self.sample_rate
         )
-    
+
+    @delayed
     def process(self, excitation: float) -> float:
         """Process one sample through all modes"""
         output = 0.0
