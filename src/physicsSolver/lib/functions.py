@@ -22,7 +22,7 @@ def _mesh_to_obj(vertices: np.ndarray, normals: np.ndarray, faces: np.ndarray, o
 
     # Create simplified convex hull for resonance model
     if resonance:
-        simplified = mesh.simplify_quadric_decimation(face_count=20)
+        simplified = mesh.simplify_quadric_decimation(percent=0.6, aggression=0)
         simplified.export(f"{obj_file.removesuffix('.obj')}_resonance.obj", file_type='obj')
 
     # Export as obj
