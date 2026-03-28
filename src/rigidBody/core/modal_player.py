@@ -185,12 +185,16 @@ class ModalPlayer:
 #                    self.rigidbody_synth.set_banks_state(new_banks_state)
                 elif len(events) == 0:
                     if t60_empty < self.t60_samples:
-                        rigidbody_output = self.rigidbody_synth.process(1, [], 0.0, 0, coupling_strength)
-#                        print('rigidbody_synth.process: ', self.obj_idx, 'static', sample_idx, rigidbody_output)
-                        for synth_type in [2,3,4]:
-                            resonance_output += self.resonance_synth.process(synth_type, [], 0.0, 0, coupling_strength)
-#                            print('resonance_synth.process: ', self.obj_idx, 'static', sample_idx, resonance_output)
-                        t60_empty += 1
+                        for synth_type in [1,2,3,4]:
+                            if synth_type == 1:
+                                value = self.rigidbody_synth.connected_buffer.read_for_obj(self.obj_idx, synth_type)
+                                if not value == 0:
+                                    rigidbody_output = self.rigidbody_synth.process(1, [], 0.0, 0, coupling_strength)
+                            else:
+                                value = self.resonance_synth.connected_buffer.read_for_obj(self.obj_idx, synth_type)
+                                if not value == 0:
+                                    resonance_output += self.resonance_synth.process(synth_type, [], 0.0, 0, coupling_strength)
+                            t60_empty += 1
 
                 self.rigidbody_synth_track[sample_idx] = rigidbody_output if not np.isnan(rigidbody_output) else 0
                 self.resonance_synth_track[sample_idx] = resonance_output if not np.isnan(resonance_output) else 0
