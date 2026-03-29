@@ -155,23 +155,36 @@ def _parse_lib(lib_content: str):
     with open(lib_content, 'r') as file:
         lines = file.readlines()
         for line in lines:
+            frequencies, t60s, gains = ([] for _ in range(3))
             # Extract frequencies from modeFreqsUnscaled
             freq_match = re.search(freq_pattern, line, re.DOTALL)
             if not freq_match == None:
                 freq_tuple_match = re.findall(tuple_match, freq_match.group())
-                frequencies = [float(f) for f in freq_tuple_match]
+                for f in freq_tuple_match:
+                    if not f == "":
+                        frequencies += [float(f)]
+                    else:
+                        frequencies += [1.0]
             # Extract T60 values
             t60_match = re.search(t60_pattern, line, re.DOTALL)
             if not t60_match == None:
                 t60_par_match = re.findall(parentesis_match, t60_match.group())
                 t60_tuple_match = re.findall(tuple_match, t60_par_match[1])
-                t60s = [float(f) for f in t60_tuple_match]
+                for f in t60_tuple_match:
+                    if not f == "":
+                        t60s += [float(f)]
+                    else:
+                        t60s += [1.0]
             # Extract gains - this is complex due to the large waveform
             gain_match = re.search(gain_pattern, line, re.DOTALL)
             if not gain_match == None:
                 gain_tuple_match = re.findall(gain_pattern, gain_match.group())
                 gain_tuple_match = re.sub("'", "", gain_tuple_match[0])
-                gains = [float(f) for f in gain_tuple_match.split(",")]
+                for f in gain_tuple_match.split(","):
+                    if not f == "":
+                        gains += [float(f)]
+                    else:
+                        gains += [1.0]
 
     return {
         'frequencies': np.array(frequencies),
