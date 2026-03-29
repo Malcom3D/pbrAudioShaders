@@ -163,7 +163,8 @@ def _parse_lib(lib_content: str):
                 nExPos_pattern = r'\s*(\d+)'
                 nExPos = re.search(nExPos_pattern, nExPos.group())
                 nExPos = int(nExPos.group())
-                break
+                if not nExPos == None:
+                    break
             # Extract frequencies from modeFreqsUnscaled
             freq_match = re.search(freq_pattern, line, re.DOTALL)
             if not freq_match == None:
