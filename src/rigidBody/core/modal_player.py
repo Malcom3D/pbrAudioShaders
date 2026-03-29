@@ -276,10 +276,10 @@ class ModalPlayer:
             subtype = 'PCM_'
             subtype += bit_depth
 
-        # Normalize between -1.0 and 1.0 for PCM_
-        if bit_depth in ['32', '24', '16']:
-            track /= np.max(abs(track))
-            track *= int((2**int(bit_depth))/2) - 1
+#        # Normalize between -1.0 and 1.0 for PCM_
+#        if bit_depth in ['32', '24', '16']:
+#            track /= np.max(abs(track))
+#            track *= int((2**int(bit_depth))/2) - 1
             
         wave_file = f"{self.output_dir}/{track_file}"
         sf.write(wave_file, track, sample_rate, subtype=subtype)
