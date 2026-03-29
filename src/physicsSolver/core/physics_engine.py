@@ -110,7 +110,7 @@ class physicsEngine:
         # Remove temporary trajectory data for this object
         for obj_idx in self.obj_dyn + self.obj_static:
             self._cleanup_tmp_trajectories(obj_idx)
-        _update_status(f"{self.status_dir}/bake", 63)
+        _update_status(f"{self.status_dir}/bake", 55)
 
         tasks_dists = [self.distances(objs_idx) for objs_idx in self.obj_pairs]
         results_dists = compute(*tasks_dists)
@@ -118,7 +118,7 @@ class physicsEngine:
 
         tasks_force = [self.force(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
         results_force = compute(*tasks_force)
-        _update_status(f"{self.status_dir}/bake", 81)
+        _update_status(f"{self.status_dir}/bake", 80)
 
         collisions = self.entity_manager.get('collisions')
         tasks_collision = [self.collision(collisions[collision_idx]) for collision_idx in collisions.keys()]
