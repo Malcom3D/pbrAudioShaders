@@ -138,18 +138,18 @@ class ModalPlayer:
                     event = events[0].to_dict()
                     if int(event['type']) in [2,3]:
 #                        print('ModalPlayer resonance_synth.process: ', self.obj_idx, event['type'], event['force'])
-                        if config_obj.resonance or isinstace(config_obj.connected, np.ndarray):
+                        if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
                             resonance_output = self.resonance_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
                         rigidbody_output = self.rigidbody_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
                         sliding_output = sliding_sound[sample_idx] * event['contact_area']
                         scraping_output = scraping_sound[sample_idx] * event['contact_area']
                     elif int(event['type']) == 4:
-                        if config_obj.resonance or isinstace(config_obj.connected, np.ndarray):
+                        if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
                             resonance_output = self.resonance_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
                         rigidbody_output = self.rigidbody_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
                         rolling_output = rolling_sound[sample_idx] * event['contact_area']
                     else:
-                        if config_obj.resonance or isinstace(config_obj.connected, np.ndarray):
+                        if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
                             resonance_output = self.resonance_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
 #                        print('ModalPlayer rigidbody_synth.process: ', self.obj_idx, event['type'], event['force'])
                         rigidbody_output = self.rigidbody_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
@@ -159,19 +159,19 @@ class ModalPlayer:
                         event = events[idx].to_dict()
                         if int(event['type']) in [2,3]:
                             #print('ModalPlayer resonance_synth.process: ', self.obj_idx, event['type'], event['force'])
-                            if config_obj.resonance or isinstace(config_obj.connected, np.ndarray):
+                            if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
                                 resonance_output += self.resonance_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
                             rigidbody_output += self.rigidbody_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
                             sliding_output += sliding_sound[sample_idx] * event['contact_area']
                             scraping_output += scraping_sound[sample_idx] * event['contact_area']
                         elif int(event['type']) == 4:
-                            if config_obj.resonance or isinstace(config_obj.connected, np.ndarray):
+                            if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
                                 resonance_output += self.resonance_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
                             rigidbody_output += self.rigidbody_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
                             rolling_output += rolling_sound[sample_idx] * event['contact_area']
                         else:
 #                            print('ModalPlayer rigidbody_synth.process: ', self.obj_idx, event['type'], event['force'])
-                            if config_obj.resonance or isinstace(config_obj.connected, np.ndarray):
+                            if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
                                 resonance_output += self.resonance_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
                             rigidbody_output += self.rigidbody_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
                             banks_state = self.rigidbody_synth.get_banks_state()
@@ -181,7 +181,7 @@ class ModalPlayer:
                             value = self.rigidbody_synth.connected_buffer.read_for_obj(self.obj_idx, synth_type)
                             if not value == 0:
                                 rigidbody_output = self.rigidbody_synth.process(1, [], 0.0, 0, coupling_strength)
-                                if config_obj.resonance or isinstace(config_obj.connected, np.ndarray):
+                                if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
                                     value = self.resonance_synth.connected_buffer.read_for_obj(self.obj_idx, synth_type)
                                     if not value == 0:
                                         resonance_output += self.resonance_synth.process(synth_type, [], 0.0, 0, coupling_strength)
