@@ -197,11 +197,11 @@ def _parse_lib(lib_content: str):
                 gain_tuple_match = re.findall(gain_pattern, gain_match.group())
                 gain_tuple_match = re.sub("'", "", gain_tuple_match[0])
                 if not gain_tuple_match == None:
-                    gains = [float(f) for f in gain_tuple_match.split(",")]
-                    break
-                else:
-                    gains = [1.0 for _ in range(nExPos)]
-                    break
+                    try:
+                        gains = [float(f) for f in gain_tuple_match.split(",")]
+                    except:
+                        gains = [1.0 for _ in range(nExPos)]
+                        break
 
     return {
         'frequencies': np.array(frequencies),
