@@ -109,7 +109,7 @@ class Pym2f:
         if config_obj.resonance:
             resonance_obj_file = f"{obj_file.removesuffix('.obj')}_resonance.obj"
             if os.path.exists(resonance_obj_file):
-                exit_code = os.system(f"{cmd} --name {output_name}_resonance --nsynthmodes {config_obj.resonance_modes} --infile resonance_obj_file)
+                exit_code = os.system(f"{cmd} --name {output_name}_resonance --nsynthmodes {config_obj.resonance_modes} --infile {resonance_obj_file}")
             if not exit_code == 0 or not os.path.exists(resonance_obj_file):
                 exit_code = os.system(f"{cmd} --name {output_name}_resonance --nsynthmodes {config_obj.resonance_modes} --infile {obj_file}")
             if exit_code == 0:
