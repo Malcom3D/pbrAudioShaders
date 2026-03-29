@@ -159,19 +159,19 @@ def _parse_lib(lib_content: str):
             freq_match = re.search(freq_pattern, line, re.DOTALL)
             if not freq_match == None:
                 freq_tuple_match = re.findall(tuple_match, freq_match.group())
-                frequencies = [float(f) for f in freq_tuple_match]
+                frequencies = [float(f) for f in freq_tuple_match if not f == "" else 1.0]
             # Extract T60 values
             t60_match = re.search(t60_pattern, line, re.DOTALL)
             if not t60_match == None:
                 t60_par_match = re.findall(parentesis_match, t60_match.group())
                 t60_tuple_match = re.findall(tuple_match, t60_par_match[1])
-                t60s = [float(f) for f in t60_tuple_match]
+                t60s = [float(f) for f in t60_tuple_match if not f == "" else 1.0]
             # Extract gains - this is complex due to the large waveform
             gain_match = re.search(gain_pattern, line, re.DOTALL)
             if not gain_match == None:
                 gain_tuple_match = re.findall(gain_pattern, gain_match.group())
                 gain_tuple_match = re.sub("'", "", gain_tuple_match[0])
-                gains = [float(f) for f in gain_tuple_match.split(",")]
+                gains = [float(f) for f in gain_tuple_match.split(",") if not f == "" else 1.0]
 
     return {
         'frequencies': np.array(frequencies),
