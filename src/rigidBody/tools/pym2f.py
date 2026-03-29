@@ -107,7 +107,10 @@ class Pym2f:
             raise ValueError(f'Error: {cmd}')
 
         if config_obj.resonance:
-            exit_code = os.system(f"{cmd} --name {output_name}_resonance --nsynthmodes {config_obj.resonance_modes} --infile {obj_file.removesuffix('.obj')}_resonance.obj")
+            try:
+                exit_code = os.system(f"{cmd} --name {output_name}_resonance --nsynthmodes {config_obj.resonance_modes} --infile {obj_file.removesuffix('.obj')}_resonance.obj")
+            except:
+                exit_code = os.system(f"{cmd} --name {output_name}_resonance --nsynthmodes {config_obj.resonance_modes} --infile {obj_file}")
             if exit_code == 0:
                 file_names.append(f"{output_name}_resonance.lib")
             else:
