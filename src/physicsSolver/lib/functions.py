@@ -160,20 +160,26 @@ def _parse_lib(lib_content: str):
             freq_match = re.search(freq_pattern, line, re.DOTALL)
             if not freq_match == None:
                 freq_tuple_match = re.findall(tuple_match, freq_match.group())
-                if not freq_tuple_match == None:
+                if not len(freq_tuple_match) == 0:
                     frequencies = [float(f) for f in freq_tuple_match]
+                    break
                 else:
                     frequencies = [1.0]
+                    break
         for line in lines:
             # Extract T60 values
             t60_match = re.search(t60_pattern, line, re.DOTALL)
             if not t60_match == None:
                 t60_par_match = re.findall(parentesis_match, t60_match.group())
-                t60_tuple_match = re.findall(tuple_match, t60_par_match[1])
-                if not t60_tuple_match == None:
-                    t60s = [float(f) for f in t60_tuple_match]
-                else:
-                    t60s = [1.0]
+                if not t60_par_match == None:
+                    try:
+                        t60_tuple_match = re.findall(tuple_match, t60_par_match[1])
+                        if not t60_tuple_match == None:
+                            t60s = [float(f) for f in t60_tuple_match]
+                            break
+                    except:
+                        t60s = [1.0]
+                        break
         for line in lines:
             # Extract nExPos
             nExPos_match = r'nExPos.*?=\s*(\d+)'
@@ -183,6 +189,7 @@ def _parse_lib(lib_content: str):
                 nExPos = re.search(nExPos_pattern, nExPos.group())
                 if not nExPos == None:
                     nExPos = int(nExPos.group())
+                    break
         for line in lines:
             # Extract gains - this is complex due to the large waveform
             gain_match = re.search(gain_pattern, line, re.DOTALL)
@@ -191,8 +198,10 @@ def _parse_lib(lib_content: str):
                 gain_tuple_match = re.sub("'", "", gain_tuple_match[0])
                 if not gain_tuple_match == None:
                     gains = [float(f) for f in gain_tuple_match.split(",")]
+                    break
                 else:
                     gains = [1.0 for _ in range(nExPos)]
+                    break
 
     return {
         'frequencies': np.array(frequencies),
