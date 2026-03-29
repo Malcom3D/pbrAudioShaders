@@ -1,0 +1,11 @@
+import("stdfaust.lib");
+
+modalModel(exPos,t60Scale) = _ <: par(mode,nModes,pm.modeFilter(modeFreqs(mode),modesT60s(mode),modesGains(int(exPos),mode))) :> /(nModes)
+with{
+nModes = 0;
+nExPos = 219;
+modeFreqsUnscaled(n) = ba.take(n+1,());
+modeFreqs(mode) = modeFreqsUnscaled(mode);
+modesGains(p,n) = waveform{,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,},int(p*nModes+n) : rdtable;
+modesT60s(n) = t60Scale * ba.take(n+1,());
+};
