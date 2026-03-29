@@ -509,10 +509,10 @@ class HertzianContact:
             delta_speed1 = (rolling_speed1 - relative_velocity) if rolling_speed1 > relative_velocity else 0
             delta_speed2 = (rolling_speed2 - relative_velocity) if rolling_speed2 > relative_velocity else 0
             delta_speed = (delta_speed1 + delta_speed2)/2
-            factor = relative_velocity / (relative_velocity + delta_speed)
-            rolling_factor = 0.5 + factor / 2
-            sliding_factor = (0.5 - factor / 2) if is_scraping else 0
-            scraping_factor = (0.5 - factor / 2) if is_scraping else 0
+            factor = relative_velocity / (relative_velocity + delta_speed) # 0 < factor < 1
+            rolling_factor = 0.5 / factor
+            sliding_factor = (0.5 * factor) if is_scraping else 0
+            scraping_factor = (0.5 * factor) if is_scraping else 0
             static_factor = 0
 
         # rolling_speed is < relative_velocity and not close
@@ -521,10 +521,10 @@ class HertzianContact:
             delta_speed1 = (relative_velocity - rolling_speed1) if relative_velocity > rolling_speed1 else 0
             delta_speed2 = (relative_velocity - rolling_speed2) if relative_velocity > rolling_speed2 else 0
             delta_speed = (delta_speed1 + delta_speed2)/2
-            factor = (relative_velocity - delta_speed) / relative_velocity
-            rolling_factor = 0.5 - factor / 2
-            sliding_factor = (0.5 + factor / 2) if is_scraping else 0
-            scraping_factor = (0.5 + factor / 2) if is_scraping else 0
+            factor = (relative_velocity - delta_speed) / relative_velocity # 0 < factor < 1
+            rolling_factor = 0.5 * factor
+            sliding_factor = (0.5 / factor) if is_scraping else 0
+            scraping_factor = (0.5 / factor) if is_scraping else 0
             static_factor = 0
 
         return {
