@@ -99,7 +99,7 @@ class Pym2f:
 #            cmd += f"--freqcontrol "
 
         cmd += f"--showfreqs"
-        exit_code = os.system(f"{cmd} --name {output_name} --nsynthmodes {config.system.modal_modes} --infile {obj_file}")
+        exit_code = os.system(f"{cmd} --name {output_name} --nsynthmodes {self.config.system.modal_modes} --infile {obj_file}")
         file_names = []
         if exit_code == 0:
             file_names.append(f"{output_name}.lib")
