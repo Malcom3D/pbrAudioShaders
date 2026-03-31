@@ -66,7 +66,7 @@ class ModalComposer:
             for score_idx in range(len(score_track1)):
                 events = score_track1[score_idx].get_events_at_sample(sample_idx)
                 for e_idx in range(len(events)):
-                    if int(events[e_idx].type) == 5: # rolling with static, sliding or scraping
+                    if int(events[e_idx].type[0]) == 5: # rolling with static, sliding or scraping
                         print('ModalComposer: ', obj1_idx, sample_idx, 'event_type: mixed')
                         for force_type in range(2, 5):
                             contact_area = events[e_idx].contact_area
@@ -84,7 +84,7 @@ class ModalComposer:
                                 coupling_data = np.array([[obj2_idx, coupling_data1]])
                                 score_track1[score_idx].add_event(ScoreEvent(type=np.array([force_type]), sample_idx=sample_idx, contact_area=contact_area, force=force, vertex_ids=vertex_ids, coupling_data=coupling_data))
                     else:
-                        force_type = int(events[e_idx].type)
+                        force_type = int(events[e_idx].type[0])
                         force = np.divide(force1[force_type][index], events[e_idx].vertex_ids.shape[0], out=np.zeros_like(force1[force_type][index]), where=events[e_idx].vertex_ids.shape[0] != 0)
                         events[e_idx].force = float(force) if not np.isnan(force) or not force == None else 0.0
                         coupling_data1 = coupling_strength1[index] if not np.isnan(coupling_strength1[index]) else 0.0
@@ -93,7 +93,7 @@ class ModalComposer:
             for score_idx in range(len(score_track2)):
                 events = score_track2[score_idx].get_events_at_sample(sample_idx)
                 for e_idx in range(len(events)):
-                    if int(events[e_idx].type) == 5: # rolling with static, sliding or scraping
+                    if int(events[e_idx].type[0]) == 5: # rolling with static, sliding or scraping
                         print('ModalComposer: ', obj2_idx, sample_idx, 'event_type: mixed')
                         for force_type in range(2, 5):
                             contact_area = events[e_idx].contact_area
@@ -111,7 +111,7 @@ class ModalComposer:
                                 coupling_data = np.array([[obj1_idx, coupling_data2]])
                                 score_track2[score_idx].add_event(ScoreEvent(type=np.array([force_type]), sample_idx=sample_idx, contact_area=contact_area, force=force, vertex_ids=vertex_ids, coupling_data=coupling_data))
                     else:
-                        force_type = int(events[e_idx].type)
+                        force_type = int(events[e_idx].type[0])
                         force = np.divide(force2[force_type][index], events[e_idx].vertex_ids.shape[0], out=np.zeros_like(force2[force_type][index]), where=events[e_idx].vertex_ids.shape[0] != 0)
                         events[e_idx].force = float(force) if not np.isnan(force) or not force == None else 0.0
                         coupling_data2 = coupling_strength2[index] if not np.isnan(coupling_strength2[index]) else 0.0
