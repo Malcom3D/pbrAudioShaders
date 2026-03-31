@@ -59,6 +59,7 @@ class ModalPlayer:
             self.player_id = id(self)
         
 #        self.synth_track = np.zeros(self.sample_counter.total_samples)
+        self.rigidbody_vertices = {}
         self.rigidbody_synth_track = np.zeros(self.sample_counter.total_samples)
         self.resonance_synth_track = np.zeros(self.sample_counter.total_samples)
         self.sliding_synth_track = np.zeros(self.sample_counter.total_samples)
@@ -136,6 +137,7 @@ class ModalPlayer:
                 if len(events) == 1:
                     t60_empty = 0
                     event = events[0].to_dict()
+                    self.rigidbody_vertices[sample_idx] = event['vertex_ids'].tolist()
                     if int(event['type']) in [2,3]:
 #                        print('ModalPlayer resonance_synth.process: ', self.obj_idx, event['type'], event['force'])
                         if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
@@ -157,6 +159,7 @@ class ModalPlayer:
                     t60_empty = 0
                     for idx in range(len(events)):
                         event = events[idx].to_dict()
+                        self.rigidbody_vertices[sample_idx] = event['vertex_ids'].tolist()
                         if int(event['type']) in [2,3]:
                             #print('ModalPlayer resonance_synth.process: ', self.obj_idx, event['type'], event['force'])
                             if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
@@ -177,6 +180,7 @@ class ModalPlayer:
                             banks_state = self.rigidbody_synth.get_banks_state()
                 elif len(events) == 0:
                     if t60_empty < self.t60_samples:
+                        self.rigidbody_vertices[sample_idx] = []
                         for synth_type in [1,2,3,4]:
                             value = self.rigidbody_synth.connected_buffer.read_for_obj(self.obj_idx, synth_type)
                             if not value == 0:
@@ -254,7 +258,8 @@ class ModalPlayer:
             'object_name': config_obj.name,
             'sample_rate': sample_rate,
             'duration': track.shape[0] / sample_rate,
-            'tracks': []
+            'track_name': suffix,
+            'vertices': self.rigidbody_vertices if suffix == 'rigidbody' else []
         }
 
         track_name = config_obj.name
@@ -294,7 +299,7 @@ class ModalPlayer:
         print(f"Saved {track_name} tracks to {self.output_dir}")
 
         # Save project file
-        json_file = f"{self.output_dir}/{config_obj.name}.json"
+        json_file = f"{self.output_dir}/{config_obj.name}_{suffix}.json"
         with open(json_file, 'w') as f:
             json.dump(project_data, f, indent=2)
 

@@ -90,7 +90,7 @@ class ScoreTrack:
         Load a ScoreTrack from a pickle file.
         
         Args:
-            filepath: Path to the JSON file to load
+            filepath: Path to the pkl file to load
             
         Returns:
             Loaded ScoreTrack instance

@@ -49,11 +49,9 @@ class ModalComposer:
             if conf_obj.idx == obj1_idx:
                 config_obj1 = conf_obj
                 force1, coupling_strength1 = self._load_audioforce_tracks(samples=samples, forces_path=forces_path, obj_name=config_obj1.name)
-#                force1 = force1 / np.max(force1)
             elif conf_obj.idx == obj2_idx:
                 config_obj2 = conf_obj
                 force2, coupling_strength2 = self._load_audioforce_tracks(samples=samples, forces_path=forces_path, obj_name=config_obj2.name)
-#                force2 = force2 / np.max(force2)
 
         score_track1, score_track2 = ([] for _ in range(2))
         score_tracks = self.entity_manager.get('score_tracks')
