@@ -610,8 +610,8 @@ class HertzianContact:
         angular_speed2 = np.linalg.norm(omega2)
         
         # Average properties
-        avg_friction = (friction1 + friction2) / 2 if friction1 and friction2 else 0.3
-        avg_roughness = (roughness1 + roughness2) / 2 if roughness1 and roughness2 else 0.5
+        avg_friction = ((friction1 + friction2) / 2 * max([friction1, friction2])) if friction1 and friction2 else 0.3
+        avg_roughness = ((roughness1 + roughness2) / 2 * max([roughness1, roughness2])) if roughness1 and roughness2 else 0.5
         
         # Calculate theoretical rolling velocities
         rolling_velocity1 = R1 * angular_speed1 if R1 else 0
@@ -648,8 +648,7 @@ class HertzianContact:
         if tangential_velocity > VELOCITY_THRESHOLD:
             # Calculate friction utilization
             max_friction_force = avg_friction * normal_force if normal_force > 0 else 0
-            friction_utilization = (tangential_force / max max_friction_force 
-                                   if max_friction_force > 0 else 1.0)
+            friction_utilization = (tangential_force / max_friction_force  if max_friction_force > 0 else 1.0)
             
             # Base sliding factor (inversely related to rolling)
             base_sliding = 1.0 - factors['rolling_factor']
@@ -664,8 +663,8 @@ class HertzianContact:
                 scraping_probability += 0.3
             
             # Criterion 2: Surface roughness
-            if avg_roughness > 0.00005:  # 50 micron roughness
-                roughness_contribution = min(avg_roughness * 20000, 1.0)  # Scale
+            if avg_roughness > 0.0005:
+                roughness_contribution = min(avg_roughness, 1.0)  # Scale
                 scraping_probability += 0.3 * roughness_contribution
             
             # Criterion 3: Velocity (scraping often at moderate speeds)
