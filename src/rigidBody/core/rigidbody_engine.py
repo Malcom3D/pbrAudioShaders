@@ -21,6 +21,7 @@ import numpy as np
 from typing import List, Tuple, Any, Dict
 from dataclasses import dataclass, field
 from dask import delayed, compute
+from dask.diagnostics import ProgressBar
 
 from physicsSolver import EntityManager, ForceDataSequence, ModalVertices, ScoreTrack, CollisionData, TrajectoryData
 from ..core.mesh2modal import Mesh2Modal
@@ -121,7 +122,11 @@ class rigidBodyEngine:
         _update_status(f"{self.status_dir}/prebake", 0)
 
         tasks_modal = [self.prebake_modal(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
-        results_modal = compute(*tasks_modal)
+        progress_bar = ProgressBar()
+        progress_bar.out = None
+        with progress_bar:
+            results_modal = compute(*tasks_modal)
+            print(progress_bar.progress)
         _update_status(f"{self.status_dir}/prebake", 45)
 
         collisions = self.entity_manager.get('collisions')
