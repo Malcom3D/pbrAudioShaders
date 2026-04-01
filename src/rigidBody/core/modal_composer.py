@@ -32,6 +32,7 @@ class ModalComposer:
         config = self.entity_manager.get('config')
 
     def compute(self, collision: Any) -> None:
+        print('ModalComposer compute: ', collision.type.value, collision.obj1_idx, collision.obj2_idx)
         if collision.type.value == 'connected' or not collision.valid:
             return
         config = self.entity_manager.get('config')
