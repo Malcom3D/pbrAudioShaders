@@ -125,7 +125,7 @@ class ModalPlayer:
         sliding_sound, scraping_sound, rolling_sound = self._load_sound_tracks(sound_path, config_obj.name)
                 
         print('ModalPlayer compute: ', self.obj_idx)
-        old_sample_idx = 0
+        t60_empty, old_sample_idx = (0 for _ in range(2))
         sample_idx = self.sample_counter.get_current()
         while sample_idx < self.end_idx:
             rigidbody_output, resonance_output, sliding_output, scraping_output, rolling_output = (0 for _ in range(5))
@@ -137,7 +137,7 @@ class ModalPlayer:
                 if len(events) == 1:
                     t60_empty = 0
                     event = events[0].to_dict()
-                    self.rigidbody_vertices[sample_idx] = event['vertex_ids'].tolist()
+                    self.rigidbody_vertices[sample_idx] = event['vertex_ids']
                     if int(event['type']) in [2,3]:
 #                        print('ModalPlayer resonance_synth.process: ', self.obj_idx, event['type'], event['force'])
                         if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
@@ -159,7 +159,7 @@ class ModalPlayer:
                     t60_empty = 0
                     for idx in range(len(events)):
                         event = events[idx].to_dict()
-                        self.rigidbody_vertices[sample_idx] = event['vertex_ids'].tolist()
+                        self.rigidbody_vertices[sample_idx] = event['vertex_ids']
                         if int(event['type']) in [2,3]:
                             #print('ModalPlayer resonance_synth.process: ', self.obj_idx, event['type'], event['force'])
                             if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
