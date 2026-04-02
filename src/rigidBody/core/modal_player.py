@@ -259,27 +259,32 @@ class ModalPlayer:
             'sample_rate': sample_rate,
             'duration': track.shape[0] / sample_rate,
             'track_name': suffix,
-            'vertices': self.rigidbody_vertices if suffix == 'rigidbody' else []
+            'vertices': self.rigidbody_vertices if suffix == 'rigidbody' else [],
+            'channels': 1,
+            'position': 0.0
         }
 
         track_name = config_obj.name
-        if file_format == 'RAW':
-            track_file = f"{track_name}_{suffix}.raw"
-        elif file_format == 'FLAC':
-            track_file = f"{track_name}_{suffix}.raw"
-        else:
-            track_file = f"{track_name}_{suffix}.wav"
+        track_file = f"{track_name}_{suffix}.raw"
+        subtype = 'FLOAT'
 
-        if file_format == 'FLAC' and bit_depth in ['FLOAT', 'DOUBLE', '32']:
-            subtype = 'PCM_24'
-        elif file_format == 'FLAC' and bit_depth in ['24', '16']:
-            subtype = 'PCM_'
-            subtype += bit_depth
-        elif bit_depth in ['FLOAT', 'DOUBLE']:
-            subtype = bit_depth
-        elif bit_depth in ['32', '24', '16']:
-            subtype = 'PCM_'
-            subtype += bit_depth
+#        if file_format == 'RAW':
+#            track_file = f"{track_name}_{suffix}.raw"
+#        elif file_format == 'FLAC':
+#            track_file = f"{track_name}_{suffix}.raw"
+#        else:
+#            track_file = f"{track_name}_{suffix}.wav"
+#
+#        if file_format == 'FLAC' and bit_depth in ['FLOAT', 'DOUBLE', '32']:
+#            subtype = 'PCM_24'
+#        elif file_format == 'FLAC' and bit_depth in ['24', '16']:
+#            subtype = 'PCM_'
+#            subtype += bit_depth
+#        elif bit_depth in ['FLOAT', 'DOUBLE']:
+#            subtype = bit_depth
+#        elif bit_depth in ['32', '24', '16']:
+#            subtype = 'PCM_'
+#            subtype += bit_depth
 
 #        # Normalize between -1.0 and 1.0 for PCM_
 #        if bit_depth in ['32', '24', '16']:
@@ -288,14 +293,6 @@ class ModalPlayer:
             
         wave_file = f"{self.output_dir}/{track_file}"
         sf.write(wave_file, track, sample_rate, subtype=subtype)
-        project_data['tracks'].append({
-            'name': track_name,
-            'file': track_file,
-            'channels': 1,
-            'position': 0.0,
-            'volume': 1.0,
-            'pan': 0.0
-        })
         print(f"Saved {track_name} tracks to {self.output_dir}")
 
         # Save project file
