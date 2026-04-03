@@ -73,7 +73,7 @@ def _load_pose(config_obj: Any) -> Tuple[np.ndarray, np.ndarray]:
 
     return positions, rotations
 
-def _generate_band_frequencies(lowest_frequency: float, higher_frequency: float, steps_per_octave: int):
+def _generate_band_frequencies(lowest_frequency: float, higher_frequency: float, bands_per_octave: int):
     """
     Generate frequencies from lowest_frequency to higher_frequency with specified steps per octave
     """
@@ -81,7 +81,7 @@ def _generate_band_frequencies(lowest_frequency: float, higher_frequency: float,
     current_freq = lowest_frequency
     
     # Calculate the frequency ratio for one step
-    step_ratio = 2 ** (1 / steps_per_octave)
+    step_ratio = 2 ** (1 / bands_per_octave)
 
     while current_freq <= higher_frequency:
         frequencies.append(current_freq)
