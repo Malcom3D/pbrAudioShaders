@@ -25,8 +25,8 @@ class FrequencyInterpolator:
     A class to interpolate values between frequency points within specified frequency bands.
     """
     
-    def __init__(self, frequencies: List[float], values: List[float], 
-                 method: str = 'linear', extrapolate: bool = True):
+#    def __init__(self, frequencies: List[float], values: List[float], method: str = 'linear', extrapolate: bool = True):
+    def __init__(self, frequencies: np.ndarray, values: np.ndarray, method: str = 'linear', extrapolate: bool = True):
         """
         Initialize the interpolator with frequency-value pairs.
         
@@ -36,17 +36,22 @@ class FrequencyInterpolator:
             method: Interpolation method ('linear', 'cubic', 'nearest')
             extrapolate: Whether to extrapolate beyond the input frequency range
         """
-        if len(frequencies) != len(values):
+#        if len(frequencies) != len(values):
+        if frequencies.shape[0] != values.shape[0]:
             raise ValueError("Frequencies and values must have the same length")
         
-        if len(frequencies) < 2:
+#        if len(frequencies) < 2:
+        if frequencies.shape[0] < 2:
             raise ValueError("At least 2 frequency-value pairs are required")
         
-        if not all(frequencies[i] < frequencies[i+1] for i in range(len(frequencies)-1)):
+#        if not all(frequencies[i] < frequencies[i+1] for i in range(len(frequencies)-1)):
+        if not all(frequencies[i] < frequencies[i+1] for i in range(frequencies.shape[0] - 1)):
             raise ValueError("Frequencies must be strictly increasing")
         
-        self.frequencies = np.array(frequencies)
-        self.values = np.array(values)
+#        self.frequencies = np.array(frequencies)
+#        self.values = np.array(values)
+        self.frequencies = frequencies
+        self.values = values
         self.method = method
         self.extrapolate = extrapolate
         
