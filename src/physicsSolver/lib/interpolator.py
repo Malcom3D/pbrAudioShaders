@@ -70,12 +70,7 @@ class FrequencyInterpolator:
                 fill_value='extrapolate' if self.extrapolate else np.nan
             )
         elif self.method == 'cubic':
-            self.interp_func = interpolate.interp1d(
-                self.frequencies, self.values, 
-                kind='cubic',
-                bounds_error=not self.extrapolate,
-                fill_value='extrapolate' if self.extrapolate else np.nan
-            )
+            self.interp_func = interpolate.interp1d(self.frequencies, self.values, kind='cubic', bounds_error=not self.extrapolate, fill_value='extrapolate' if self.extrapolate else np.nan)
         elif self.method == 'nearest':
             self.interp_func = interpolate.interp1d(
                 self.frequencies, self.values, 
