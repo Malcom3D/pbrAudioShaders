@@ -250,6 +250,11 @@ class ModalPlayer:
             if conf_obj.idx == self.obj_idx:
                 config_obj = conf_obj
 
+        # skip if track is all zeros
+        if not np.any(array):
+            print(f"Track {suffix} synth track for {config_obj.name} is empty, skipping")
+            return
+
         sample_rate = config.system.sample_rate
         bit_depth = config.system.bit_depth
         file_format = config.system.file_format
