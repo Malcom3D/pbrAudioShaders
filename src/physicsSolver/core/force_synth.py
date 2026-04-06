@@ -893,7 +893,7 @@ class ForceSynth:
         for track_name, track_data in tracks.items():
             track_file = f"{config_obj.name}_{track_name}.raw"
             wave_file = f"{self.audio_force_dir}/{track_file}"
-            sf.write(wave_file, track_data, sample_rate, subtype='FLOAT')
+            sf.write(wave_file, track_data, sample_rate, subtype='32')
             project_data['tracks'].append({
                 'name': track_name,
                 'file': track_file,
