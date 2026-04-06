@@ -24,7 +24,8 @@ from dask import delayed, compute
 
 # Configure Dask to use more threads
 from dask import config as dask_config
-dask_config.set(scheduler='threads', num_workers=1024)
+#dask_config.set(scheduler='threads', num_workers=1024)
+dask_config.set(num_workers=1024)
 
 from ..core.entity_manager import EntityManager
 from ..core.position_solver import PositionSolver
