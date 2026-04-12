@@ -255,8 +255,8 @@ class ModalPlayer:
             print(f"Track {suffix} synth track for {config_obj.name} is empty, skipping")
             return
 
-        sample_rate = config.system.sample_rate
-        bit_depth = config.system.bit_depth
+        sample_rate = int(config.system.sample_rate)
+        bit_depth = int(config.system.bit_depth)
         file_format = config.system.file_format
 
         project_data = {
