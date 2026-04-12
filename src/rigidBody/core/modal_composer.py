@@ -114,7 +114,7 @@ class ModalComposer:
                                 score_track2[score_idx].add_event(ScoreEvent(type=np.array([force_type]), sample_idx=sample_idx, contact_area=contact_area, force=force, vertex_ids=vertex_ids, coupling_data=coupling_data))
                     else:
                         force_type = int(events[e_idx].type[0])
-                        print('ModalComposer line: 89', 'force_type: ', force_type, 'index: ', index, sample_stop)
+                        print('ModalComposer line: 116', 'force_type: ', force_type, 'index: ', index, sample_stop)
                         force = np.divide(force2[force_type][index], events[e_idx].vertex_ids.shape[0], out=np.zeros_like(force2[force_type][index]), where=events[e_idx].vertex_ids.shape[0] != 0)
                         events[e_idx].force = float(force) if not np.isnan(force) or not force == None else 0.0
                         coupling_data2 = coupling_strength2[index] if not np.isnan(coupling_strength2[index]) else 0.0
@@ -125,14 +125,17 @@ class ModalComposer:
         sample_start = samples[0]
         sample_stop = samples[-1] + 1
 
-        _no_force = np.zeros(sample_stop - sample_start)
+        non_collision = np.zeros(sample_stop - sample_start)
         impact = np.zeros(sample_stop - sample_start)
         scraping = np.zeros(sample_stop - sample_start)
         sliding = np.zeros(sample_stop - sample_start)
         rolling = np.zeros(sample_stop - sample_start)
-        non_collision = np.zeros(sample_stop - sample_start)
+        _mixed = np.zeros(sample_stop - sample_start)
+        static = np.zeros(sample_stop - sample_start)
         coupling_strength = np.zeros(sample_stop - sample_start)
 
+        if os.path.exists(f"{forces_path}/{obj_name}_non_collision.raw"):
+            non_collision += np.fromfile(f"{forces_path}/{obj_name}_non_collision.raw", dtype=np.float32)[sample_start:sample_stop]
         if os.path.exists(f"{forces_path}/{obj_name}_impact.raw"):
             impact += np.fromfile(f"{forces_path}/{obj_name}_impact.raw", dtype=np.float32)[sample_start:sample_stop]
         if os.path.exists(f"{forces_path}/{obj_name}_scraping.raw"):
@@ -141,9 +144,7 @@ class ModalComposer:
             sliding += np.fromfile(f"{forces_path}/{obj_name}_sliding.raw", dtype=np.float32)[sample_start:sample_stop]
         if os.path.exists(f"{forces_path}/{obj_name}_rolling.raw"):
             rolling += np.fromfile(f"{forces_path}/{obj_name}_rolling.raw", dtype=np.float32)[sample_start:sample_stop]
-        if os.path.exists(f"{forces_path}/{obj_name}_non_collision.raw"):
-            non_collision += np.fromfile(f"{forces_path}/{obj_name}_non_collision.raw", dtype=np.float32)[sample_start:sample_stop]
         if os.path.exists(f"{forces_path}/{obj_name}_coupling_strength.raw"):
             coupling_strength += np.fromfile(f"{forces_path}/{obj_name}_coupling_strength.raw", dtype=np.float32)[sample_start:sample_stop]
 
-        return [_no_force, impact, scraping, sliding, rolling, non_collision], coupling_strength
+        return [non_collision, impact, scraping, sliding, rolling, _mixed, static], coupling_strength

@@ -35,7 +35,7 @@ class ContactType(IntEnum):
     ROLLING = 4
     MIXED = 5 # ROLLING and (SLIDING or SCRAPPING or STATIC)
     STATIC = 6
-#    STATIC = 5
+#    STATIC = 5 # old
 
 @dataclass
 class ForceData:

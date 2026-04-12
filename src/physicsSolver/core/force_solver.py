@@ -189,7 +189,7 @@ class ForceSolver:
         # Get linear acceleration
         linear_acceleration = trajectory.get_acceleration(frames[frame_idx])
         
-        # For non-collision frames, normal and tangential forces are zero
+        # For static frames, normal and tangential forces are zero
         # but we compute relative velocity for potential future collisions
         relative_velocity = linear_velocity.copy()
         normal_velocity = np.zeros(3)
@@ -209,7 +209,7 @@ class ForceSolver:
         total_force = mass * linear_acceleration
         
         # Decompose into normal and tangential components
-        # For non-collision, assume gravity is the main normal force
+        # For static, assume gravity is the main normal force
         g_0 = -9.80665
         gravity = np.array([0, g_0, 0])  # m/s²
         normal_force = mass * gravity
