@@ -86,6 +86,7 @@ class ModalComposer:
                                 score_track1[score_idx].add_event(ScoreEvent(type=np.array([force_type]), sample_idx=sample_idx, contact_area=contact_area, force=force, vertex_ids=vertex_ids, coupling_data=coupling_data))
                     else:
                         force_type = int(events[e_idx].type[0])
+                        print('ModalComposer line: 89', 'force_type: ', force_type, 'index: ', index, sample_stop)
                         force = np.divide(force1[force_type][index], events[e_idx].vertex_ids.shape[0], out=np.zeros_like(force1[force_type][index]), where=events[e_idx].vertex_ids.shape[0] != 0)
                         events[e_idx].force = float(force) if not np.isnan(force) or not force == None else 0.0
                         coupling_data1 = coupling_strength1[index] if not np.isnan(coupling_strength1[index]) else 0.0
@@ -113,6 +114,7 @@ class ModalComposer:
                                 score_track2[score_idx].add_event(ScoreEvent(type=np.array([force_type]), sample_idx=sample_idx, contact_area=contact_area, force=force, vertex_ids=vertex_ids, coupling_data=coupling_data))
                     else:
                         force_type = int(events[e_idx].type[0])
+                        print('ModalComposer line: 89', 'force_type: ', force_type, 'index: ', index, sample_stop)
                         force = np.divide(force2[force_type][index], events[e_idx].vertex_ids.shape[0], out=np.zeros_like(force2[force_type][index]), where=events[e_idx].vertex_ids.shape[0] != 0)
                         events[e_idx].force = float(force) if not np.isnan(force) or not force == None else 0.0
                         coupling_data2 = coupling_strength2[index] if not np.isnan(coupling_strength2[index]) else 0.0
