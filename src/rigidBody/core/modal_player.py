@@ -251,7 +251,7 @@ class ModalPlayer:
                 config_obj = conf_obj
 
         # skip if track is all zeros
-        if not np.any(array):
+        if not np.any(track):
             print(f"Track {suffix} synth track for {config_obj.name} is empty, skipping")
             return
 
