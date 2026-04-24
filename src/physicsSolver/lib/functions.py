@@ -30,7 +30,15 @@ def _mesh_to_obj(vertices: np.ndarray, normals: np.ndarray, faces: np.ndarray, o
     mesh.export(obj_file, file_type='obj')
     return
 
-def _load_mesh(obj_config, frame_idx: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _acoustic_domain_mesh(config: Any) -> trimesh.Trimesh:
+    """ Return the AcousticDomain as mesh """
+    ac_geometry = np.array(config.acoustic_domain.geometry)
+    ac_max = np.array([max(ac_geometry[i][0] for i in range(len(ac_geometry))), max(ac_geometry[i][1] for i in range(len(ac_geometry))), max(ac_geometry[i][2] for i in range(len(ac_geometry)))])
+    ac_min = np.array([min(ac_geometry[i][0] for i in range(len(ac_geometry))), min(ac_geometry[i][1] for i in range(len(ac_geometry))), min(ac_geometry[i][2] for i in range(len(ac_geometry)))])
+    ac = trimesh.creation.box(bounds=(ac_min,ac_max))
+    return ac
+
+def _load_mesh(obj_config: Any, frame_idx: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Load mesh for an object at a given frame index."""
     if obj_config.static:
         # For static, load once
@@ -56,22 +64,28 @@ def _load_mesh(obj_config, frame_idx: int) -> Tuple[np.ndarray, np.ndarray, np.n
 
 def _load_pose(config_obj: Any) -> Tuple[np.ndarray, np.ndarray]:
     """Load all pose sequence for an object."""
-    if not 'ObjectConfig' in str(type(config_obj)):
-        raise ValueError(f"{config_obj} is not of ObjectConfig type.")
+    for obj_type in ['SourceConfig', 'OutputConfig', 'ObjectConfig']:
+        if obj_type in str(type(config_obj)):
+            type_error = False
+            pose_path = config_obj.pose_path
+            obj_name = config_obj.name
 
-    pose_path = config_obj.pose_path
-    obj_name = config_obj.name
+            npz_file = os.path.join(pose_path, f"{obj_name}.npz")
 
-    npz_file = os.path.join(pose_path, f"{obj_name}.npz")
+            if not npz_file:
+                raise ValueError(f"No pose files found for {obj_name} in {pose_path}")
 
-    if not npz_file:
-        raise ValueError(f"No pose files found for {obj_name} in {pose_path}")
+            pose = np.load(npz_file)
+            positions = pose[pose.files[0]]
+            rotations = pose[pose.files[1]]
+            break
+        else:
+            type_error = True
 
-    pose = np.load(npz_file)
-    positions = pose[pose.files[0]]
-    rotations = pose[pose.files[1]]
-
-    return positions, rotations
+    if type_error:
+        raise ValueError(f"{config_obj} is not of know type: SourceConfig, OutputConfig, ObjectConfig.")
+    else:
+        return positions, rotations
 
 def _generate_band_frequencies(lowest_frequency: float, higher_frequency: float, bands_per_octave: int):
     """
@@ -337,3 +351,55 @@ def _degrees_to_radians(phase_coeffs, input_unit='auto'):
         phase = np.mod(phase + np.pi, 2 * np.pi) - np.pi
 
     return phase
+
+    def _compute_rayleigh_damping(f1: float, f2: float, xi1: float, xi2: float = None) -> Tuple[float, float]:
+        """
+        Compute Rayleigh damping coefficients α and β.
+   
+        Parameters:
+        -----------
+        f1 : float
+            First frequency (Hz)
+        f2 : float
+            Second frequency (Hz)
+        xi1 : float
+            Damping ratio at f11 (dimensionless, e.g., 0.05 for 5%)
+        xi2 : float
+            Damping ratio at f2 (dimensionless, e.g., 0.05 for 5%)
+   
+        Returns:
+        --------
+        tuple : (alpha, beta)
+            Mass-proportional coefficient α (1/s)
+            Stiffness-proportional coefficient β (s)
+   
+        Notes:
+        ------
+        Rayleigh damping: C = αM + βK
+        Damping ratio at frequency ω: ξ = α/(2ω) + βω/2
+        """
+        xi2 = xi1 if xi2 == None else xi2
+
+        # Convert frequencies to angular frequencies (rad/s)
+        omega1 = 2 * np.pi * f1
+        omega2 = 2 * np.pi * f2
+   
+        # Solve the system of equations:
+        # ξ1 = α/(2ω1) + βω1/2
+        # ξ2 = α/(2ω2) + βω2/2
+   
+        # Create the coefficient matrix
+        A = np.array([
+            [1/(2*omega1), omega1/2],
+            [1/(2*omega2), omega2/2]
+        ])
+
+        # Create the right-hand side vector
+        b = np.array([xi1, xi2])
+   
+        # Solve for α and β
+        try:
+            alpha, beta = np.linalg.solve(A, b)
+            return alpha, beta
+        except np.linalg.LinAlgError:
+            raise ValueError("The two frequencies must be different to compute unique Rayleigh damping coefficients.")
