@@ -77,8 +77,7 @@ class ScoreTrack:
         Save the ScoreTrack to a pickle file.
         
         Args:
-            filepath: Path to save the JSON file
-            indent: JSON indentation level (None for compact format)
+            filepath: Path to save the pickle file
         """
         
         with open(filepath, 'wb') as f:
