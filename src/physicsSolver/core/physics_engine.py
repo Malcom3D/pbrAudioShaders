@@ -141,18 +141,18 @@ class physicsEngine:
 
         # Save collision data
         collision_data = self.entity_manager.get('collisions')
-        print('Save collisions: ', len(collision_data))
+        print('Saved collisions: ', len(collision_data))
         for c_idx in collision_data.keys():
             collision_data[c_idx].save(f"{self.collisions_dir}/{c_idx:05d}.pkl")
 
         # Save modal vertices and score tracks data
         modal_vertices = self.entity_manager.get('modal_vertices')
-        print('Save modal_vertices: ', len(modal_vertices))
+        print('Saved modal_vertices: ', len(modal_vertices))
         for m_idx in modal_vertices.keys():
             modal_vertices[m_idx].save(f"{self.modalvertices_dir}/{m_idx:05d}.json")
 
         score_tracks = self.entity_manager.get('score_tracks')
-        print('Save score_tracks: ', len(score_tracks))
+        print('Saved score_tracks: ', len(score_tracks))
         for s_idx in score_tracks.keys():
             score_tracks[s_idx].save(f"{self.scoretracks_dir}/{s_idx:05d}.pkl")
 
