@@ -7,6 +7,8 @@ import numpy as np
 import numba as nb
 from typing import Any, Tuple, Optional, List, Union, Dict
 
+from ..lib.filter import LinkwitzRileyFilter
+
 def _mesh_to_obj(vertices: np.ndarray, normals: np.ndarray, faces: np.ndarray, obj_file: str, resonance: bool = False):
     """
     Convert an npz mesh file to Wavefront OBJ format.
@@ -404,3 +406,36 @@ def _compute_rayleigh_damping(f1: float, f2: float, xi1: float, xi2: float = Non
         return alpha, beta
     except np.linalg.LinAlgError:
         raise ValueError("The two frequencies must be different to compute unique Rayleigh damping coefficients.")
+
+def _mono_to_bands(audio_file: str, sample_rate: int, frequency_bands: List[Tuple[float, float]]) -> str:
+    """
+    Convert audio_file to frequency dependent np.ndarray in npz file audio_npz.
+    """
+    # Read the audio file
+    try:
+        audio_data, sr = sf.read(audio_file)
+    except Exception as e:
+        raise FileNotFoundError(f"Could not read audio file {audio_file}: {e}")
+
+    # Ensure mono audio
+    if audio_data.ndim > 1:
+        if audio_data.shape[1] > 1:
+            # Convert to mono by averaging channels
+            audio_data = np.mean(audio_data, axis=1)
+            print(f"Warning: Multi-channel audio converted to mono")
+
+    # align sample_rate
+    if not sample_rate == sr:
+        audio_data = resampy.resample(audio_data, sample_rate, grid_sample_rate)
+
+    # create an array of shape (n_bands,audio_length)
+    n_bands = len(frequency_bands)
+    audio_length = audio_data.shape[0]
+    multi_bands_audio = np.zeros((n_bands,audio_length), dtype=np.float32)
+    for index in range(n_bands):
+        low_freq = frequency_bands[index][0]
+        high_freq = frequency_bands[index][1]
+        filtered_audio, sample_rate = LinkwitzRileyFilter.linkwitz_riley_bandpass_filter(audio_data, sample_rate, low_freq, high_freq)
+        multi_bands_audio[index] = filtered_audio
+
+    return multi_bands_audio
