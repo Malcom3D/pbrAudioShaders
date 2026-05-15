@@ -5,6 +5,8 @@ import string
 import trimesh
 import numpy as np
 import numba as nb
+import resampy
+import soundfile as sf
 from typing import Any, Tuple, Optional, List, Union, Dict
 
 from ..lib.filter import LinkwitzRileyFilter
@@ -96,12 +98,15 @@ def _generate_band_frequencies(lowest_frequency: float, higher_frequency: float,
     frequencies = []
     current_freq = lowest_frequency
     
-    # Calculate the frequency ratio for one step
-    step_ratio = 2 ** (1 / bands_per_octave)
+    if bands_per_octave > 0:
+        # Calculate the frequency ratio for one step
+        step_ratio = 2 ** (1 / bands_per_octave)
 
-    while current_freq <= higher_frequency:
+        while current_freq <= higher_frequency:
+            frequencies.append(current_freq)
+            current_freq *= step_ratio
+    else:
         frequencies.append(current_freq)
-        current_freq *= step_ratio
 
     return frequencies
 
@@ -407,7 +412,7 @@ def _compute_rayleigh_damping(f1: float, f2: float, xi1: float, xi2: float = Non
     except np.linalg.LinAlgError:
         raise ValueError("The two frequencies must be different to compute unique Rayleigh damping coefficients.")
 
-def _mono_to_bands(audio_file: str, sample_rate: int, frequency_bands: List[Tuple[float, float]]) -> str:
+def _mono_to_bands(audio_file: str, sample_rate: int, frequency_bands: List[Tuple[float, float]]) -> List:
     """
     Convert audio_file to frequency dependent np.ndarray in npz file audio_npz.
     """
@@ -426,7 +431,7 @@ def _mono_to_bands(audio_file: str, sample_rate: int, frequency_bands: List[Tupl
 
     # align sample_rate
     if not sample_rate == sr:
-        audio_data = resampy.resample(audio_data, sample_rate, grid_sample_rate)
+        audio_data = resampy.resample(audio_data, sr, sample_rate)
 
     # create an array of shape (n_bands,audio_length)
     n_bands = len(frequency_bands)
@@ -435,6 +440,7 @@ def _mono_to_bands(audio_file: str, sample_rate: int, frequency_bands: List[Tupl
     for index in range(n_bands):
         low_freq = frequency_bands[index][0]
         high_freq = frequency_bands[index][1]
+        high_freq = high_freq if high_freq < sample_rate / 2 else (sample_rate / 2) - 1
         filtered_audio, sample_rate = LinkwitzRileyFilter.linkwitz_riley_bandpass_filter(audio_data, sample_rate, low_freq, high_freq)
         multi_bands_audio[index] = filtered_audio
 
