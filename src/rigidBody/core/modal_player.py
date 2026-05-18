@@ -108,7 +108,7 @@ class ModalPlayer:
         sound_path = f"{config.system.cache_path}/audio_force"
         self.sliding_sound, self.scraping_sound, self.rolling_sound = self._load_sound_tracks(sound_path, config_obj.name)
 
-    def compute(self, frame_idx: int) -> None:
+    def compute(self, sample_idx: int) -> None:
         config = self.entity_manager.get('config')
 #        sound_path = f"{config.system.cache_path}/audio_force"
         for conf_obj in config.objects:

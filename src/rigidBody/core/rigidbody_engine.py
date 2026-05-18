@@ -182,8 +182,8 @@ class rigidBodyEngine:
 #        results_player = compute(*tasks_player)
         players = [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
         update_step = 80 / sample_counter.total_samples
-        for frame_idx in range(sample_counter.total_samples):
-            tasks_player = [self.bake_player(player, frame_idx) for player in players]
+        for sample_idx in range(sample_counter.total_samples):
+            tasks_player = [self.bake_player(player, sample_idx) for player in players]
             results_player = compute(*tasks_player)
             _update_status(f"{self.status_dir}/bake", update_step)
         _update_status(f"{self.status_dir}/bake", 90)
