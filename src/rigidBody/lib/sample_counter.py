@@ -65,6 +65,7 @@ class SampleCounter:
         Non-blocking version: returns True if all players are ready and sample was advanced.
         Returns False if we need to wait for more players.
         """
+        print('SampleCounter', player_id, 'ready', self.players_ready, self.current_sample)
         if player_id in self.players_registered and player_id not in self.players_ready:
             self.players_ready.append(player_id)
             if len(self.players_ready) == len(self.players_registered):
@@ -75,6 +76,7 @@ class SampleCounter:
                        _update_status(self.status_file, int(self.get_progress()))
                 self.players_ready = []
                 # Execute all registered callbacks
+                print('SampleCounter execute all callbacks')
                 for callback in self._ready_callbacks:
                     callback()
 

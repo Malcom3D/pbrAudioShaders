@@ -210,6 +210,7 @@ class ModalPlayer:
             # Call ready - this will either:
             # - Return True if all players are ready (sample was advanced and callback executed)
             # - Return False if we're still waiting for other players
+            print(self.player_id, 'call ready')
             all_ready = self.sample_counter.ready(self.player_id)
         
             if all_ready:
