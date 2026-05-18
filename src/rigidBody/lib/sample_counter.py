@@ -83,8 +83,8 @@ class SampleCounter:
                 return True  # All players are ready, sample advanced
             
             return False  # Still waiting for more players
-        
-        return True  # Player already ready or not registered
+
+        return False # Player already ready or not registered
 
     def set_total_samples(self, total_samples: int) -> None:
         """Set the total number of samples."""

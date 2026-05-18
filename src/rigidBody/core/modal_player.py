@@ -18,6 +18,7 @@
 
 import os
 import json
+import time
 import numpy as np
 import soundfile as sf
 from typing import Any, List, Tuple, Dict, Optional
@@ -55,6 +56,10 @@ class ModalPlayer:
         # Generate unique player ID if not provided
         if self.player_id is None:
             self.player_id = id(self)
+
+        # Set polling and timeout for synchronization mechanism
+        self.timeout = 30
+        self.poll_interval = 0.01
         
 #        self.synth_track = np.zeros(self.sample_counter.total_samples)
         self.rigidbody_vertices = {}
@@ -206,6 +211,7 @@ class ModalPlayer:
         self.sample_counter.register_ready_callback(on_all_ready)
     
         # Process samples in a loop (non-blocking)
+        start_time = time.time()
         while sample_idx < self.end_idx:
             # Call ready - this will either:
             # - Return True if all players are ready (sample was advanced and callback executed)
@@ -218,9 +224,9 @@ class ModalPlayer:
                 # Get the next sample index
                 sample_idx = self.sample_counter.get_next(self.player_id)
             else:
-                # We need to wait - in a non-blocking environment, we'd yield control
-                # For Blender, we can use a timer or return control to the main loop
-                break  # Break out and let the main loop handle timing
+                if (time.time() - start_time) >= self.timeout:
+                    raise TimeoutError(f"No new sample_idx for {self.timeout} seconds")
+                time.sleep(self.poll_interval)
 
         # Unregister when done
         if sample_idx >= self.end_idx:
