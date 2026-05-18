@@ -17,7 +17,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import copy
-import threading
+#import threading
 import numpy as np
 from typing import List, Tuple, Any
 from ..utils.config import Config
@@ -28,11 +28,11 @@ class EntityManager:
 #    _lock = threading.Lock()
     _initialized = False
     
-    def __new__(cls, *args, **kwargs):
-        with cls._lock:
-            if cls._instance is None:
-                cls._instance = super().__new__(cls)
-        return cls._instance
+#    def __new__(cls, *args, **kwargs):
+#        with cls._lock:
+#            if cls._instance is None:
+#                cls._instance = super().__new__(cls)
+#        return cls._instance
     
     def __init__(self, config: str):
 #        with self._lock:
