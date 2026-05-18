@@ -223,7 +223,7 @@ class ModalPlayer:
 
         # Unregister when done
         if sample_idx >= self.end_idx:
-            self.sample_counter.unregister_player(self(self.player_id)
+            self.sample_counter.unregister_player(self.player_id)
             print(f"Player {self.player_id} finished processing")
 
     def _get_modal_t60(self, config_obj: Any) -> float:
