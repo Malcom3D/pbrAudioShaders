@@ -59,7 +59,7 @@ class ModalPlayer:
 
         # Set polling and timeout for synchronization mechanism
         self.timeout = 30
-        self.poll_interval = 0.01
+        self.poll_interval = 0.1
         
 #        self.synth_track = np.zeros(self.sample_counter.total_samples)
         self.rigidbody_vertices = {}
@@ -200,7 +200,7 @@ class ModalPlayer:
                 self.rigidbody_synth_track[sample_idx] = rigidbody_output if not np.isnan(rigidbody_output) else 0
                 self.resonance_synth_track[sample_idx] = resonance_output if not np.isnan(resonance_output) else 0
                 self.sliding_synth_track[sample_idx] = sliding_output if not np.isnan(sliding_output) else 0
-                self.scraping_synth_track[sample_idx_idx] = scraping_output if not np.isnan(scraping_output) else 0
+                self.scraping_synth_track[sample_idx] = scraping_output if not np.isnan(scraping_output) else 0
                 self.rolling_synth_track[sample_idx] = rolling_output if not np.isnan(rolling_output) else 0
         
             # Update sample indices for next iteration
@@ -222,6 +222,7 @@ class ModalPlayer:
             if all_ready:
                 # The callback has already processed this sample
                 # Get the next sample index
+                start_time = time.time()
                 sample_idx = self.sample_counter.get_next(self.player_id)
             else:
                 if (time.time() - start_time) >= self.timeout:
