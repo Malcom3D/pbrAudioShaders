@@ -77,7 +77,7 @@ def _process_trajectory(entity_manager, obj_idx):
 def _process_static(entity_manager, obj_idx):
     """Wrapper function for parallel execution of static object computation."""
     fp = FlightPath(entity_manager)
-    fp.compute(obj_idx)
+    fp.compute(obj(obj_idx)
 
 
 def _process_distances(entity_manager, objs_idx):
@@ -181,7 +181,7 @@ class physicsEngine:
         # Cleanup temporary trajectory data
         for obj_idx in self.obj_dyn + self.obj_static:
             self._cleanup_tmp_trajectories(obj_idx)
-        _update_status(f"{self.status_dir}/bake", 55)
+        _update_status(f"{self.status_dir_dir}/bake", 55)
 
         # Phase 7: Distance computation
         with Pool(processes=self.num_workers) as pool:
@@ -221,7 +221,7 @@ class physicsEngine:
         for c_idx in collision_data.keys():
             collision_data[c_idx].save(f"{self.collisions_dir}/{c_idx:05d}.pkl")
 
-        # Save modal vertices and score tracks data
+        # Save modal vertices vertices and score tracks data
         modal_vertices = self.entity_manager.get('modal_vertices')
         print('Saved modal_vertices: ', len(modal_vertices))
         for m_idx in modal_vertices.keys():
