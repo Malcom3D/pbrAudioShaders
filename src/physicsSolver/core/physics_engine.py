@@ -20,13 +20,9 @@ import os
 import numpy as np
 from typing import List, Tuple, Any, Dict
 from dataclasses import dataclass, field
-from dask import delayed, compute
-
-# Configure Dask to use more threads
-from dask import config as dask_config
-#dask_config.set(scheduler='threads', num_workers=1024)
-#dask_config.set(scheduler='processes', num_workers=1024)
-dask_config.set(num_workers=1024)
+from multiprocessing import Pool, cpu_count
+from functools import partial
+import copy
 
 from ..core.entity_manager import EntityManager
 from ..core.position_solver import PositionSolver
@@ -47,12 +43,74 @@ from ..lib.score_data import ScoreTrack
 
 from ..lib.functions import _update_status
 
+
+def _process_position(entity_manager, obj_idx):
+    """Wrapper function for parallel execution of position solving."""
+    ps = PositionSolver(entity_manager)
+    ps.compute(obj_idx)
+
+
+def _process_rotation(entity_manager, obj_idx):
+    """Wrapper function for parallel execution of rotation solving."""
+    rs = RotationSolver(entity_manager)
+    rs.compute(obj_idx)
+
+
+def _process_vertex(entity_manager, obj_idx):
+    """Wrapper function for parallel execution of vertex solving."""
+    vs = VertexSolver(entity_manager)
+    vs.compute(obj_idx)
+
+
+def _process_normal(entity_manager, obj_idx):
+    """Wrapper function for parallel execution of normal solving."""
+    ns = NormalSolver(entity_manager)
+    ns.compute(obj_idx)
+
+
+def _process_trajectory(entity_manager, obj_idx):
+    """Wrapper function for parallel execution of trajectory computation."""
+    fp = FlightPath(entity_manager)
+    fp.compute(obj_idx)
+
+
+def _process_static(entity_manager, obj_idx):
+    """Wrapper function for parallel execution of static object computation."""
+    fp = FlightPath(entity_manager)
+    fp.compute(obj_idx)
+
+
+def _process_distances(entity_manager, objs_idx):
+    """Wrapper function for parallel execution of distance computation."""
+    ds = DistanceSolver(entity_manager)
+    ds.compute(objs_idx)
+
+
+def _process_force(entity_manager, obj_idx):
+    """Wrapper function for parallel execution of force computation."""
+    fs = ForceSolver(entity_manager)
+    fs.compute(obj_idx)
+
+
+def _process_force_synth(entity_manager, obj_idx):
+    """Wrapper function for parallel execution of force synthesis."""
+    fsy = ForceSynth(entity_manager)
+    fsy.compute(obj_idx)
+
+
+def _process_collision(entity_manager, collision):
+    """Wrapper function for parallel execution of collision solving."""
+    cs = CollisionSolver(entity_manager)
+    cs.compute(collision)
+
+
 @dataclass
 class physicsEngine:
     entity_manager: EntityManager
     obj_dyn: List[int] = field(default_factory=list)
     obj_static: List[int] = field(default_factory=list)
     obj_pairs: List[int] = field(default_factory=list)
+    num_workers: int = field(default=None)
 
     def __post_init__(self):
         config = self.entity_manager.get('config')
@@ -62,6 +120,10 @@ class physicsEngine:
         self.forces_dir = f"{config.system.cache_path}/forces_data"
         self.modalvertices_dir = f"{config.system.cache_path}/modalvertices"
         self.scoretracks_dir = f"{config.system.cache_path}/scoretracks"
+
+        # Set number of workers (default to CPU count)
+        if self.num_workers is None:
+            self.num_workers = cpu_count()
 
         # Ensure status directory exists
         os.makedirs(self.status_dir, exist_ok=True)
@@ -78,64 +140,77 @@ class physicsEngine:
 
     def bake(self):
         _update_status(f"{self.status_dir}/bake", 0)
-#        self.ps = PositionSolver(self.entity_manager)
-#        self.rs = RotationSolver(self.entity_manager)
-#        self.vs = VertexSolver(self.entity_manager)
-#        self.ns = NormalSolver(self.entity_manager)
-#        self.fp = FlightPath(self.entity_manager)
-#        self.ds = DistanceSolver(self.entity_manager)
-#        self.fs = ForceSolver(self.entity_manager)
 
-#        tasks_static = [self.fp.compute(obj_idx) for obj_idx in self.obj_static]
-#        results_static = compute(*tasks_static)
-
-        tasks_static = [self.static(obj_idx) for obj_idx in self.obj_static]
-        results_static = compute(*tasks_static)
+        # Phase 1: Static objects
+        with Pool(processes=self.num_workers) as pool:
+            # Process static objects
+            static_func = partial(_process_static, self.entity_manager)
+            pool.map(static_func, self.obj_static)
         _update_status(f"{self.status_dir}/bake", 9)
 
-        tasks_pos = [self.position(obj_idx) for obj_idx in self.obj_dyn]
-        results_pos = compute(*tasks_pos)
+        # Phase 2: Position solving
+        with Pool(processes=self.num_workers) as pool:
+            pos_func = partial(_process_position, self.entity_manager)
+            pool.map(pos_func, self.obj_dyn)
         _update_status(f"{self.status_dir}/bake", 18)
 
-        tasks_rot = [self.rotation(obj_idx) for obj_idx in self.obj_dyn]
-        results_rot = compute(*tasks_rot)
+        # Phase 3: Rotation solving
+        with Pool(processes=self.num_workers) as pool:
+            rot_func = partial(_process_rotation, self.entity_manager)
+            pool.map(rot_func, self.obj_dyn)
         _update_status(f"{self.status_dir}/bake", 27)
 
-        tasks_vertex = [self.vertex(obj_idx) for obj_idx in self.obj_dyn]
-        results_vertex = compute(*tasks_vertex)
+        # Phase 4: Vertex solving
+        with Pool(processes=self.num_workers) as pool:
+            vertex_func = partial(_process_vertex, self.entity_manager)
+            pool.map(vertex_func, self.obj_dyn)
         _update_status(f"{self.status_dir}/bake", 36)
 
-        tasks_norm = [self.normal(obj_idx) for obj_idx in self.obj_dyn]
-        results_norm = compute(*tasks_norm)
+        # Phase 5: Normal solving
+        with Pool(processes=self.num_workers) as pool:
+            normal_func = partial(_process_normal, self.entity_manager)
+            pool.map(normal_func, self.obj_dyn)
         _update_status(f"{self.status_dir}/bake", 45)
 
-        tasks_traj = [self.trajectory(obj_idx) for obj_idx in self.obj_dyn]
-        results_traj = compute(*tasks_traj)
+        # Phase 6: Trajectory computation
+        with Pool(processes=self.num_workers) as pool:
+            traj_func = partial(_process_trajectory, self.entity_manager)
+            pool.map(traj_func, self.obj_dyn)
         _update_status(f"{self.status_dir}/bake", 54)
 
-        # Remove temporary trajectory data for this object
+        # Cleanup temporary trajectory data
         for obj_idx in self.obj_dyn + self.obj_static:
             self._cleanup_tmp_trajectories(obj_idx)
         _update_status(f"{self.status_dir}/bake", 55)
 
-        tasks_dists = [self.distances(objs_idx) for objs_idx in self.obj_pairs]
-        results_dists = compute(*tasks_dists)
+        # Phase 7: Distance computation
+        with Pool(processes=self.num_workers) as pool:
+            dist_func = partial(_process_distances, self.entity_manager)
+            pool.map(dist_func, self.obj_pairs)
         _update_status(f"{self.status_dir}/bake", 72)
 
-        tasks_force = [self.force(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
-        results_force = compute(*tasks_force)
+        # Phase 8: Force computation
+        force_objects = self.obj_dyn + self.obj_static
+        with Pool(processes=self.num_workers) as pool:
+            force_func = partial(_process_force, self.entity_manager)
+            pool.map(force_func, force_objects)
         _update_status(f"{self.status_dir}/bake", 80)
 
+        # Phase 9: Collision solving
         collisions = self.entity_manager.get('collisions')
-        tasks_collision = [self.collision(collisions[collision_idx]) for collision_idx in collisions.keys()]
-        results_collision = compute(*tasks_collision)
+        collision_list = list(collisions.values())
+        with Pool(processes=self.num_workers) as pool:
+            coll_func = partial(_process_collision, self.entity_manager)
+            pool.map(coll_func, collision_list)
         _update_status(f"{self.status_dir}/bake", 90)
 
-        tasks_force_synth = [self.force_synth(obj_idx) for obj_idx in self.obj_dyn]
-        results_force_synth = compute(*tasks_force_synth)
+        # Phase 10: Force synthesis
+        with Pool(processes=self.num_workers) as pool:
+            force_synth_func = partial(_process_force_synth, self.entity_manager)
+            pool.map(force_synth_func, self.obj_dyn)
         _update_status(f"{self.status_dir}/bake", 99)
 
-        # Ensure directory exists
+        # Ensure directories exist
         os.makedirs(self.collisions_dir, exist_ok=True)
         os.makedirs(self.modalvertices_dir, exist_ok=True)
         os.makedirs(self.scoretracks_dir, exist_ok=True)
@@ -159,63 +234,12 @@ class physicsEngine:
 
         _update_status(f"{self.status_dir}/bake", 100)
 
-
     def _cleanup_tmp_trajectories(self, obj_idx: int):
         """Remove temporary trajectory data for the given object."""
-        import copy
         trajectories = self.entity_manager.get('trajectories')
         tmp_trajectories = copy.deepcopy(trajectories)
-        for key in trajectories.keys():
+        for key in list(tmp_trajectories.keys()):
             if isinstance(tmp_trajectories[key], tmpTrajectoryData) and tmp_trajectories[key].obj_idx == obj_idx:
                 del tmp_trajectories[key]
         self.entity_manager._trajectories = tmp_trajectories
 
-    @delayed
-    def position(self, obj_idx: int):
-        ps = PositionSolver(self.entity_manager)
-        ps.compute(obj_idx)
-
-    @delayed
-    def rotation(self, obj_idx: int):
-        rs = RotationSolver(self.entity_manager)
-        rs.compute(obj_idx)
-
-    @delayed
-    def vertex(self, obj_idx: int):
-        vs = VertexSolver(self.entity_manager)
-        vs.compute(obj_idx)
-
-    @delayed
-    def normal(self, obj_idx: int):
-        ns = NormalSolver(self.entity_manager)
-        ns.compute(obj_idx)
-
-    @delayed
-    def trajectory(self, obj_idx: int):
-        fp = FlightPath(self.entity_manager)
-        fp.compute(obj_idx)
-
-    @delayed
-    def static(self, obj_idx: int):
-        fp = FlightPath(self.entity_manager)
-        fp.compute(obj_idx)
-
-    @delayed
-    def distances(self, objs_idx: Tuple[int, int]):
-        ds = DistanceSolver(self.entity_manager)
-        ds.compute(objs_idx)
-
-    @delayed
-    def force(self, obj_idx: int):
-        fs = ForceSolver(self.entity_manager)
-        fs.compute(obj_idx)
-
-    @delayed
-    def force_synth(self, obj_idx: int):
-        fsy = ForceSynth(self.entity_manager)
-        fsy.compute(obj_idx)
-
-    @delayed
-    def collision(self, collision: CollisionData):
-        cs = CollisionSolver(self.entity_manager)
-        cs.compute(collision)
