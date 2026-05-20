@@ -17,13 +17,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import os
-import sys
 import json
-import copy
+import time
+import fcntl
 import pickle
-import numpy as np
 import tempfile
-import shutil
+import numpy as np
 from typing import List, Tuple, Any, Dict, Optional
 from ..utils.config import Config
 
@@ -31,47 +30,41 @@ class EntityManager:
     _instance = None
     _initialized = False
     
-    # Lock file management
-    _lock_dir = None
-    _lock_files = {}
-    
-    # Catalog directory
-    _catalog_dir = None
-    
-    def __init__(self, config: str, catalog_dir: str = None, lock_dir: str = None):
+    def __init__(self, config: str, lock_dir: Optional[str] = None):
         if not self._initialized:
-            # Setup catalog directory
-            if catalog_dir is None:
-                # Use a default location relative to the config cache path
-                config_obj = Config(config)
-                self._catalog_dir = os.path.join(
-                    config_obj.system.cache_path, 
-                    "entity_catalog"
-                )
-            else:
-                self._catalog_dir = catalog_dir
-            
-            # Setup lock directory
-            if lock_dir is None:
-                self._lock_dir = os.path.join(
-                    self._catalog_dir, 
-                    "locks"
-                )
-            else:
-                self._lock_dir = lock_dir
-            
-            # Create directories
-            os.makedirs(self._catalog_dir, exist_ok=True)
-            os.makedirs(self._lock_dir, exist_ok=True)
-            
-            # Initialize catalog structure
-            self._init_catalog()
-            
-            # Initialize singleton storage
+            # Initialize in-memory storage
+            self._sources = {}
+            self._objects = {}
+            self._outputs = {}
+            self._output_datas = {}
+            self._wave_propagators = {}
+            self._layer_managers = {}
+            self._trajectories = {}
+            self._collisions = {}
+            self._forces = {}
+            self._modal_vertices = {}
+            self._score_tracks = {}
+            self._rigidbody_synth = {}
+            self._resonance_synth = {}
             self._singleton = {}
+            self._initialized = True
+
+            # Create lock directory
+            if lock_dir is None:
+                lock_dir = tempfile.mkdtemp(prefix='entity_manager_locks_')
             
-            # Define entity maps
-            self.singleton_map = {
+            self.lock_dir = lock_dir
+            os.makedirs(self.lock_dir, exist_ok=True)
+            
+            # Lock timeout and retry settings
+            self.lock_timeout = 30  # seconds
+            self.lock_retry_interval = 0.01  # 10ms between retries
+            
+            # Storage directory for persisted data
+            self.data_dir_dir = os.path.join(self.lock_dir, 'data')
+            os.makedirs(self.data_dir, exist_ok=True)
+
+            self.sigleton_map = {
                 'config': 'Config',
                 'frames': 'FrameCounter',
                 'sample_counter': 'SampleCounter',
@@ -82,7 +75,6 @@ class EntityManager:
                 'material_properties': 'MaterialProperties',
                 'medium_properties': 'MediumProperties'
             }
-            
             self.entities_map = {
                 'sources': ['SphericalSource', 'PlanarSource'],
                 'objects': ['AcousticObject'],
@@ -97,448 +89,337 @@ class EntityManager:
                 'rigidbody_synth': 'RigidBodySynth',
                 'resonance_synth': 'ResonanceSynth'
             }
-            
-            # Register config
-            config_obj = Config(config)
-            self.register('config', config_obj)
-            
-            self._initialized = True
-    
-    def _init_catalog(self):
-        """Initialize catalog directory structure."""
-        # Create subdirectories for each entity type
-        for entity_type in list(self.singleton_map.keys()) + list(self.entities_map.keys()):
-            entity_dir = os.path.join(self._catalog_dir, entity_type)
-            os.makedirs(entity_dir, exist_ok=True)
-    
-    def _get_lock_file(self, entity_type: str, entity_id: Any = None) -> str:
+
+            config = Config(config)
+            self.register('config', config)
+
+    def _get_lock_path(self, entity: str, idx: Optional[int] = None) -> str:
+        """Get the path for a lock file."""
+        if idx is not None:
+            return os.path.join(self.lock_dir, f"{entity}_{idx}.lock")
+        return os.path.join(self.lock_dir, f"{entity}.lock")
+
+    def _get_data_path(self, entity: str, idx: Optional[int] = None) -> str:
+        """Get the path for a data file."""
+        if idx is not None:
+            return os.path.join(self.data_dir, f"{entity}_{idx}.pkl")
+        return os.path.join(self.data_dir, f"{entity}.pkl")
+
+    def _acquire_lock(self, lock lock_path: str, shared: bool = False) -> Optional[int]:
         """
-        Get the lock file path for a specific entity.
+        Acquire a file lock with retry logic.
         
         Args:
-            entity_type: Type of entity (e.g., 'config', 'trajectories')
-            entity_id: Optional entity ID for indexed entities
+            lock_path: Path to the lock file
+            shared: If True, acquire a shared lock (read). If False, exclusive lock (write).
             
         Returns:
-            Path to the lock file
+            File descriptor if lock acquired, None if timeout
         """
-        if entity_id is not None:
-            lock_name = f"{entity_type}_{entity_id}.lock"
-        else:
-            lock_name = f"{entity_type}.lock"
+        start_time = time.time()
         
-        return os.path.join(self._lock_dir, lock_name)
-    
-    def _acquire_lock(self, lock_file: str, exclusive: bool = True):
-        """
-        Acquire a file lock.
-        
-        Args:
-            lock_file: Path to the lock file
-            exclusive: If True, acquire exclusive lock; otherwise shared lock
-            
-        Returns:
-            Lock file descriptor or raises exception
-        """
-        # Ensure lock file exists
-        if not os.path.exists(lock_file):
+        while time.time() - start_time < self.lock_timeout:
             try:
-                with open(lock_file, 'w') as f:
-                    f.write('')
-            except:
-                pass
-        
-        try:
-            fd = os.open(lock_file, os.O_RDWR | os.O_CREAT)
-            
-            if sys.platform.startswith('win'):
-                # Windows: use msvcrt
-                import msvcrt
-                if exclusive:
-                    msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
-                else:
-                    msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)  # Windows doesn't distinguish well
-            else:
-                # Unix: use fcntl
-                import fcntl
-                if exclusive:
-                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                else:
-                    fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
-            
-            return fd
-            
-        except (IOError, BlockingIOError, PermissionError) as e:
-            if fd:
-                os.close(fd)
-            raise RuntimeError(f"Could not acquire lock on {lock_file}: {e}")
-    
-    def _release_lock(self, fd):
-        """Release a file lock."""
-        if fd is not None:
-            try:
-                if sys.platform.startswith('win'):
-                    import msvcrt
-                    msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
-                else:
-                    import fcntl
-                    fcntl.flock(fd, fcntl.LOCK_UN)
+                # Create lock file if it doesn't exist
+                if not os.path.exists(lock_path):
+                    # Use a temporary file to avoid race conditions
+                    temp_path = lock_path + '.tmp'
+                    fd = os.open(temp_path, os.O_CREAT | os.O_WRONLY, 0o644)
+                    os.close(fd)
+                    os.rename(temp_path, lock_path)
                 
-                os.close(fd)
-            except:
-                pass
-    
-    def _get_entity_path(self, entity_type: str, entity_id: Any = None) -> str:
-        """
-        Get the file path for a specific entity in the catalog.
+                fd = os.open(lock_path, os.O_RDWR)
+                
+                if shared:
+                    lock_type = fcntl.LOCK_SH
+                else:
+                    lock_type = fcntl.LOCK_EX
+                
+                # Try to acquire lock with LOCK_NB (non-blocking)
+                try:
+                    fcntl.flock(fd, lock_type | fcntl.LOCK_NB)
+                    return fd
+                except (IOError, OSError) as e:
+                    if e.errno == 11:  # Resource temporarily unavailable
+                        os.close(fd)
+                        time.sleep(self.lock_retry_interval)
+                        continue
+                    else:
+                        os.close(fd)
+                        raise
+                        
+            except (IOError, OSError) as e:
+                if e.errno == 11:  # Resource temporarily unavailable
+                    time.sleep(self.lock_retry_interval)
+                    continue
+                else:
+                    raise
         
-        Args:
-            entity_type: Type of entity
-            entity_id: Optional entity ID
-            
-        Returns:
-            Path to the entity file
-        """
-        entity_dir = os.path.join(self._catalog_dir, entity_type)
-        
-        if entity_id is not None:
-            return os.path.join(entity_dir, f"{entity_id}.pkl")
-        else:
-            return os.path.join(entity_dir, "data.pkl")
-    
-    def _serialize_object(self, obj: Any) -> bytes:
-        """
-        Serialize an object to bytes for storage.
-        
-        Args:
-            obj: Object to serialize
-            
-        Returns:
-            Serialized bytes
-        """
-        # Handle special types
-        if isinstance(obj, Config):
-            # Config objects need special handling
-            return pickle.dumps({
-                '_type': 'Config',
-                'data': obj.data
-            })
-        elif hasattr(obj, '__dict__'):
-            return pickle.dumps(obj)
-        else:
-            return pickle.dumps(obj)
-    
-    def _deserialize_object(self, data: bytes) -> Any:
-        """
-        Deserialize an object from bytes.
-        
-        Args:
-            data: Serialized bytes
-            
-        Returns:
-            Deserialized object
-        """
+        raise TimeoutError(f"Could not acquire lock for {lock_path} after {self.lock_timeout} seconds")
+
+    def _release_lock(self, fd: int):
+        """Release a file lock."""
         try:
-            obj = pickle.loads(data)
-            
-            # Handle special types
-            if isinstance(obj, dict) and obj.get('_type') == 'Config':
-                config = Config.__new__(Config)
-                config.data = obj['data']
-                return config
-            
-            return obj
-        except:
-            return data
-    
-    def _get_next_id(self, entity_type: str) -> int:
-        """
-        Get the next available ID for an entity type.
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            os.close(fd)
+        except (IOError, OSError):
+            pass
+
+    def _save_to_file(self, entity: str, data: Any, idx: Optional[int] = None):
+        """Save data to a file with proper locking."""
+        lock_path = self._get_lock_path(entity, idx)
+        data_path = self._get_data_path(entity, idx)
         
-        Args:
-            entity_type: Type of entity
-            
-        Returns:
-            Next available ID
-        """
-        lock_file = self._get_lock_file(entity_type, 'counter')
+        # Create directories if they don't exist
+        os.makedirs(os.path.dirname(data_path), exist_ok=True)
+        
         fd = None
-        
         try:
-            fd = self._acquire_lock(lock_file, exclusive=True)
+            fd = self._acquire_lock(lock_path, shared=False)
             
-            counter_file = os.path.join(self._catalog_dir, entity_type, '_counter.txt')
+            # Save data using pickle
+            with open(data_path, 'wb') as f:
+                pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
+                
+        finally:
+            if fd is not None:
+                self._release_lock(fd)
+
+    def _load_from_file(self, entity: str, idx: Optional[int] = None) -> Any:
+        """Load data from a file with proper locking."""
+        lock_path = self._get_lock_path(entity, idx)
+        data_path = self._get_data_path(entity, idx)
+        
+        if not os.path.exists(data_path):
+            return None
+        
+        fd = None
+        try:
+            fd = self._acquire_lock(lock_path, shared=True)
             
-            if os.path.exists(counter_file):
-                with open(counter_file, 'r') as f:
-                    counter = int(f.read().strip())
-            else:
-                counter = 0
-            
-            counter += 1
-            
-            with open(counter_file, 'w') as f:
-                f.write(str(counter))
-            
-            return counter - 1  # Return the previous counter value
+            with open(data_path, 'rb') as f:
+                data = pickle.load(f)
+                
+            return data
             
         finally:
             if fd is not None:
                 self._release_lock(fd)
-    
+
+    def _get_next_index(self, entity: str) -> int:
+        """Get the next available index for an entity type."""
+        lock_path = self._get_lock_path(f"{entity}_counter")
+        counter_path = self._get_data_path(f"{entity}_counter")
+        
+        fd = None
+        try:
+            fd = self._acquire_lock(lock_path, shared=False)
+            
+            # Load current counter
+            counter = 0
+            if os.path.exists(counter_path):
+                with open(counter_path, 'rb') as f:
+                    counter = pickle.load(f)
+            
+            # Increment and save
+
+            counter += 1
+            with open(counter_path, 'wb') as f:
+                pickle.dump(counter, f)
+                
+            return counter - 1  # Return the index before increment
+            
+        finally:
+            if fd is not None:
+                self._release_lock(fd)
+
     def register(self, entity: str, obj: Any) -> int:
         """
-        Register an object in the catalog.
+        Register an object with the entity manager.
         
         Args:
-            entity: Entity type
+            entity: Entity type name
             obj: Object to register
             
         Returns:
-            Entity ID (for indexed entities) or None
+            Index of the registered object (if applicable)
         """
-        # Check if it's a singleton
-        if entity in self.singleton_map:
-            lock_file = self._get_lock_file(entity)
-            fd = None
+        if entity in self.sigleton_map:
+            # Singleton - save to file
+            self._save_to_file(entity, obj)
+            self._singleton[entity] = obj
+            return 0
             
-            try:
-                fd = self._acquire_lock(lock_file, exclusive=True)
-                
-                # Store in local cache
-                self._singleton[entity] = obj
-                
-                # Store in catalog
-                entity_path = self._get_entity_path(entity)
-                serialized = self._serialize_object(obj)
-                
-                with open(entity_path, 'wb') as f:
-                    f.write(serialized)
-                
-                return None
-                
-            finally:
-                if fd is not None:
-                    self._release_lock(fd)
-        
-        # Check if it's an indexed entity
-        elif entity in self.entities_map:
-            lock_file = self._get_lock_file(entity)
-            fd = None
+        elif entity in self.entities_map.keys():
+            # Get next available index
+            idx = self._get_next_index(entity)
             
-            try:
-                fd = self._acquire_lock(lock_file, exclusive=True)
-                
-                # Get next ID
-                entity_id = self._get_next_id(entity)
-                
-                # Store in catalog
-                entity_path = self._get_entity_path(entity, entity_id)
-                serialized = self._serialize_object(obj)
-                
-                with open(entity_path, 'wb') as f:
-                    f.write(serialized)
-                
-                return entity_id
-                
-            finally:
-                if fd is not None:
-                    self._release_lock(fd)
-        
-        else:
-            raise ValueError(f"Unknown entity type: {entity}")
-    
+            # Save to file
+            self._save_to_file(entity, obj, idx)
+            
+            # Update in-memory cache
+            entities = eval(f"self._{entity}")
+            entities[idx] = obj
+            
+            return idx
+
     def get(self, entity: str = None, idx: int = None) -> dict[str, Any]:
         """
-        Get objects from the catalog.
+        Get registered objects.
         
         Args:
-            entity: Entity type to retrieve
-            idx: Optional entity ID for indexed entities
+            entity: Entity type to get (None returns all)
+            idx: Specific index to get (None returns all of that type)
             
         Returns:
             Requested object(s)
         """
         if entity is None:
-            # Return all entities
-            result = {}
-            
-            # Get singletons
-            for singleton_type in self.singleton_map.keys():
-                result[singleton_type] = self.get(singleton_type)
-            
-            # Get indexed entities
-            for entity_type in self.entities_map.keys():
-                result[entity_type] = self.get(entity_type)
-            
-            return result
+            return (self._singleton, self._sources, self._objects, self._outputs,
+                    self._wave_propagators, self._output_datas, self._trajectories,
+                    self._collisions, self._forces, self._modal_vertices,
+                    self._score_tracks, self._rigidbody_synth, self._resonance_synth)
         
-        # Check if it's a singleton
-        if entity in self.singleton_map:
-            lock_file = self._get_lock_file(entity)
-            fd = None
-            
-            try:
-                fd = self._acquire_lock(lock_file, exclusive=False)
-                
-                # Check local cache first
+        # Check singletons
+        for key in self.sigleton_map.keys():
+            if entity in key:
                 if entity in self._singleton:
-                    obj = self._singleton[entity]
-                    
-                    # For certain types, return deep copy
-                    if entity in ['geometry_data', 'material_properties', 'medium_properties']:
-                        return copy.deepcopy(obj)
-                    return obj
+                    return self._singleton[entity]
                 
-                # Try to load from catalog
-                entity_path = self._get_entity_path(entity)
-                if os.path.exists(entity_path):
-                    with open(entity_path, 'rb') as f:
-                        data = f.read()
-                    
-                    obj = self._deserialize_object(data)
-                    self._singleton[entity] = obj
-                    
-                    if entity in ['geometry_data', 'material_properties', 'medium_properties']:
-                        return copy.deepcopy(obj)
-                    return obj
-                
+                # Try to load from file
+                data = self._load_from_file(entity)
+                if data is not None:
+                    self._singleton[entity] = data
+                    return data
                 return None
-                
-            finally:
-                if fd is not None:
-                    self._release_lock(fd)
         
-        # Check if it's an indexed entity
-        elif entity in self.entities_map:
-            lock_file = self._get_lock_file(entity)
-            fd = None
-            
-            try:
-                fd = self._acquire_lock(lock_file, exclusive=False)
-                
-                entity_dir = os.path.join(self._catalog_dir, entity)
+        # Check entities
+        for key in self.entities_map.keys():
+            if entity in key:
+                entities = eval(f"self._{entity}")
                 
                 if idx is not None:
-                    # Return specific entity
-                    entity_path = self._get_entity_path(entity, idx)
-                    if os.path.exists(entity_path):
-                        with open(entity_path, 'rb') as f:
-                            data = f.read()
-                        return self._deserialize_object(data)
+                    # Get specific index
+                    if idx in entities:
+                        return entities[idx]
+                    
+                    # Try to load from file
+                    data = self._load_from_file(entity, idx)
+                    if data is not None:
+                        entities[idx] = data
+                        return data
                     return None
                 else:
-                    # Return all entities of this type
-                    result = {}
-                    
-                    if os.path.exists(entity_dir):
-                        for filename in os.listdir(entity_dir):
-                            if filename.endswith('.pkl') and filename != '_counter.txt':
+                    # Get all entities of this type
+                    # Try to load any missing from files
+                    data_dir = self.data_dir
+                    if os.path.exists(data_dir):
+                        for filename in os.listdir(data_dir):
+                            if filename.startswith(f"{entity}_") and filename.endswith(".pkl"):
                                 try:
-                                    entity_id = int(filename.replace('.pkl', ''))
-                                    entity_path = os.path.join(entity_dir, filename)
-                                    
-                                    with open(entity_path, 'rb') as f:
-                                        data = f.read()
-                                    
-                                    result[entity_id] = self._deserialize_object(data)
-                                except (ValueError, IOError):
+                                    file_idx = int(filename.split('_')[1].split('.')[0])
+                                    if file_idx not in entities:
+                                        data = self._load_from_file(entity, file_idx)
+                                        if data is not None:
+                                            entities[file_idx] = data
+                                except (ValueError, IndexError):
                                     continue
                     
-                    return result
-                
-            finally:
-                if fd is not None:
-                    self._release_lock(fd)
-        
-        else:
-            raise ValueError(f"Unknown entity type: {entity}")
-    
+                    return entities
+
     def unregister(self, entity: str, idx: int = None) -> None:
         """
-        Unregister an object from the catalog.
+        Unregister an object.
         
         Args:
-            entity: Entity type
-            idx: Optional entity ID for indexed entities
+            entity: Entity type to unregister
+            idx: Specific index to unregister (None for all of that type)
         """
-        # Check if it's a singleton
-        if entity in self.singleton_map:
-            lock_file = self._get_lock_file(entity)
-            fd = None
-            
-            try:
-                fd = self._acquire_lock(lock_file, exclusive=True)
-                
-                # Remove from local cache
+        # Check singletons
+        for key in self.sigleton_map.keys():
+            if entity in key:
                 if entity in self._singleton:
                     del self._singleton[entity]
-                
-                # Remove from catalog
-                entity_path = self._get_entity_path(entity)
-                if os.path.exists(entity_path):
-                    os.remove(entity_path)
-                
-            finally:
-                if fd is not None:
-                    self._release_lock(fd)
+                    
+                # Remove data file
+                               data_path = self._get_data_path(entity)
+                if os.path.exists(data_path):
+                    os.remove(data_path)
+                    
+                # Remove lock file
+                lock_path = self._get_lock_path(entity)
+                if os.path.exists(lock_path):
+                    os.remove(lock_path)
+                return
         
-        # Check if it's an indexed entity
-        elif entity in self.entities_map:
-            lock_file = self._get_lock_file(entity)
-            fd = None
-            
-            try:
-                fd = self._acquire_lock(lock_file, exclusive=True)
+        # Check entities
+        for key in self.entities_map.keys():
+            if entity in key:
+                entities = eval(f"self._{entity}")
                 
                 if idx is not None:
-                    entity_path = self._get_entity_path(entity, idx)
-                    if os.path.exists(entity_path):
-                        os.remove(entity_path)
+                    # Remove specific index
+                    if idx in entities:
+                        del entities[idx]
+                    
+                    # Remove data file
+                    data_path = self._get_data_path(entity, idx)
+                    if os.path.exists(data_path):
+                        os.remove(data_path)
+                    
+                    # Remove lock file
+                    lock_path = self._get_lock_path(entity, idx)
+                    if os.path.exists(lock_path):
+                        os.remove(lock_path)
                 else:
                     # Remove all entities of this type
-                    entity_dir = os.path.join(self._catalog_dir, entity)
-                    if os.path.exists(entity_dir):
-                        shutil.rmtree(entity_dir)
-                        os.makedirs(entity_dir, exist_ok=True)
-                
-            finally:
-                if fd is not None:
-                    self._release_lock(fd)
+                    for existing_idx in list(entities.keys()):
+                        del entities[existing_idx]
+                    
+                    # Remove all data files
+                    data_dir = self.data_dir
+                    if os.path.exists(data_dir):
+                        for filename in os.listdir(data_dir):
+                            if filename.startswith(f"{entity}_"):
+                                file_path = os.path.join(data_dir, filename)
+                                if os.path.exists(file_path):
+                                    os.remove(file_path)
+                    
+                    # Remove all lock files
+                    lock_dir = self.lock_dir
+                    if os.path.exists(lock_dir):
+                        for filename in os.listdir(lock_dir):
+                            if filename.startswith(f"{entity}_"):
+                                file_path = os.path.join(lock_dir, filename)
+                                if os.path.exists(file_path):
+                                    os.remove(file_path)
+
+    def clear_all(self):
+        """Clear all registered objects and data files."""
+        # Clear in-memory storage
+        self._sources.clear()
+        self._objects.clear()
+        self._outputs.clear()
+        self._output_datas.clear()
+        self._wave_propagators.clear()
+        self._layer_managers.clear()
+        self._trajectories.clear()
+        self._collisions.clear()
+        self._forces.clear()
+        self._modal_vertices.clear()
+        self._score_tracks.clear()
+        self._rigidbody_synth.clear()
+        self._resonance_synth.clear()
+        self._singleton.clear()
         
-        else:
-            raise ValueError(f"Unknown entity type: {entity}")
-    
-    def clear(self):
-        """Clear all registered entities."""
-        # Acquire locks for all entity types
-        fds = []
-        try:
-            for entity_type in list(self.singleton_map.keys()) + list(self.entities_map.keys()):
-                lock_file = self._get_lock_file(entity_type)
-                try:
-                    fd = self._acquire_lock(lock_file, exclusive=True)
-                    fds.append((entity_type, fd))
-                except:
-                    pass
-            
-            # Clear local cache
-            self._singleton = {}
-            
-            # Clear catalog
-            if os.path.exists(self._catalog_dir):
-                shutil.rmtree(self._catalog_dir)
-                os.makedirs(self._catalog_dir, exist_ok=True)
-                self._init_catalog()
-            
-        finally:
-            for _, fd in fds:
-                self._release_lock(fd)
-    
-    def __del__(self):
-        """Cleanup on deletion."""
-        # Release any held locks
-        for fd in self._lock_files.values():
-            self._release_lock(fd)
-        self._lock_files.clear()
+        # Remove all data and lock files
+        import shutil
+        if os.path.exists(self.data_dir):
+            shutil.rmtree(self.data_dir)
+        if os.path.exists(self.lock_dir):
+            shutil.rmtree(self.lock_dir)
+        
+        # Recreate directories
+        os.makedirs(self.data_dir, exist_ok=True)
+        os.makedirs(self.lock_dir, exist_ok=True)
 
