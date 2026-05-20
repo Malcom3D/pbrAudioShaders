@@ -1,0 +1,129 @@
+# Copyright (C) 2025 Malcom3D <malcom3d.gpl@gmail.com>
+#
+# This file is part of pbrAudio.
+#
+# pbrAudio is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# pbrAudio is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+import os, sys
+import stat
+import numpy as np
+import shutil
+from typing import List, Tuple
+from dataclasses import dataclass
+
+from physicsSolver import EntityManager
+from physicsSolver.lib.functions import _load_mesh, _mesh_to_obj, _compute_rayleigh_damping
+
+@dataclass
+class Pym2f:
+    entity_manager: EntityManager
+    mesh2faust: str = "mesh2faust"
+
+    def __post_init__(self):
+        self.config = self.entity_manager.get('config')
+        bin_dir = f"{os.path.dirname(os.path.abspath(sys.modules[Pym2f.__module__].__file__))}/../bin"
+        os.environ['LD_LIBRARY_PATH'] = bin_dir
+        self.mesh2faust = f"{bin_dir}/{self.mesh2faust}"
+        if not os.access(self.mesh2faust, os.X_OK):
+            os.chmod(self.mesh2faust, stat.S_IXUSR)
+        self.cache_path = f"{self.config.system.cache_path}"
+        os.makedirs(f"{self.cache_path}/obj", exist_ok=True)
+        os.makedirs(f"{self.cache_path}/dsp", exist_ok=True)
+
+    def compute(self, obj_idx: int, expos: List[int] = None) -> None:
+        """
+            mesh2faust Input parameters
+
+            - obj_file: volumetric mesh in Wavefront .obj file (watertight triangulated mesh with normals)
+            - young_modulus: Young's modulus (in N/m^2)
+            - poisson_ratio: Poisson's ratio (no unit)
+            - density: Density (in kg/m^3)
+            - damping: Rayleigh damping ratio (no unit)
+            - minmode: minimum frequency of the lowest mode (in Hz)
+            - maxmode: maximum frequency of the highest mode (in Hz)
+            - expos: list of vertex of active excitation positions (e.g. 89 63 45 ...)
+            - output_name: name for generated Faust modal model lib
+        """
+        for config_obj in self.config.objects:
+            if config_obj.idx == obj_idx:
+                vertices, normals, faces = _load_mesh(config_obj, 0)
+                items = os.listdir(config_obj.obj_path)
+                filenames = sorted(items)
+                filename = filenames[0]
+                if filename.endswith('.npz'):
+                    obj_file = f"{self.cache_path}/obj/{filename.removesuffix('npz') + 'obj'}"
+                if config_obj.resonance:
+                    mesh_obj = _mesh_to_obj(vertices, normals, faces, obj_file, config_obj.resonance)
+                else:
+                    mesh_obj = _mesh_to_obj(vertices, normals, faces, obj_file)
+
+                young_modulus = config_obj.acoustic_shader.young_modulus
+                poisson_ratio = config_obj.acoustic_shader.poisson_ratio
+                density = config_obj.acoustic_shader.density
+                damping = config_obj.acoustic_shader.damping if not config_obj.acoustic_shader.damping == None else 0.02 # conservative value
+                minmode = config_obj.acoustic_shader.low_frequency
+                maxmode = config_obj.acoustic_shader.high_frequency
+                output_name = f"{config_obj.name}"
+
+        cmd = f"{self.mesh2faust} "
+        if not young_modulus == None and not poisson_ratio == None and not density == None:
+            """
+            compute alpha and beta Rayleigh damping coefficient from low and high frequency:
+            alpha: stiffness-proportional damping coefficient (in seconds)
+            beta: mass-proportional damping coefficient (in 1/seconds)
+            """
+            alpha_rayleigh, beta_rayleigh = _compute_rayleigh_damping(minmode, maxmode, damping)
+            cmd += f"--material {young_modulus} {poisson_ratio} {density} {alpha_rayleigh} {beta_rayleigh} "
+        if not minmode == None:
+            cmd += f"--minmode {minmode} "
+        if not maxmode == None:
+            cmd += f"--maxmode {maxmode} "
+        if not expos == None:
+            verts = ''
+            for pos in expos:
+                verts += f"{pos} "
+            cmd += f"--expos {verts} "
+#        if isinstance(config_obj.connected, np.ndarray): # ToBeVerified for vibration in force_synth
+#            cmd += f"--freqcontrol "
+
+        cmd += f"--showfreqs"
+        exit_code = os.system(f"{cmd} --name {output_name} --nsynthmodes {self.config.system.modal_modes} --infile {obj_file}")
+        file_names = []
+        if exit_code == 0:
+            file_names.append(f"{output_name}.lib")
+        else:
+            raise ValueError(f'Error: {cmd}')
+
+        if config_obj.resonance:
+            resonance_obj_file = f"{obj_file.removesuffix('.obj')}_resonance.obj"
+            if os.path.exists(resonance_obj_file):
+                exit_code = os.system(f"{cmd} --name {output_name}_resonance --nsynthmodes {config_obj.resonance_modes} --infile {resonance_obj_file}")
+            if not exit_code == 0 or not os.path.exists(resonance_obj_file):
+                exit_code = os.system(f"{cmd} --name {output_name}_resonance --nsynthmodes {config_obj.resonance_modes} --infile {obj_file}")
+            if exit_code == 0:
+                file_names.append(f"{output_name}_resonance.lib")
+            else:
+                raise ValueError(f'Error: {cmd}')
+
+        # remove import(stdfaust.lib)
+        for file_name in file_names:
+            with open(file_name, 'r') as file:
+                data = file.read()
+            data = data.replace('import(', '//import(')
+            with open(file_name, 'w') as file:
+                file.write(data)
+
+            dest_path = f"{self.cache_path}/dsp/{file_name}"
+            shutil.move(file_name, dest_path)
