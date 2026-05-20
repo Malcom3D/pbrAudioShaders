@@ -152,7 +152,7 @@ class rigidBodyEngine:
         collisions = self.entity_manager.get('collisions')
         collision_list = list(collisions.values())
         with Pool(processes=self.num_workers) as pool:
-            composer_func = partial(_prebake_composerposer, self.entity_manager)
+            composer_func = partial(_prebake_composer, self.entity_manager)
             pool.map(composer_func, collision_list)
         _update_status(f"{self.status_dir}/prebake", 90)
 

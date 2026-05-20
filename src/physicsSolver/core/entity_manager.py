@@ -50,7 +50,7 @@ class EntityManager:
             self._initialized = True
 
             # Read the cache_path from config file
-            with open("config.json", "r") as f:
+            with open(config, "r") as f:
                 json_config = json.load(f)
                 cache_path = json_config["system"]["cache_path"]
 
