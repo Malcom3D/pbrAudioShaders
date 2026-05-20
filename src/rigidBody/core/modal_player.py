@@ -59,7 +59,7 @@ class ModalPlayer:
 
         # Set polling and timeout for synchronization mechanism
         self.timeout = 30
-        self.poll_interval = 0.1
+        self.poll_interval = 0.001
         
 #        self.synth_track = np.zeros(self.sample_counter.total_samples)
         self.rigidbody_vertices = {}
@@ -152,7 +152,7 @@ class ModalPlayer:
                     if int(event['type']) in [2,3]:
                         if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
                             resonance_output = self.resonance_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
-                        rigidbody_output = self.rigidbody_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['couplingpling_data'])
+                        rigidbody_output = self.rigidbody_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
                         sliding_output = self.sliding_sound[sample_idx] * event['contact_area']
                         scraping_output = self.scraping_sound[sample_idx] * event['contact_area']
                     elif int(event['type']) == 4:
@@ -183,7 +183,7 @@ class ModalPlayer:
                         else:
                             if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
                                 resonance_output += self.resonance_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
-                            rigidbody_output += self.rigidbody_synth.process(event['type'], event['vertex_ids'], event['forceforce'], event['contact_area'], event['coupling_data'])
+                            rigidbody_output += self.rigidbody_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
                 elif len(events) == 0:
                     if t60_empty < self.t60_samples:
                         self.rigidbody_vertices[sample_idx] = []
