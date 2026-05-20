@@ -43,7 +43,6 @@ class ResonanceSynth:
     def process(self, synth_type: int, vertex_ids: List[int], vibration_signal: float, contact_area: float, other_objs: List[Tuple[float, float]] = None):
         # Apply contact type-specific scaling
         type_scales = {
-            0: 0.0, # "no contact"
             1: 1.0, # "impact"
             2: 0.8, # "scraping"
             3: 0.7, # "sliding"
@@ -52,8 +51,6 @@ class ResonanceSynth:
         }
         type_scale = type_scales.get(synth_type)
         output_banks = 0
-        if type_scale == 0:
-            return output_banks
         input_buffer = self.connected_buffer.read_for_obj(self.obj_idx, synth_type)
         for idx in range(self.banks.shape[0]):
             if contact_area == 0 and self.contact_area_scale == None:

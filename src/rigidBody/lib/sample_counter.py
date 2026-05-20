@@ -17,9 +17,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import os
-import numpy as np
+import threading
 from dataclasses import dataclass, field
-from typing import Optional, List, Callable
+from typing import Optional, List
 
 from ..lib.functions import _update_status
 
@@ -29,9 +29,13 @@ class SampleCounter:
     total_samples: int = None
     current_sample: int = 0
     num_players: int = 0
+    condiction: threading.Condition = None
     players_ready: List[int] = field(default_factory=list)
     players_registered: List[int] = field(default_factory=list)
-    _ready_callbacks: List[Callable] = field(default_factory=list)  # Callbacks to execute when all players are ready
+    soft_players_registered: List[int] = field(default_factory=list)
+
+    def __post_init__(self):
+        self.condiction = threading.Condition()
 
     def register_player(self, player_id: int) -> None:
         """Register a ModalPlayer instance."""
@@ -39,6 +43,7 @@ class SampleCounter:
             self.players_registered.append(player_id)
             self.num_players += 1
             print(f"Player {player_id} registered. Total players: {self.num_players}")
+            return self.condiction
     
     def unregister_player(self, player_id: int) -> None:
         """Unregister a ModalPlayer instance."""
@@ -55,19 +60,12 @@ class SampleCounter:
         """ Returns the next sample index. """
         if player_id in self.players_registered and not player_id in self.players_ready and self.num_players > 0:
             return self.current_sample + 1
-        return self.current_sample  # Return current if not ready
-
-    def register_ready_callback(self, callback: Callable) -> None:
-        """Register a callback to be called when all players are ready."""
-        self._ready_callbacks.append(callback)
 
     def ready(self, player_id):
         """
-        Non-blocking version: returns True if all players are ready and sample was advanced.
-        Returns False if we need to wait for more players.
+        wait until all players are ready.
         """
-        print('SampleCounter', player_id, 'ready', self.players_ready, self.players_registered, self.current_sample)
-        if player_id in self.players_registered and player_id not in self.players_ready:
+        if player_id in self.players_registered and not player_id in self.players_ready:
             self.players_ready.append(player_id)
             if len(self.players_ready) == len(self.players_registered):
                 if self.current_sample < self.total_samples:
@@ -75,20 +73,10 @@ class SampleCounter:
                     self.current_sample += 1
                     if self.current_sample % int(self.total_samples/100) == 0:
                        _update_status(self.status_file, int(self.get_progress()))
-                # Execute all registered callbacks
-                for callback in self._ready_callbacks:
-                    print('SampleCounter execute callback')
-                    callback()
-
                 self.players_ready = []
-                return True  # All players are ready, sample advanced
-            
-            return False  # Still waiting for more players
-
-        elif not np.all([ready in self.players_registered for ready in self.players_ready]):
-            print('SampleCounter: Player already ready or not registered')
-            self.players_ready = []
-            return False # Player already ready or not registered
+                self.condiction.notify_all()
+            else:
+                self.condiction.wait()
 
     def set_total_samples(self, total_samples: int) -> None:
         """Set the total number of samples."""

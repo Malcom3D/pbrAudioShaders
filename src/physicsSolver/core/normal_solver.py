@@ -56,10 +56,7 @@ class NormalSolver:
 
                     # Get normals at impact time
                     normals_impact = self._impact_normals(config_obj, positions, rotations, impact_position, impact_rotation, frame)
-                    def update_normals(traj):
-                        traj.add_data('normals', normals_impact)
-                        return traj
-                    self.entity_manager.update_entity('trajectories', index, update_normals)
+                    tmp_trajectory.add_data('normals', normals_impact)
 
     def _impact_normals(self, config_obj, positions: np.ndarray, rotations: np.ndarray, impact_position: np.ndarray, impact_rotation: np.ndarray, frame: float, n_frames: int = 3) -> np.ndarray:
         """
