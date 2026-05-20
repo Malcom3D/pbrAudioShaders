@@ -240,6 +240,7 @@ class physicsEngine:
         tmp_trajectories = copy.deepcopy(trajectories)
         for key in list(tmp_trajectories.keys()):
             if isinstance(tmp_trajectories[key], tmpTrajectoryData) and tmp_trajectories[key].obj_idx == obj_idx:
-                del tmp_trajectories[key]
-        self.entity_manager._trajectories = tmp_trajectories
+                self.entity_manager.unregister('trajectories', key)
+#                del tmp_trajectories[key]
+#        self.entity_manager._trajectories = tmp_trajectories
 
