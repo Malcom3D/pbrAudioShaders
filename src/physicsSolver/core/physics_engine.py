@@ -77,7 +77,7 @@ def _process_trajectory(entity_manager, obj_idx):
 def _process_static(entity_manager, obj_idx):
     """Wrapper function for parallel execution of static object computation."""
     fp = FlightPath(entity_manager)
-    fp.compute(obj(obj_idx)
+    fp.compute(obj_idx)
 
 
 def _process_distances(entity_manager, objs_idx):
@@ -181,7 +181,7 @@ class physicsEngine:
         # Cleanup temporary trajectory data
         for obj_idx in self.obj_dyn + self.obj_static:
             self._cleanup_tmp_trajectories(obj_idx)
-        _update_status(f"{self.status_dir_dir}/bake", 55)
+        _update_status(f"{self.status_dir}/bake", 55)
 
         # Phase 7: Distance computation
         with Pool(processes=self.num_workers) as pool:

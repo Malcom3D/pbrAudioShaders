@@ -16,44 +16,52 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+# ./physicsSolver/core/entity_manager.py
 import copy
-#import threading
 import numpy as np
-from typing import List, Tuple, Any
+from multiprocessing import Manager, Lock
+from typing import List, Tuple, Any, Dict
 from ..utils.config import Config
-#from ..lib.functions import _soxel_grid_shape
 
 class EntityManager:
     _instance = None
-#    _lock = threading.Lock()
-    _initialized = False
+    _lock = Lock()
     
-#    def __new__(cls, *args, **kwargs):
-#        with cls._lock:
-#            if cls._instance is None:
-#                cls._instance = super().__new__(cls)
-#        return cls._instance
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance._initialized = False
+        return cls._instance
     
-    def __init__(self, config: str):
-#        with self._lock:
+    def __init__(self, config: str = None):
         if not self._initialized:
-            self._sources = {}
-            self._objects = {}
-            self._outputs = {}
-            self._output_datas = {}
-            self._wave_propagators = {}
-            self._layer_managers = {}
-            self._trajectories = {}
-            self._collisions = {}
-            self._forces = {}
-            self._modal_vertices = {}
-            self._score_tracks = {}
-            self._rigidbody_synth = {}
-            self._resonance_synth = {}
-            self._singleton = {}
+            # Use Manager for shared state across processes
+            self.manager = Manager()
+            
+            # Initialize shared dictionaries
+            self._singleton = self.manager.dict()
+            self._sources = self.manager.dict()
+            self._objects = self.manager.dict()
+            self._outputs = self.manager.dict()
+            self._output_datas = self.manager.dict()
+            self._wave_propagators = self.manager.dict()
+            self._layer_managers = self.manager.dict()
+            self._trajectories = self.manager.dict()
+            self._collisions = self.manager.dict()
+            self._forces = self.manager.dict()
+            self._modal_vertices = self.manager.dict()
+            self._score_tracks = self.manager.dict()
+            self._rigidbody_synth = self.manager.dict()
+            self._resonance_synth = self.manager.dict()
+            
             self._initialized = True
+            
+            # Local lock for thread safety within a process
+            self._local_lock = Lock()
 
-            self.sigleton_map = {
+            self.singleton_map = {
                 'config': 'Config',
                 'frames': 'FrameCounter',
                 'sample_counter': 'SampleCounter',
@@ -71,58 +79,66 @@ class EntityManager:
                 'wave_propagators': 'WavePropagator',
                 'output_datas': 'OutputData',
                 'trajectories': ['TrajectoryData', 'tmpTrajectoryData'],
-                'collisions': [ 'CollisionData'],
-                'forces': [ 'ForceData', 'ForceDataSequence'],
+                'collisions': ['CollisionData'],
+                'forces': ['ForceData', 'ForceDataSequence'],
                 'modal_vertices': 'ModalVertices',
                 'score_tracks': 'ScoreTrack',
                 'rigidbody_synth': 'RigidBodySynth',
                 'resonance_synth': 'ResonanceSynth'
             }
 
-            config = Config(config)
-            self.register('config', config)
+            if config:
+                config_obj = Config(config)
+                self.register('config', config_obj)
 
-    # Dispatcher:
     def register(self, entity: str, obj: Any) -> int:
-        if entity in self.sigleton_map and not entity in self._singleton:
-            self._singleton[entity] = obj
-#        elif entity in self.entities_map.keys() and not idx == None: # when entity is unregistered len(List(idx]) != List[idx]
-        elif entity in self.entities_map.keys():
-            for key in self.entities_map.keys():
-                if entity in key:
-                    for sub in self.entities_map[key]:
-                        if sub in str(type(obj)):
-                            entities = eval(f"self._{key}")
-                            idx = 0
-                            if not len(entities.keys()) == 0:
-                                idx = list(entities.keys())[-1] + 1
-                            entities[idx] = obj
-                            return idx
+        with self._local_lock:
+            if entity in self.singleton_map and entity not in self._singleton:
+                self._singleton[entity] = obj
+            elif entity in self.entities_map.keys():
+                for key in self.entities_map.keys():
+                    if entity in key:
+                        for sub in self.entities_map[key]:
+                            if sub in str(type(obj)):
+                                entities = eval(f"self._{key}")
+                                idx = 0
+                                if not len(entities.keys()) == 0:
+                                    idx = max(list(entities.keys())) + 1
+                                entities[idx] = obj
+                                return idx
+            return -1
                
     def get(self, entity: str = None, idx: int = None) -> dict[str, Any]:
         """Get all objects"""
-        if entity == None:
-            return self._singleton, self._sources, self._objects, self._outputs, self._wave_propagators, self._output_datas, self._trajectories, self._collisions, self._forces, self._modal_vertices, self._score_tracks, self._rigidbody_synth, self._resonance_synth
-        for key in self.sigleton_map.keys():
-            if entity in key:
-                if entity in ['geometry_data', 'material_properties', 'medium_properties']:
-                    return copy.deepcopy(self._singleton[entity])
-                return self._singleton[entity]
-            else:
-                for key in self.entities_map.keys():
-                    if entity in key:
-                        entities = eval(f"self._{entity}")
-                        return entities.get(idx) if not idx == None else entities
+        if entity is None:
+            return (dict(self._singleton), dict(self._sources), dict(self._objects), 
+                    dict(self._outputs), dict(self._wave_propagators), dict(self._output_datas),
+                    dict(self._trajectories), dict(self._collisions), dict(self._forces),
+                    dict(self._modal_vertices), dict(self._score_tracks),
+                    dict(self._rigidbody_synth), dict(self._resonance_synth))
+        
+        if entity in self.singleton_map:
+            if entity in ['geometry_data', 'material_properties', 'medium_properties']:
+                return copy.deepcopy(self._singleton[entity])
+            return self._singleton.get(entity)
+        else:
+            for key in self.entities_map.keys():
+                if entity in key:
+                    entities = eval(f"self._{entity}")
+                    if idx is not None:
+                        return entities.get(idx)
+                    return dict(entitiesentities)
+        return None
 
     def unregister(self, entity: str, idx: int = None) -> None:
-        """Unregister an object"""
-        for key in self.sigleton_map.keys():
-            if entity in key:
-                del self._singleton[entity]
-            elif not idx == None:
+        with self._local_lock:
+            if entity in self.singleton_map:
+                if entity in self._singleton:
+                    del self._singleton[entity]
+            elif idx is not None:
                 for key in self.entities_map.keys():
                     if entity in key:
                         entities = eval(f"self._{entity}")
-                        if idx in entities.keys():
+                        if idx in entities:
                             del entities[idx]
-                            return entities
+                            return
