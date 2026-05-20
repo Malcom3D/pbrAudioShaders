@@ -102,7 +102,7 @@ class EntityManager:
     def _get_lock_path(self, entity: str, idx: Optional[int] = None) -> str:
         """Get the path for a lock file."""
         if idx is not None:
-            return os.path.join(self.l.lock_dir, f"{entity}_{idx}.lock")
+            return os.path.join(self.lock_dir, f"{entity}_{idx}.lock")
         return os.path.join(self.lock_dir, f"{entity}.lock")
 
     def _get_data_path(self, entity: str, idx: Optional[int] = None) -> str:
