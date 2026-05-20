@@ -49,9 +49,14 @@ class EntityManager:
             self._singleton = {}
             self._initialized = True
 
+            # Read the cache_path from config file
+            with open("config.json", "r") as f:
+                json_config = json.load(f)
+                cache_path = json_config["system"]["cache_path"]
+
             # Create lock directory
             if lock_dir is None:
-                lock_dir = tempfile.mkdtemp(prefix='entity_manager_locks_')
+                lock_dir = tempfile.mkdtemp(prefix=f"{cache_path}/entity_manager_locks_")
             
             self.lock_dir = lock_dir
             os.makedirs(self.lock_dir, exist_ok=True)
