@@ -78,7 +78,7 @@ class ModalBank:
         self.r, self.c, self.s, self.g = calculate_coefficients(
             self.frequencies, self.gains, self.t60s, self.sample_rate
         )
-
+    
     def process(self, excitation: float) -> float:
         """Process one sample through all modes"""
         output = 0.0

@@ -7,7 +7,10 @@ import numpy as np
 import numba as nb
 from typing import Any, Tuple, Optional, List, Union, Dict
 
-def _mesh_to_obj(vertices: np.ndarray, normals: np.ndarray, faces: np.ndarray, obj_file: str, resonance: bool = False):
+def _soxel_grid_shape(grid_geometry, voxel_size):
+    pass
+
+def _mesh_to_obj(vertices: np.ndarray, normals: np.ndarray, faces: np.ndarray, obj_file: str):
     """
     Convert an npz mesh file to Wavefront OBJ format.
     
@@ -21,34 +24,32 @@ def _mesh_to_obj(vertices: np.ndarray, normals: np.ndarray, faces: np.ndarray, o
     mesh = trimesh.Trimesh(vertices=vertices, vertex_normals=normals, faces=faces)
 
     # Create simplified convex hull for resonance model
-    if resonance:
-        simplified = mesh.simplify_quadric_decimation(percent=0.5, aggression=0)
-        if simplified.is_volume and simplified.is_watertight and simplified.is_winding_consistent:
-            simplified.export(f"{obj_file.removesuffix('.obj')}_resonance.obj", include_normals=True, file_type='obj')
+#    simplified = mesh.simplify_quadric_decimation(face_count=20)
+#    hull = trimesh.convex.convex_hull(simplified)
 
     # Export as obj
     mesh.export(obj_file, file_type='obj')
+#    hull.export(f"{obj_file.removesuffix('.obj')}_resonance.obj", file_type='obj')
     return
 
-def _load_mesh(obj_config, frame_idx: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Load mesh for an object at a given frame index."""
-    if obj_config.static:
-        # For static, load once
-        filename = obj_config.obj_path
-        # Assume single npz file or directory with one file
-        if os.path.isdir(obj_config.obj_path):
-            files = [f for f in os.listdir(obj_config.obj_path) if f.endswith('.npz')]
-            filename = os.path.join(obj_config.obj_path, files[0])
-        else:
-            filename = obj_config.obj_path
-    else:
-        # For dynamic, load sequence
-        items = os.listdir(obj_config.obj_path)
+def _load_mesh(config_obj: Any, frame_idx: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Load all pose sequence for an object."""
+    if not 'ObjectConfig' in str(type(config_obj)):
+        raise ValueError(f"{config_obj} is not of ObjectConfig type.")
+
+    if config_obj.static:
+        for filename in os.listdir(config_obj.obj_path):
+            if filename.endswith('.npz'):
+                filename = f"{config_obj.obj_path}/{filename}"
+    elif not config_obj.static:
+        items = os.listdir(config_obj.obj_path)
         items = [x for x in items if x.endswith('.npz')]
         filenames = sorted(items, key=lambda x: int(''.join(filter(str.isdigit, x))))
-        filename = os.path.join(obj_config.obj_path, filenames[frame_idx])
-
-    data = np.load(filename, allow_pickle=False)
+        filename = os.path.join(config_obj.obj_path, filenames[frame_idx])
+    if not os.path.exists(filename):
+        raise FileNotFoundError(f"NPZ file not found for {config_obj.name}: {filename}")
+    data = np.load(filename)
+    data.allow_pickle = False
     vertices = data[data.files[0]]
     normals = data[data.files[1]]
     faces = data[data.files[2]]
@@ -72,22 +73,6 @@ def _load_pose(config_obj: Any) -> Tuple[np.ndarray, np.ndarray]:
     rotations = pose[pose.files[1]]
 
     return positions, rotations
-
-def _generate_band_frequencies(lowest_frequency: float, higher_frequency: float, steps_per_octave: int):
-    """
-    Generate frequencies from lowest_frequency to higher_frequency with specified steps per octave
-    """
-    frequencies = []
-    current_freq = lowest_frequency
-    
-    # Calculate the frequency ratio for one step
-    step_ratio = 2 ** (1 / steps_per_octave)
-
-    while current_freq <= higher_frequency:
-        frequencies.append(current_freq)
-        current_freq *= step_ratio
-
-    return frequencies
 
 def _euler_to_rotation_matrix(q: np.ndarray, degrees=False):
     """
@@ -155,54 +140,24 @@ def _parse_lib(lib_content: str):
 
     with open(lib_content, 'r') as file:
         lines = file.readlines()
-        frequencies, t60s, gains = ([] for _ in range(3))
         for line in lines:
             # Extract frequencies from modeFreqsUnscaled
             freq_match = re.search(freq_pattern, line, re.DOTALL)
             if not freq_match == None:
                 freq_tuple_match = re.findall(tuple_match, freq_match.group())
-                if not len(freq_tuple_match) == 0:
-                    frequencies = [float(f) for f in freq_tuple_match]
-                    break
-                else:
-                    frequencies = [1.0]
-                    break
-        for line in lines:
+                frequencies = [float(f) for f in freq_tuple_match]
             # Extract T60 values
             t60_match = re.search(t60_pattern, line, re.DOTALL)
             if not t60_match == None:
                 t60_par_match = re.findall(parentesis_match, t60_match.group())
-                if not t60_par_match == None:
-                    try:
-                        t60_tuple_match = re.findall(tuple_match, t60_par_match[1])
-                        if not t60_tuple_match == None:
-                            t60s = [float(f) for f in t60_tuple_match]
-                            break
-                    except:
-                        t60s = [1.0]
-                        break
-        for line in lines:
-            # Extract nExPos
-            nExPos_match = r'nExPos.*?=\s*(\d+)'
-            nExPos = re.match(nExPos_match, line, re.DOTALL)
-            if not nExPos == None:
-                nExPos_pattern = r'\s*(\d+)'
-                nExPos = re.search(nExPos_pattern, nExPos.group())
-                if not nExPos == None:
-                    nExPos = int(nExPos.group())
-                    break
-        for line in lines:
+                t60_tuple_match = re.findall(tuple_match, t60_par_match[1])
+                t60s = [float(f) for f in t60_tuple_match]
             # Extract gains - this is complex due to the large waveform
             gain_match = re.search(gain_pattern, line, re.DOTALL)
             if not gain_match == None:
                 gain_tuple_match = re.findall(gain_pattern, gain_match.group())
                 gain_tuple_match = re.sub("'", "", gain_tuple_match[0])
-                if not gain_tuple_match == None:
-                    try:
-                        gains = [float(f) for f in gain_tuple_match.split(",")]
-                    except:
-                        gains = [1.0 for _ in range(nExPos)]
-                        break
+                gains = [float(f) for f in gain_tuple_match.split(",")]
 
     return {
         'frequencies': np.array(frequencies),

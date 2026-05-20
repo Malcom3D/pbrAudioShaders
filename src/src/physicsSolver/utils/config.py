@@ -31,7 +31,8 @@ class SystemConfig:
     fps_base: int = 1
     file_format: str = 'RAW'
     subframes: int = 1 # video subframes
-    modal_modes: int = 20
+    modes: int = 20
+    resonance_modes: int = 20
     collision_margin: float = 0.05
     cache_path: str = "./pbrAudioCache/"
 
@@ -43,8 +44,6 @@ class ObjectConfig:
     pose_path: str
     static: bool
     ground: bool = False
-    resonance: bool = False
-    resonance_modes: int = 10
     is_shard: Union[bool, int] = False
     fractured: Union[bool, int] = False
     shard: Union[bool, np.ndarray] = False # for shards of fractured object [obj_idx]
