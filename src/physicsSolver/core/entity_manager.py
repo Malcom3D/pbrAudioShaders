@@ -499,7 +499,7 @@ class EntityManager:
                     
                     return entities
 
-    def unregister(self, entity: str, idx: int = None) -> None None:
+    def unregister(self, entity: str, idx: int = None) -> None:
         """
         Unregister an object.
         
