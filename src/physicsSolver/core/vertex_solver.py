@@ -56,7 +56,10 @@ class VertexSolver:
                     
                     # Get vertices at impact time using interpolation
                     vertices_impact = self._impact_vertices(config_obj, positions, rotations, impact_position, impact_rotation, frame)
-                    tmp_trajectory.add_data('vertices', vertices_impact)
+                    def update_vertices(traj):
+                        traj.add_data('vertices', vertices_impact)
+                        return traj
+                    self.entity_manager.update_entity('trajectories', index, update_vertices)
 
     def _impact_vertices(self, config_obj, positions: np.ndarray, rotations: np.ndarray, impact_position: np.ndarray, impact_rotation: np.ndarray, frame: float, n_frames: int = 3) -> np.ndarray:
         """

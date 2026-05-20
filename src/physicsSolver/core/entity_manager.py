@@ -23,7 +23,7 @@ import fcntl
 import pickle
 import tempfile
 import numpy as np
-from typing import List, Tuple, Any, Dict, Optional
+from typing import List, Tuple, Any, Dict, Optional, Callable
 from ..utils.config import Config
 
 class EntityManager:
@@ -61,8 +61,14 @@ class EntityManager:
             self.lock_retry_interval = 0.01  # 10ms between retries
             
             # Storage directory for persisted data
-            self.data_dir_dir = os.path.join(self.lock_dir, 'data')
+            self.data_dir = os.path.join(self.lock_dir, 'data')
             os.makedirs(self.data_dir, exist_ok=True)
+
+            # Track which processes have modified which entities
+            self._dirty_entities = {}  # {entity_type: {idx: set(process_ids)}}
+            
+            # Callbacks for entity modifications
+            self._modification_callbacks = {}  # {entity_type: {idx: [callbacks]}}
 
             self.sigleton_map = {
                 'config': 'Config',
@@ -96,7 +102,7 @@ class EntityManager:
     def _get_lock_path(self, entity: str, idx: Optional[int] = None) -> str:
         """Get the path for a lock file."""
         if idx is not None:
-            return os.path.join(self.lock_dir, f"{entity}_{idx}.lock")
+            return os.path.join(self.l.lock_dir, f"{entity}_{idx}.lock")
         return os.path.join(self.lock_dir, f"{entity}.lock")
 
     def _get_data_path(self, entity: str, idx: Optional[int] = None) -> str:
@@ -105,7 +111,7 @@ class EntityManager:
             return os.path.join(self.data_dir, f"{entity}_{idx}.pkl")
         return os.path.join(self.data_dir, f"{entity}.pkl")
 
-    def _acquire_lock(self, lock lock_path: str, shared: bool = False) -> Optional[int]:
+    def _acquire_lock(self, lock_path: str, shared: bool = False) -> Optional[int]:
         """
         Acquire a file lock with retry logic.
         
@@ -222,7 +228,6 @@ class EntityManager:
                     counter = pickle.load(f)
             
             # Increment and save
-
             counter += 1
             with open(counter_path, 'wb') as f:
                 pickle.dump(counter, f)
@@ -232,6 +237,173 @@ class EntityManager:
         finally:
             if fd is not None:
                 self._release_lock(fd)
+
+    def update_entity(self, entity: str, idx: int, update_func: Callable[[Any], Any]) -> Any:
+        """
+        Atomically update an entity using a callback function.
+        This is the recommended way to modify entities in a multiprocess environment.
+        
+        Args:
+            entity: Entity type name
+            idx: Index of the entity to update
+            update_func: Function that takes the current entity and returns the modified entity
+            
+        Returns:
+            The modified entity
+            
+        Example:
+            def add_rotation(traj):
+                traj.add_data('rotation', rotation_data)
+                return traj
+            
+            entity_manager.update_entity('trajectories', 0, add_rotation)
+        """
+        # Get lock path for this entity
+        lock_path = self._get_lock_path(entity, idx)
+        data_path = self._get_data_path(entity, idx)
+        
+        fd = None
+        try:
+            # Acquire exclusive lock for writing
+            fd = self._acquire_lock(lock_path, shared=False)
+            
+            # Load current state from file
+            current_data = None
+            if os.path.exists(data_path):
+                with open(data_path, 'rb') as f:
+                    current_data = pickle.load(f)
+            
+            # Apply the update function
+            modified_data = update_func(current_data)
+            
+            # Save modified data
+            with open(data_path, 'wb') as f:
+                pickle.dump(modified_data, f, protocol=pickle.HIGHEST_PROTOCOL)
+            
+            # Update in-memory cache
+            entities = self._get_entities_dict(entity)
+            if entities is not None:
+                entities[idx] = modified_data
+            
+            # Track dirty entities
+            if entity not in self._dirty_entities:
+                self._dirty_entities[entity] = {}
+            if idx not in self._dirty_entities[entity]:
+                self._dirty_entities[entity][idx] = set()
+            self._dirty_entities[entity][idx].add(os.getpid())
+            
+            # Execute modification callbacks
+            self._execute_modification_callbacks(entity, idx, modified_data)
+            
+            return modified_data
+            
+        finally:
+            if fd is not None:
+                self._release_lock(fd)
+
+    def _get_entities_dict(self, entity: str) -> Optional[Dict]:
+        """Get the in-memory dictionary for an entity type."""
+        entity_map = {
+            'sources': self._sources,
+            'objects': self._objects,
+            'outputs': self._outputs,
+            'output_datas': self._output_datas,
+            'wave_propagators': self._wave_propagators,
+            'layer_managers': self._layer_managers,
+            'trajectories': self._trajectories,
+            'collisions': self._collisions,
+            'forces': self._forces,
+            'modal_vertices': self._modal_vertices,
+            'score_tracks': self._score_tracks,
+            'rigidbody_synth': self._rigidbody_synth,
+            'resonance_synth': self._resonance_synth,
+        }
+        
+        for key in entity_map:
+            if entity in key:
+                return entity_map[key]
+        return None
+
+    def register_modification_callback(self, entity: str, idx: int, callback: Callable[[Any], None]):
+        """
+        Register a callback that will be called when an entity is modified.
+        
+        Args:
+            entity: Entity type name
+            idx: Index of the entity
+            callback: Function that takes the modified entity as argument
+        """
+        if entity not in self._modification_callbacks:
+            self._modification_callbacks[entity] = {}
+        if idx not in self._modification_callbacks[entity]:
+            self._modification_callbacks[entity][idx] = []
+        self._modification_callbacks[entity][idx].append(callback)
+
+    def _execute_modification_callbacks(self, entity: str, idx: int, data: Any):
+        """Execute all registered callbacks for an entity modification."""
+        if entity in self._modification_callbacks:
+            if idx in self._modification_callbacks[entity]:
+                for callback in self._modification_callbacks[entity][idx]:
+                    try:
+                        callback(data)
+                    except Exception as e:
+                        print(f"ErrorError in modification callback: {e}")
+
+    def batch_update_entities(self, updates: List[Tuple[str, int, Callable]]) -> List[Any]:
+        """
+        Perform multiple entity updates atomically.
+        Useful when multiple entities need to be updated consistently.
+        
+        Args:
+            updates: List of (entity, idx, update_func) tuples
+            
+        Returns:
+            List of modified entities
+        """
+        # Sort by entity type and idx to avoid deadlocks
+        updates.sort(key=lambda x: (x[0], x[1]))
+        
+        results = []
+        try:
+            for entity, idx, update_func in updates:
+                result = self.update_entity(entity, idx, update_func)
+                results.append(result)
+        except Exception as e:
+            print(f"Batch update failed: {e}")
+            raise
+        
+        return results
+
+    def get_dirty_entities(self, entity: Optional[str] = None) -> Dict:
+        """
+        Get entities that have been modified by multiple processes.
+        
+        Args:
+            entity: Optional entity type to filter by
+            
+        Returns:
+            Dictionary of dirty entities
+        """
+        if entity:
+            return self._dirty_entities.get(entity, {})
+        return self._dirty_entities
+
+    def clear_dirty_flags(self, entity: Optional[str] = None, idx: Optional[int] = None):
+        """
+        Clear dirty flags for entities.
+        
+        Args:
+            entity: Optional entity type to clear
+            idx: Optional specific index to clear
+        """
+        if entity and idx is not None:
+            if entity in self._dirty_entities and idx in self._dirty_entities[entity]:
+                del self._dirty_entities[entity][idx]
+        elif entity:
+            if entity in self._dirty_entities:
+                del self._dirty_entities[entity]
+        else:
+            self._dirty_entities.clear()
 
     def register(self, entity: str, obj: Any) -> int:
         """
@@ -327,7 +499,7 @@ class EntityManager:
                     
                     return entities
 
-    def unregister(self, entity: str, idx: int = None) -> None:
+    def unregister(self, entity: str, idx: int = None) -> None None:
         """
         Unregister an object.
         
@@ -342,7 +514,7 @@ class EntityManager:
                     del self._singleton[entity]
                     
                 # Remove data file
-                               data_path = self._get_data_path(entity)
+                data_path = self._get_data_path(entity)
                 if os.path.exists(data_path):
                     os.remove(data_path)
                     
@@ -367,10 +539,14 @@ class EntityManager:
                     if os.path.exists(data_path):
                         os.remove(data_path)
                     
+                    
                     # Remove lock file
                     lock_path = self._get_lock_path(entity, idx)
                     if os.path.exists(lock_path):
                         os.remove(lock_path)
+                    
+                    # Remove dirty flags
+                    self.clear_dirty_flags(entity, idx)
                 else:
                     # Remove all entities of this type
                     for existing_idx in list(entities.keys()):
@@ -393,6 +569,9 @@ class EntityManager:
                                 file_path = os.path.join(lock_dir, filename)
                                 if os.path.exists(file_path):
                                     os.remove(file_path)
+                    
+                    # Clear dirty flags
+                    self.clear_dirty_flags(entity)
 
     def clear_all(self):
         """Clear all registered objects and data files."""
@@ -411,6 +590,8 @@ class EntityManager:
         self._rigidbody_synth.clear()
         self._resonance_synth.clear()
         self._singleton.clear()
+        self._dirty_entities.clear()
+        self._modification_callbacks.clear()
         
         # Remove all data and lock files
         import shutil
@@ -422,4 +603,3 @@ class EntityManager:
         # Recreate directories
         os.makedirs(self.data_dir, exist_ok=True)
         os.makedirs(self.lock_dir, exist_ok=True)
-
