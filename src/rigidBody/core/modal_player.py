@@ -79,9 +79,9 @@ class ModalPlayer:
                 self.t60_samples = int(t60_obj * spsf)
 
                 sample_indices = []
-                print('ModalPlayer get rigidbody_synth: ', self.obj_idx)
+#                print('ModalPlayer get rigidbody_synth: ', self.obj_idx)
                 rigidbody_synth = self.entity_manager.get('rigidbody_synth')
-                print('ModalPlayer get resonance_synth: ', self.obj_idx)
+#                print('ModalPlayer get resonance_synth: ', self.obj_idx)
                 resonance_synth = self.entity_manager.get('resonance_synth')
                 for rb_key in rigidbody_synth.keys():
                     if rigidbody_synth[rb_key].obj_idx == self.obj_idx:
@@ -91,7 +91,7 @@ class ModalPlayer:
                     if resonance_synth[re_key].obj_idx == self.obj_idx:
                         self.resonance_synth = resonance_synth[re_key]
                         break
-                print('ModalPlayer get score_tracks: ', self.obj_idx)
+#                print('ModalPlayer get score_tracks: ', self.obj_idx)
                 score_tracks = self.entity_manager.get('score_tracks')
                 for idx in score_tracks.keys():
                     if score_tracks[idx].obj_idx == self.obj_idx:
@@ -216,7 +216,7 @@ class ModalPlayer:
             # Call ready - this will either:
             # - Return True if all players are ready (sample was advanced and callback executed)
             # - Return False if we're still waiting for other players
-            print(self.player_id, 'call ready')
+#            print(self.player_id, 'call ready')
             all_ready = self.sample_counter.ready(self.player_id)
         
             if all_ready:
