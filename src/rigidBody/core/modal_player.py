@@ -179,7 +179,7 @@ class ModalPlayer:
                             if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
                                 resonance_output += self.resonance_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
                             rigidbody_output += self.rigidbody_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
-                            rolling_output_output += self.rolling_sound[sample_idx] * event['contact_area']
+                            rolling_output += self.rolling_sound[sample_idx] * event['contact_area']
                         else:
                             if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
                                 resonance_output += self.resonance_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
