@@ -18,7 +18,7 @@
 
 import os
 import json
-import threading
+import time
 import numpy as np
 import soundfile as sf
 from typing import Any, List, Tuple, Dict, Optional
@@ -35,7 +35,6 @@ class ModalPlayer:
     end_idx: int = 0
     player_id: int = None
     score: List = field(default_factory=list)
-    condiction: threading.Condition = None
 
     def __post_init__(self):
         print('ModalPlayer init: ', self.obj_idx)
@@ -57,8 +56,13 @@ class ModalPlayer:
         # Generate unique player ID if not provided
         if self.player_id is None:
             self.player_id = id(self)
+
+        # Set polling and timeout for synchronization mechanism
+        self.timeout = 30
+        self.poll_interval = 0.001
         
 #        self.synth_track = np.zeros(self.sample_counter.total_samples)
+        self.rigidbody_vertices = {}
         self.rigidbody_synth_track = np.zeros(self.sample_counter.total_samples)
         self.resonance_synth_track = np.zeros(self.sample_counter.total_samples)
         self.sliding_synth_track = np.zeros(self.sample_counter.total_samples)
@@ -100,13 +104,16 @@ class ModalPlayer:
 
         # Register with sample counter
         print('Register with sample counter', self.obj_idx)
-        self.condiction = self.sample_counter.register_player(self.player_id)
+        self.sample_counter.register_player(self.player_id)
         print('ModalPlayer init end: ', self.obj_idx)
         print('ModalPlayer t60: ', self.t60_samples)
 
-    def compute(self) -> None:
-        config = self.entity_manager.get('config')
         sound_path = f"{config.system.cache_path}/audio_force"
+        self.sliding_sound, self.scraping_sound, self.rolling_sound = self._load_sound_tracks(sound_path, config_obj.name)
+
+    def compute(self) -> None:
+        """Non-blocking version that works with Blender."""
+        config = self.entity_manager.get('config')
         for conf_obj in config.objects:
             if conf_obj.idx == self.obj_idx:
                 config_obj = conf_obj
@@ -121,14 +128,19 @@ class ModalPlayer:
         if not isinstance(config_obj.is_shard, bool):
             is_shard_frame = config_obj.is_shard * sample_rate / sfps
 
-        sliding_sound, scraping_sound, rolling_sound = self._load_sound_tracks(sound_path, config_obj.name)
-                
         print('ModalPlayer compute: ', self.obj_idx)
-        old_sample_idx = 0
+        t60_empty, old_sample_idx = (0 for _ in range(2))
         sample_idx = self.sample_counter.get_current()
-        while sample_idx < self.end_idx:
+    
+        # Register a callback that will be called when all players are ready
+        def on_all_ready():
+            """Called when all players have called ready() for the current sample."""
+            nonlocal sample_idx, old_sample_idx, t60_empty
+        
+            # Process the current sample
             rigidbody_output, resonance_output, sliding_output, scraping_output, rolling_output = (0 for _ in range(5))
             events = []
+        
             if self.begin_idx <= sample_idx and (is_shard_frame == None or is_shard_frame <= sample_idx) and (fracture_frame == None or sample_idx <= fracture_frame) and not sample_idx == old_sample_idx:
                 for score_idx in range(len(self.score)):
                     events += self.score[score_idx].get_events_at_sample(sample_idx)
@@ -136,47 +148,45 @@ class ModalPlayer:
                 if len(events) == 1:
                     t60_empty = 0
                     event = events[0].to_dict()
+                    self.rigidbody_vertices[sample_idx] = event['vertex_ids']
                     if int(event['type']) in [2,3]:
-#                        print('ModalPlayer resonance_synth.process: ', self.obj_idx, event['type'], event['force'])
                         if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
                             resonance_output = self.resonance_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
                         rigidbody_output = self.rigidbody_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
-                        sliding_output = sliding_sound[sample_idx] * event['contact_area']
-                        scraping_output = scraping_sound[sample_idx] * event['contact_area']
+                        sliding_output = self.sliding_sound[sample_idx] * event['contact_area']
+                        scraping_output = self.scraping_sound[sample_idx] * event['contact_area']
                     elif int(event['type']) == 4:
                         if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
                             resonance_output = self.resonance_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
                         rigidbody_output = self.rigidbody_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
-                        rolling_output = rolling_sound[sample_idx] * event['contact_area']
+                        rolling_output = self.rolling_sound[sample_idx] * event['contact_area']
                     else:
                         if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
                             resonance_output = self.resonance_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
-#                        print('ModalPlayer rigidbody_synth.process: ', self.obj_idx, event['type'], event['force'])
                         rigidbody_output = self.rigidbody_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
                 elif len(events) > 1:
                     t60_empty = 0
                     for idx in range(len(events)):
                         event = events[idx].to_dict()
+                        self.rigidbody_vertices[sample_idx] = event['vertex_ids']
                         if int(event['type']) in [2,3]:
-                            #print('ModalPlayer resonance_synth.process: ', self.obj_idx, event['type'], event['force'])
                             if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
                                 resonance_output += self.resonance_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
                             rigidbody_output += self.rigidbody_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
-                            sliding_output += sliding_sound[sample_idx] * event['contact_area']
-                            scraping_output += scraping_sound[sample_idx] * event['contact_area']
+                            sliding_output += self.sliding_sound[sample_idx] * event['contact_area']
+                            scraping_output += self.scraping_sound[sample_idx] * event['contact_area']
                         elif int(event['type']) == 4:
                             if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
                                 resonance_output += self.resonance_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
                             rigidbody_output += self.rigidbody_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
-                            rolling_output += rolling_sound[sample_idx] * event['contact_area']
+                            rolling_output_output += self.rolling_sound[sample_idx] * event['contact_area']
                         else:
-#                            print('ModalPlayer rigidbody_synth.process: ', self.obj_idx, event['type'], event['force'])
                             if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
                                 resonance_output += self.resonance_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
                             rigidbody_output += self.rigidbody_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
-                            banks_state = self.rigidbody_synth.get_banks_state()
                 elif len(events) == 0:
                     if t60_empty < self.t60_samples:
+                        self.rigidbody_vertices[sample_idx] = []
                         for synth_type in [1,2,3,4]:
                             value = self.rigidbody_synth.connected_buffer.read_for_obj(self.obj_idx, synth_type)
                             if not value == 0:
@@ -186,22 +196,43 @@ class ModalPlayer:
                                     if not value == 0:
                                         resonance_output += self.resonance_synth.process(synth_type, [], 0.0, 0, coupling_strength)
                         t60_empty += 1
-
+    
                 self.rigidbody_synth_track[sample_idx] = rigidbody_output if not np.isnan(rigidbody_output) else 0
                 self.resonance_synth_track[sample_idx] = resonance_output if not np.isnan(resonance_output) else 0
                 self.sliding_synth_track[sample_idx] = sliding_output if not np.isnan(sliding_output) else 0
                 self.scraping_synth_track[sample_idx] = scraping_output if not np.isnan(scraping_output) else 0
                 self.rolling_synth_track[sample_idx] = rolling_output if not np.isnan(rolling_output) else 0
-            
-            # Get next sample (waits for all players to be ready)
+        
+            # Update sample indices for next iteration
             old_sample_idx = sample_idx
             sample_idx = self.sample_counter.get_next(self.player_id)
-            with self.condiction:
-                self.sample_counter.ready(self.player_id)
+    
+        # Register the callback
+        self.sample_counter.register_ready_callback(on_all_ready)
+    
+        # Process samples in a loop (non-blocking)
+        start_time = time.time()
+        while sample_idx < self.end_idx:
+            # Call ready - this will either:
+            # - Return True if all players are ready (sample was advanced and callback executed)
+            # - Return False if we're still waiting for other players
+            print(self.player_id, 'call ready')
+            all_ready = self.sample_counter.ready(self.player_id)
+        
+            if all_ready:
+                # The callback has already processed this sample
+                # Get the next sample index
+                start_time = time.time()
+                sample_idx = self.sample_counter.get_next(self.player_id)
+            else:
+                if (time.time() - start_time) >= self.timeout:
+                    raise TimeoutError(f"No new sample_idx for {self.timeout} seconds")
+                time.sleep(self.poll_interval)
 
         # Unregister when done
-        self.sample_counter.unregister_player(self.player_id)
-        print(f"Player {self.player_id} finished processing")
+        if sample_idx >= self.end_idx:
+            self.sample_counter.unregister_player(self.player_id)
+            print(f"Player {self.player_id} finished processing")
 
     def _get_modal_t60(self, config_obj: Any) -> float:
         """
@@ -246,35 +277,46 @@ class ModalPlayer:
             if conf_obj.idx == self.obj_idx:
                 config_obj = conf_obj
 
-        sample_rate = config.system.sample_rate
-        bit_depth = config.system.bit_depth
+        # skip if track is all zeros
+        if not np.any(track):
+            print(f"Track {suffix} synth track for {config_obj.name} is empty, skipping")
+            return
+
+        sample_rate = int(config.system.sample_rate)
+        bit_depth = int(config.system.bit_depth)
         file_format = config.system.file_format
 
         project_data = {
             'object_name': config_obj.name,
             'sample_rate': sample_rate,
             'duration': track.shape[0] / sample_rate,
-            'tracks': []
+            'track_name': suffix,
+            'vertices': self.rigidbody_vertices if suffix == 'rigidbody' else [],
+            'channels': 1,
+            'position': 0.0
         }
 
         track_name = config_obj.name
-        if file_format == 'RAW':
-            track_file = f"{track_name}_{suffix}.raw"
-        elif file_format == 'FLAC':
-            track_file = f"{track_name}_{suffix}.raw"
-        else:
-            track_file = f"{track_name}_{suffix}.wav"
+        track_file = f"{track_name}_{suffix}.raw"
+        subtype = 'FLOAT'
 
-        if file_format == 'FLAC' and bit_depth in ['FLOAT', 'DOUBLE', '32']:
-            subtype = 'PCM_24'
-        elif file_format == 'FLAC' and bit_depth in ['24', '16']:
-            subtype = 'PCM_'
-            subtype += bit_depth
-        elif bit_depth in ['FLOAT', 'DOUBLE']:
-            subtype = bit_depth
-        elif bit_depth in ['32', '24', '16']:
-            subtype = 'PCM_'
-            subtype += bit_depth
+#        if file_format == 'RAW':
+#            track_file = f"{track_name}_{suffix}.raw"
+#        elif file_format == 'FLAC':
+#            track_file = f"{track_name}_{suffix}.raw"
+#        else:
+#            track_file = f"{track_name}_{suffix}.wav"
+#
+#        if file_format == 'FLAC' and bit_depth in ['FLOAT', 'DOUBLE', '32']:
+#            subtype = 'PCM_24'
+#        elif file_format == 'FLAC' and bit_depth in ['24', '16']:
+#            subtype = 'PCM_'
+#            subtype += bit_depth
+#        elif bit_depth in ['FLOAT', 'DOUBLE']:
+#            subtype = bit_depth
+#        elif bit_depth in ['32', '24', '16']:
+#            subtype = 'PCM_'
+#            subtype += bit_depth
 
 #        # Normalize between -1.0 and 1.0 for PCM_
 #        if bit_depth in ['32', '24', '16']:
@@ -283,18 +325,10 @@ class ModalPlayer:
             
         wave_file = f"{self.output_dir}/{track_file}"
         sf.write(wave_file, track, sample_rate, subtype=subtype)
-        project_data['tracks'].append({
-            'name': track_name,
-            'file': track_file,
-            'channels': 1,
-            'position': 0.0,
-            'volume': 1.0,
-            'pan': 0.0
-        })
         print(f"Saved {track_name} tracks to {self.output_dir}")
 
         # Save project file
-        json_file = f"{self.output_dir}/{config_obj.name}.json"
+        json_file = f"{self.output_dir}/{config_obj.name}_{suffix}.json"
         with open(json_file, 'w') as f:
             json.dump(project_data, f, indent=2)
 

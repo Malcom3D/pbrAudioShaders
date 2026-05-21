@@ -147,7 +147,7 @@ class ForceSynth:
             'coupling_strength': coupling_strength_track
         }
         
-        self._save_tracks(config_obj, tracks, total_samples, sample_rate)
+        self._save_tracks(config_obj, tracks, total_samples, int(sample_rate))
 
     def _synthesize_impact(self, force: Any, collision: Any, config_obj: Any, other_config_obj: Any, sample_idx: float, total_samples: int, sample_rate: int) -> Dict[str, Any]:
         """Synthesize Hertzian impact audio-force."""

@@ -24,7 +24,7 @@ from typing import List, Tuple
 from dataclasses import dataclass
 
 from physicsSolver import EntityManager
-from physicsSolver.lib.functions import _load_mesh, _mesh_to_obj
+from physicsSolver.lib.functions import _load_mesh, _mesh_to_obj, _compute_rayleigh_damping
 
 @dataclass
 class Pym2f:
@@ -84,7 +84,7 @@ class Pym2f:
             alpha: stiffness-proportional damping coefficient (in seconds)
             beta: mass-proportional damping coefficient (in 1/seconds)
             """
-            alpha_rayleigh, beta_rayleigh = self._compute_rayleigh_damping(minmode, maxmode, damping)
+            alpha_rayleigh, beta_rayleigh = _compute_rayleigh_damping(minmode, maxmode, damping)
             cmd += f"--material {young_modulus} {poisson_ratio} {density} {alpha_rayleigh} {beta_rayleigh} "
         if not minmode == None:
             cmd += f"--minmode {minmode} "
@@ -127,55 +127,3 @@ class Pym2f:
 
             dest_path = f"{self.cache_path}/dsp/{file_name}"
             shutil.move(file_name, dest_path)
-
-    def _compute_rayleigh_damping(self, f1: float, f2: float, xi1: float, xi2: float = None) -> Tuple[float, float]:
-        """
-        Compute Rayleigh damping coefficients α and β.
-    
-        Parameters:
-        -----------
-        f1 : float
-            First frequency (Hz)
-        f2 : float
-            Second frequency (Hz)
-        xi1 : float
-            Damping ratio at f11 (dimensionless, e.g., 0.05 for 5%)
-        xi2 : float
-            Damping ratio at f2 (dimensionless, e.g., 0.05 for 5%)
-    
-        Returns:
-        --------
-        tuple : (alpha, beta)
-            Mass-proportional coefficient α (1/s)
-            Stiffness-proportional coefficient β (s)
-    
-        Notes:
-        ------
-        Rayleigh damping: C = αM + βK
-        Damping ratio at frequency ω: ξ = α/(2ω) + βω/2
-        """
-        xi2 = xi1 if xi2 == None else xi2
-
-        # Convert frequencies to angular frequencies (rad/s)
-        omega1 = 2 * np.pi * f1
-        omega2 = 2 * np.pi * f2
-    
-        # Solve the system of equations:
-        # ξ1 = α/(2ω1) + βω1/2
-        # ξ2 = α/(2ω2) + βω2/2
-    
-        # Create the coefficient matrix
-        A = np.array([
-            [1/(2*omega1), omega1/2],
-            [1/(2*omega2), omega2/2]
-        ])
-        
-        # Create the right-hand side vector
-        b = np.array([xi1, xi2])
-    
-        # Solve for α and β
-        try:
-            alpha, beta = np.linalg.solve(A, b)
-            return alpha, beta
-        except np.linalg.LinAlgError:
-            raise ValueError("The two frequencies must be different to compute unique Rayleigh damping coefficients.")
