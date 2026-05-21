@@ -282,13 +282,20 @@ class ModalPlayer:
             print(f"Track {suffix} synth track for {config_obj.name} is empty, skipping")
             return
 
+#        bit_depth = int(config.system.bit_depth)
+#        file_format = config.system.file_format
+
         sample_rate = int(config.system.sample_rate)
-        bit_depth = int(config.system.bit_depth)
-        file_format = config.system.file_format
+        file_format == 'RAW'
+        subtype = 'FLOAT'
+        track_name = config_obj.name
+        track_file = f"{track_name}_{suffix}.raw"
 
         project_data = {
             'object_name': config_obj.name,
             'sample_rate': sample_rate,
+            'file_format': file_format,
+            'bit_depth': subtype,
             'duration': track.shape[0] / sample_rate,
             'track_name': suffix,
             'vertices': self.rigidbody_vertices if suffix == 'rigidbody' else [],
@@ -296,9 +303,6 @@ class ModalPlayer:
             'position': 0.0
         }
 
-        track_name = config_obj.name
-        track_file = f"{track_name}_{suffix}.raw"
-        subtype = 'FLOAT'
 
 #        if file_format == 'RAW':
 #            track_file = f"{track_name}_{suffix}.raw"
