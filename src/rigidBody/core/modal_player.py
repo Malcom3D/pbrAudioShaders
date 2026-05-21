@@ -212,7 +212,7 @@ class ModalPlayer:
     
         # Process samples in a loop (non-blocking)
         start_time = time.time()
-        while sample_idx < self.end_idx:
+        while sample_idx < self.end_idx - 1:
             # Call ready - this will either:
             # - Return True if all players are ready (sample was advanced and callback executed)
             # - Return False if we're still waiting for other players
