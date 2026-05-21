@@ -286,7 +286,7 @@ class ModalPlayer:
 #        file_format = config.system.file_format
 
         sample_rate = int(config.system.sample_rate)
-        file_format == 'RAW'
+        file_format = 'RAW'
         subtype = 'FLOAT'
         track_name = config_obj.name
         track_file = f"{track_name}_{suffix}.raw"
