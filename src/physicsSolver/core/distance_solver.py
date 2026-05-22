@@ -84,13 +84,26 @@ class DistanceSolver:
 #            self.entity_manager.register('collisions', collision_data, collision_idx)
             _ = self.entity_manager.register('collisions', collision_data)
 
+        # Process dynamic pairs in parallel using Dask
         if not config_objs[0].static or not config_objs[1].static:
+            # Create delayed tasks for each frame
+            tasks = [self._distance_task(config_objs=config_objs, trajectory1=trajectory1, trajectory2=trajectory2, frame=frames[idx], sfps=sfps, sample_rate=sample_rate, collision_margin=collision_margin) for frame in frames]
+            # Compute all frames in parallel
+            results = compute(*tasks)
+            
+            # Unpack results
             distances, closest_point1, closest_point2 = ([] for _ in range(3))
-            for idx in range(len(frames)):
-                distance, closest_points = self._distance(config_objs=config_objs, trajectory1=trajectory1, trajectory2=trajectory2, frame=frames[idx], sfps=sfps, sample_rate=sample_rate, collision_margin=collision_margin)
+            for distance, closest_points in results:
                 distances.append(distance)
                 closest_point1.append(closest_points['mesh1_point'])
                 closest_point2.append(closest_points['mesh2_point'])
+
+#            distances, closest_point1, closest_point2 = ([] for _ in range(3))
+#            for idx in range(len(frames)):
+#                distance, closest_points = self._distance(config_objs=config_objs, trajectory1=trajectory1, trajectory2=trajectory2, frame=frames[idx], sfps=sfps, sample_rate=sample_rate, collision_margin=collision_margin)
+#                distances.append(distance)
+#                closest_point1.append(closest_points['mesh1_point'])
+#                closest_point2.append(closest_points['mesh2_point'])
 
             distances = np.array(distances)
             closest_point1 = np.array(closest_point1)
@@ -317,6 +330,11 @@ class DistanceSolver:
         
         return is_impact
 
+    @delayed
+    def _distance_task(self, config_objs: List[Any], trajectory1: Any, trajectory2: Any, frame: float, sfps: int, sample_rate: int, collision_margin: float) -> Tuple[float, Dict[str, Any]]:
+        """ Dask delayed _distance function """
+        return self._distance(config_objs=config_objs, trajectory1=trajectory1, trajectory2=trajectory2, frame=frame, sfps=sfps, sample_rate=sample_rate, collision_margin=collision_margin)
+    
     def _distance(self, config_objs: List[Any], trajectory1: Any, trajectory2: Any, frame: float, sfps: int, sample_rate: int, collision_margin: float) -> Tuple[float, Dict[str, Any]]:
         """
         Calculate minimum distance between transformed meshes.
