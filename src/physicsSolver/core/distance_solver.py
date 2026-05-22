@@ -24,6 +24,7 @@ from typing import Any, List, Tuple, Dict
 from dataclasses import dataclass, field
 from scipy import stats
 from scipy.signal import find_peaks
+from dask import delayed, compute
 
 from ..core.entity_manager import EntityManager
 from ..utils.config import Config, ObjectConfig
