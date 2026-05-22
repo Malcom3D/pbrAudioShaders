@@ -495,9 +495,10 @@ class HertzianContact:
             is_sliding = True
 
         # Mixed condition
+        print('angular_speed1', angular_speed1, 'rolling_speed1' rolling_speed1, 'relative_velocity', relative_velocity, 'angular_speed2', angular_speed2, 'rolling_speed2', rolling_speed2)
         # angular_speed and not rolling_speed and not relative_velocity
         if (angular_speed1 > 0 and math.isclose(rolling_speed1, 0, rel_tol=0.2) and math.isclose(relative_velocity, 0, rel_tol=0.2)) or (angular_speed2 > 0 and math.isclose(rolling_speed2, 0, rel_tol=0.2) and math.isclose(relative_velocity, 0, rel_tol=0.2)):
-            # rolling sul posto o reverse rolling -> sliding/scraping sulla superfice che rotola
+            # rolling in place or reverse rolling -> sliding/scraping on the rolling surface
             rolling_factor = 0
             sliding_factor = 0 if is_scraping else 1
             scraping_factor = 1 if is_scraping else 0
