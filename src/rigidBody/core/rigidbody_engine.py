@@ -69,7 +69,7 @@ class rigidBodyEngine:
                 for filename in os.listdir(f"{self.trajectories_dir}"):
                     if filename.endswith('.pkl'):
                         trajectories = TrajectoryData.load(f"{self.trajectories_dir}/{filename}")
-                        self.entity_manager.register('trajectories', trajectories)
+                        _ = self.entity_manager.register('trajectories', trajectories)
 #                        self.entity_manager.register('trajectories', trajectories, trajectories_idx)
 #                        trajectories_idx += 1
 
@@ -81,7 +81,7 @@ class rigidBodyEngine:
 #                        idx = int(filename.removesuffix('.pkl'))
                         collisions = CollisionData.load(f"{self.collisions_dir}/{filename}")
 #                        self.entity_manager.register('collisions', collisions, idx)
-                        self.entity_manager.register('collisions', collisions)
+                        _ = self.entity_manager.register('collisions', collisions)
 
         forces = self.entity_manager.get('forces')
         if len(forces) == 0:
@@ -90,7 +90,7 @@ class rigidBodyEngine:
                 for filename in os.listdir(f"{self.forces_dir}"):
                     if filename.endswith('.pkl'):
                         forces = ForceDataSequence.load(f"{self.forces_dir}/{filename}")
-                        self.entity_manager.register('forces', forces)
+                        _ = self.entity_manager.register('forces', forces)
 #                        self.entity_manager.register('forces', forces, forces_idx)
 #                        forces_idx += 1
             forces = self.entity_manager.get('forces')
@@ -102,7 +102,7 @@ class rigidBodyEngine:
 #                modalvertices_idx = 0
                 for filename in filenames:
                     modal_vertices = ModalVertices.load(f"{self.modalvertices_dir}/{filename}")
-                    self.entity_manager.register('modal_vertices', modal_vertices)
+                    _ = self.entity_manager.register('modal_vertices', modal_vertices)
 #                    self.entity_manager.register('modal_vertices', modal_vertices, modalvertices_idx)
 #                    modalvertices_idx += 1
 
@@ -113,7 +113,7 @@ class rigidBodyEngine:
 #                scoretracks_idx = 0
                 for filename in filenames:
                     score_tracks = ScoreTrack.load(f"{self.scoretracks_dir}/{filename}")
-                    self.entity_manager.register('score_tracks', score_tracks)
+                    _ = self.entity_manager.register('score_tracks', score_tracks)
 #                    self.entity_manager.register('score_tracks', score_tracks, scoretracks_idx)
 #                    scoretracks_idx += 1
 
@@ -146,7 +146,7 @@ class rigidBodyEngine:
         _update_status(f"{self.status_dir}/bake", 0)
 
         connected_buffer = ConnectedBuffer()
-        self.entity_manager.register('connected_buffer', connected_buffer)
+        _ = self.entity_manager.register('connected_buffer', connected_buffer)
         sample_counter = SampleCounter(status_file=f"{self.status_dir}/bake")
         trajectories = self.entity_manager.get('trajectories')
         if len(trajectories) == 0: 
@@ -163,7 +163,7 @@ class rigidBodyEngine:
                     break
 
         sample_counter.set_total_samples(int(trajectory.get_x()[-1]))
-        self.entity_manager.register('sample_counter', sample_counter)
+        _ = self.entity_manager.register('sample_counter', sample_counter)
 
         tasks_luthier = [self.bake_luthier(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
         results_luthier = compute(*tasks_luthier)

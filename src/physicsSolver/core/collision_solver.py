@@ -40,7 +40,6 @@ class CollisionSolver:
 
     def compute(self, collision: CollisionData) -> None:
         config = self.entity_manager.get('config')
-#        sample_counter = self.entity_manager.get('sample_counter')
         fps = config.system.fps
         fps_base = config.system.fps_base
         subframes = config.system.subframes
@@ -50,7 +49,6 @@ class CollisionSolver:
         forces = self.entity_manager.get('forces')
 
         for f_idx in forces.keys():
-#            if forces[f_idx].obj_idx == obj1_idx and forces[f_idx].other_obj_idx == obj2_idx: #single_impact return UnboundLocalError: cannot access local variable 'force' where it is not associated with a value
             if forces[f_idx].obj_idx == collision.obj1_idx and forces[f_idx].other_obj_idx == collision.obj2_idx:
                 force = forces[f_idx]
                 obj1_idx = collision.obj1_idx
@@ -98,20 +96,8 @@ class CollisionSolver:
         if isinstance(config_obj2.connected, np.ndarray) and config_obj1.idx in config_obj2.connected[:,0] and isinstance(config_obj1.connected, np.ndarray) and config_obj2.idx in config_obj1.connected[:,0]:
             self._connected_facing_face(obj1_idx=obj1_idx, obj2_idx=obj2_idx, mesh1_faces=mesh1_faces, mesh2_faces=mesh2_faces)
 
-#        if not config_obj1.static or not config_obj2.static:
-#            for f_idx in forces.keys():
-#                if forces[f_idx].obj_idx == obj1_idx and forces[f_idx].other_obj_idx == obj2_idx: #single_impact return UnboundLocalError: cannot access local variable 'force' where it is not associated with a value
-#                if forces[f_idx].obj_idx == obj1_idx and forces[f_idx].other_obj_idx == obj2_idx:
-#                    force = forces[f_idx]
-#                elif forces[f_idx].obj_idx == obj2_idx and forces[f_idx].other_obj_idx == obj1_idx:
-#                    force = forces[f_idx]
-#                    obj1_idx = forces[f_idx].obj_idx
-#                    obj2_idx = forces[f_idx].other_obj_idx
-#        else:
-#            return
 
         total_samples = int(self.trajectory1.get_x()[-1] if not config_obj1.static else self.trajectory2.get_x()[-1])
-#        sample_counter.total_samples = total_samples
 
         start_samples = int(collision.frame - collision.impulse_range / 2)
         stop_samples = int(collision.frame + collision.impulse_range)
@@ -168,35 +154,55 @@ class CollisionSolver:
             closest_points2 = distance_data[distance_data.files[2]]
 
             # Get the frames corresponding to our sample range
-#            frames = self.trajectory1.get_x() if not config_obj1.static else self.trajectory2.get_x()
             frames = np.unique(np.sort(np.concatenate((self.trajectory1.get_x(), self.trajectory2.get_x()))))
 
             distances = CubicSpline(frames, distances, extrapolate=1)
             closest_points1 = [CubicSpline(frames, closest_points1[:, i], extrapolate=1) for i in range(closest_points1.shape[1])]
             closest_points2 = [CubicSpline(frames, closest_points2[:, i], extrapolate=1) for i in range(closest_points2.shape[1])]
 
+            # Get or create score tracks
             score_tracks = self.entity_manager.get('score_tracks')
-            score_track1, score_track2 = (None for _ in range(2))
+            score_track1 = None
+            score_track2 = None
+            score_track1_idx = None
+            score_track2_idx = None
+            
             for st_idx in score_tracks.keys():
                 if score_tracks[st_idx].obj_idx == obj1_idx:
-                   score_track1 = score_tracks[st_idx]
+                    score_track1 = score_tracks[st_idx]
+                    score_track1_idx = st_idx
                 elif score_tracks[st_idx].obj_idx == obj2_idx:
-                   score_track2 = score_tracks[st_idx]
+                    score_track2 = score_tracks[st_idx]
+                    score_track2_idx = st_idx
 
             if score_track1 == None:
                 score_track1 = ScoreTrack(obj_idx=obj1_idx, obj_name=config_obj1.name)
-#                score_track_idx = len(self.entity_manager.get('score_tracks')) + 1
-#                self.entity_manager.register('score_tracks', score_track1, score_track_idx)
-                score_track_idx = self.entity_manager.register('score_tracks', score_track1)
-                score_track1 = self.entity_manager.get('score_tracks', score_track_idx)
+                score_track1_idx = self.entity_manager.register('score_tracks', score_track1)
+                score_track1 = self.entity_manager.get('score_tracks', score_track1_idx)
             if score_track2 == None:
                 score_track2 = ScoreTrack(obj_idx=obj2_idx, obj_name=config_obj2.name)
-#                score_track_idx = len(self.entity_manager.get('score_tracks')) + 1
-#                self.entity_manager.register('score_tracks', score_track2, score_track_idx)
-                score_track_idx = self.entity_manager.register('score_tracks', score_track2)
-                score_track2 = self.entity_manager.get('score_tracks', score_track_idx)
+                score_track2_idx = self.entity_manager.register('score_tracks', score_track2)
+                score_track2 = self.entity_manager.get('score_tracks', score_track2_idx)
 
-            samples_idx, vertex1_id_list, vertex2_id_list = ([] for _ in range(3))
+            # Get or create modal vertices
+            modal_vertices = self.entity_manager.get('modal_vertices')
+            mod_v1 = None
+            mod_v2 = None
+            mod_v1_idx = None
+            mod_v2_idx = None
+            
+            for mv_idx in modal_vertices.keys():
+                if modal_vertices[mv_idx].obj_idx == obj1_idx:
+                    mod_v1 = modal_vertices[mv_idx]
+                    mod_v1_idx = mv_idx
+                elif modal_vertices[mv_idx].obj_idx == obj2_idx:
+                    mod_v2 = modal_vertices[mv_idx]
+                    mod_v2_idx = mv_idx
+
+            samples_idx = []
+            vertex1_id_list = []
+            vertex2_id_list = []
+            
             for sample_idx in range(start_samples, stop_samples):
                 samples_idx.append(sample_idx)
                 collision_margin = distances(sample_idx) * (1 + collision.threshold)
@@ -214,7 +220,6 @@ class CollisionSolver:
                 tree2 = cKDTree(mesh2_vertices)
 
                 # Get contact type
-                # PUT THIS IN ForceDataSequence lib/force_data.py get_contact_type
                 force_frames = force.frames
                 ctf = force_frames[np.where(force_frames <= sample_idx)]
                 if not ctf.shape[0] == 0 and not ctf[-1] == force_frames[-1]:
@@ -225,16 +230,15 @@ class CollisionSolver:
                     contact_type = force.get_contact_type(force_frames[0])
 
                 # Find vertices within collision margin of the closest points
-                radius = collision_margin * 2.0  # Use slightly larger radius to capture nearby faces
+                radius = collision_margin * 2.0
                 if contact_type in [4, 5]:
-                    radius = collision_margin * 4.0  # Use slightly larger radius to capture nearby rolling faces
+                    radius = collision_margin * 4.0
 
-                # Query for vertices near the closest closest point on each mesh
+                # Query for vertices near the closest point on each mesh
                 vertices1_idx = tree1.query_ball_point(cp1, radius, workers=-1)
                 vertices2_idx = tree2.query_ball_point(cp2, radius, workers=-1)
 
                 if vertices1_idx and vertices2_idx:
-                    # Convert vertex indices to face indices
                     vertices1_idx = np.array(vertices1_idx)
                     vertices2_idx = np.array(vertices2_idx)
                         
@@ -275,45 +279,52 @@ class CollisionSolver:
                     vertex2_id_list += cvidx2.tolist()
 
                     print(f"facing faces between {config_obj1.name} and {config_obj2.name} at frame {sample_idx}: {mesh1_faces_idx.shape[0]} {mesh2_faces_idx.shape[0]} at distance {collision_margin}")
+                    
+                    # Update score tracks through EntityManager
                     if sample_idx <= impact_end:
                         impact_type = np.array([1])
-                        score_track1.add_event(ScoreEvent(type=impact_type, sample_idx=sample_idx, contact_area=face_area1, vertex_ids=cvidx1))
-                        score_track2.add_event(ScoreEvent(type=impact_type, sample_idx=sample_idx, contact_area=face_area2, vertex_ids=cvidx2))
-                    score_track1.add_event(ScoreEvent(type=contact_type, sample_idx=sample_idx, contact_area=face_area1, vertex_ids=cvidx1))
-                    score_track2.add_event(ScoreEvent(type=contact_type, sample_idx=sample_idx, contact_area=face_area2, vertex_ids=cvidx2))
+                        self._add_event_to_score_track(score_track1_idx, ScoreEvent(type=impact_type, sample_idx=sample_idx, contact_area=face_area1, vertex_ids=cvidx1))
+                        self._add_event_to_score_track(score_track2_idx, ScoreEvent(type=impact_type, sample_idx=sample_idx, contact_area=face_area2, vertex_ids=cvidx2))
+                    
+                    self._add_event_to_score_track(score_track1_idx, ScoreEvent(type=contact_type, sample_idx=sample_idx, contact_area=face_area1, vertex_ids=cvidx1))
+                    self._add_event_to_score_track(score_track2_idx, ScoreEvent(type=contact_type, sample_idx=sample_idx, contact_area=face_area2, vertex_ids=cvidx2))
                 else:
                     print(f"facing faces between {config_obj1.name} and {config_obj2.name} at frame {sample_idx}: 0 0 at distance {collision_margin}")
-                    score_track1.add_event(ScoreEvent(type=contact_type, sample_idx=sample_idx, contact_area=0, vertex_ids=np.array([])))
-                    score_track2.add_event(ScoreEvent(type=contact_type, sample_idx=sample_idx, contact_area=0, vertex_ids=np.array([])))
+                    self._add_event_to_score_track(score_track1_idx, ScoreEvent(type=contact_type, sample_idx=sample_idx, contact_area=0, vertex_ids=np.array([])))
+                    self._add_event_to_score_track(score_track2_idx, ScoreEvent(type=contact_type, sample_idx=sample_idx, contact_area=0, vertex_ids=np.array([])))
 
             vertex1_id_list = np.unique(np.array(vertex1_id_list))
             vertex2_id_list = np.unique(np.array(vertex2_id_list))
 
-#            print('CollisionSolver: ', collision.frame, obj1_idx, obj2_idx, len(samples_idx))
             collision.samples = np.array(samples_idx)
-            modal_vertices = self.entity_manager.get('modal_vertices')
-            mod_v1, mod_v2 = (None for _ in range(2))
-            for mv_idx in modal_vertices.keys():
-                if modal_vertices[mv_idx].obj_idx == obj1_idx:
-                    mod_v1 = modal_vertices[mv_idx]
-                elif modal_vertices[mv_idx].obj_idx == obj2_idx:
-                    mod_v2 = modal_vertices[mv_idx]
             
-            if not mod_v1 == None:
-                mod_v1.add_vertices(vertex1_id_list)
-            else:
-                modal_vertices1 = ModalVertices(obj_idx=obj1_idx, vertices=vertex1_id_list)
-#                modal_idx = len(self.entity_manager.get('modal_vertices')) + 1
-#                self.entity_manager.register('modal_vertices', modal_vertices1, modal_idx)
-                _ = self.entity_manager.register('modal_vertices', modal_vertices1)
+            # Update modal vertices through EntityManager
+            self._update_modal_vertices(mod_v1_idx, obj1_idx, vertex1_id_list)
+            self._update_modal_vertices(mod_v2_idx, obj2_idx, vertex2_id_list)
 
-            if not mod_v2 == None:
-                mod_v2.add_vertices(vertex2_id_list)
-            else:
-                modal_vertices2 = ModalVertices(obj_idx=obj2_idx, vertices=vertex2_id_list)
-#                modal_idx = len(self.entity_manager.get('modal_vertices')) + 1
-#                self.entity_manager.register('modal_vertices', modal_vertices2, modal_idx)
-                _ = self.entity_manager.register('modal_vertices', modal_vertices2)
+    def _add_event_to_score_track(self, score_track_idx: int, event: ScoreEvent) -> None:
+        """Add an event to a score track using EntityManager's update_entity."""
+        def update_score_track(score_track):
+            if score_track is not None:
+                score_track.add_event(event)
+            return score_track
+        
+        self.entity_manager.update_entity('score_tracks', score_track_idx, update_score_track)
+
+    def _update_modal_vertices(self, modal_vertices_idx: Optional[int], obj_idx: int, vertex_ids: np.ndarray) -> None:
+        """Update or create modal vertices using EntityManager."""
+        if modal_vertices_idx is not None:
+            # Update existing modal vertices
+            def update_modal_vertices(modal_vertices):
+                if modal_vertices is not None:
+                    modal_vertices.add_vertices(vertex_ids)
+                return modal_vertices
+            
+            self.entity_manager.update_entity('modal_vertices', modal_vertices_idx, update_modal_vertices)
+        else:
+            # Create new modal vertices
+            modal_vertices = ModalVertices(obj_idx=obj_idx, vertices=vertex_ids)
+            self.entity_manager.register('modal_vertices', modal_vertices)
 
     def _connected_facing_face(self, obj1_idx: int, obj2_idx: int, mesh1_faces: np.ndarray, mesh2_faces: np.ndarray) -> None:
         # Load pre-computed distance data
@@ -328,7 +339,9 @@ class CollisionSolver:
             cp1 = distance_data[distance_data.files[1]]
             cp2 = distance_data[distance_data.files[2]]
 
-            vertex1_id_list, vertex2_id_list = ([] for _ in range(2))
+            vertex1_id_list = []
+            vertex2_id_list = []
+            
             # Find vertices near the collision using KDTree
             mesh1_vertices = self.trajectory1.get_vertices(0)
             mesh2_vertices = self.trajectory2.get_vertices(0)
@@ -338,9 +351,9 @@ class CollisionSolver:
             tree2 = cKDTree(mesh2_vertices)
                     
             # Find vertices within collision margin of the closest points
-            radius = collision_margin * 2.0  # Use slightly larger radius to capture nearby faces
+            radius = collision_margin * 2.0
 
-            # Query for vertices near the closest closest point on each mesh
+            # Query for vertices near the closest point on each mesh
             vertices1_idx = tree1.query_ball_point(cp1, radius, workers=-1)
             vertices2_idx = tree2.query_ball_point(cp2, radius, workers=-1)
 
@@ -388,26 +401,39 @@ class CollisionSolver:
                 vertex1_id_list = np.unique(np.array(vertex1_id_list))
                 vertex2_id_list = np.unique(np.array(vertex2_id_list))
 
+                # Get or create modal vertices
                 modal_vertices = self.entity_manager.get('modal_vertices')
-                mod_v1, mod_v2 = (None for _ in range(2))
+                mod_v1 = None
+                mod_v2 = None
+                mod_v1_idx = None
+                mod_v2_idx = None
+                
                 for mv_idx in modal_vertices.keys():
                     if modal_vertices[mv_idx].obj_idx == obj1_idx:
                         mod_v1 = modal_vertices[mv_idx]
+                        mod_v1_idx = mv_idx
                     elif modal_vertices[mv_idx].obj_idx == obj2_idx:
                         mod_v2 = modal_vertices[mv_idx]
+                        mod_v2_idx = mv_idx
                         
-                if not mod_v1 == None:
-                    mod_v1.add_vertices(vertex1_id_list)
+                # Update or create modal vertices for object 1
+                if mod_v1_idx is not None:
+                    def update_mv1(mv):
+                        if mv is not None:
+                            mv.add_vertices(vertex1_id_list)
+                        return mv
+                    self.entity_manager.update_entity('modal_vertices', mod_v1_idx, update_mv1)
                 else:
                     modal_vertices1 = ModalVertices(obj_idx=obj1_idx, vertices=vertex1_id_list, connected_area=face_area1/vertex1_id_list.shape[0])
-#                    modal_idx = len(self.entity_manager.get('modal_vertices')) + 1
-#                    self.entity_manager.register('modal_vertices', modal_vertices1, modal_idx)
-                    _ = self.entity_manager.register('modal_vertices', modal_vertices1)
+                    self.entity_manager.register('modal_vertices', modal_vertices1)
                    
-                if not mod_v2 == None:
-                    mod_v2.add_vertices(vertex2_id_list)
+                # Update or create modal vertices for object 2
+                if mod_v2_idx is not None:
+                    def update_mv2(mv):
+                        if mv is not None:
+                            mv.add_vertices(vertex2_id_list)
+                        return mv
+                    self.entity_manager.update_entity('modal_vertices', mod_v2_idx, update_mv2)
                 else:
                     modal_vertices2 = ModalVertices(obj_idx=obj2_idx, vertices=vertex2_id_list, connected_area=face_area2/vertex2_id_list.shape[0])
-#                    modal_idx = len(self.entity_manager.get('modal_vertices')) + 1
-#                    self.entity_manager.register('modal_vertices', modal_vertices2, modal_idx)
-                    _ = self.entity_manager.register('modal_vertices', modal_vertices2)
+                    self.entity_manager.register('modal_vertices', modal_vertices2)
