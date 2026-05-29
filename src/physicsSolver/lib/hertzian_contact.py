@@ -492,13 +492,17 @@ class HertzianContact:
                        abs(rolling_velocity2 - tangential_velocity) / max(rolling_velocity2, 0.001) < 0.2)
         
         # Pure rolling condition
-        if (is_rolling1 or is_rolling2) and tangential_velocity > VELOCITY_THRESHOLD:
+        # Rolling condition: tangential velocity matches angular velocity * radius
+        rolling_speed1 = R1 * angular_speed1 / 2
+        rolling_speed2 = R2 * angular_speed2 / 2
+        if (tangential_velocity > VELOCITY_THRESHOLD and (is_rolling1 or is_rolling2)) and (math.isclose(rolling_speed1, relative_velocity, rel_tol=0.5) or math.isclose(rolling_speed2, relative_velocity, rel_tol=0.5)):
             # Check if it it's pure rolling (minimal slip)
-            slip_ratio = 0
+            slip_ratio1, slip_ratio2 = (0 for _ in range(2))
             if is_rolling1 and rolling_velocity1 > 0:
-                slip_ratio = abs(tangential_velocity - rolling_velocity1) / rolling_velocity1
-            elif is_rolling2 and rolling_velocity2 > 0:
-                slip_ratio = abs(tangential_velocity - rolling_velocity2) / rolling_velocity2
+                slip_ratio1 = abs(tangential_velocity - rolling_velocity1) / rolling_velocity1
+            if is_rolling2 and rolling_velocity2 > 0:
+                slip_ratio2 = abs(tangential_velocity - rolling_velocity2) / rolling_velocity2
+            slip_ratio = max(slip_ratio1, slip_ratio2)
             
             if slip_ratio < 0.1:  # Less than 10% slip
                 return ContactType.ROLLING
@@ -533,7 +537,7 @@ class HertzianContact:
             
             if scraping_score >= 0.6:
                 return ContactType.SCRAPING
-            else:
+            elif scraping_score < 0.6:
                 return ContactType.SLIDING
         
         # Mixed contact conditions
@@ -659,8 +663,10 @@ class HertzianContact:
             # Criterion 1: High friction utilization
             if friction_utilization > 0.8:
                 scraping_probability += 0.5
-            elif friction_utilization > 0.5:
+            elif 0.5 < friction_utilization <= 0.8:
                 scraping_probability += 0.3
+            elif friction_utilization <= 0.5:
+                scraping_probability += 0.1
             
             # Criterion 2: Surface roughness
             if avg_roughness > 0.0005: # 500 micron roughness
