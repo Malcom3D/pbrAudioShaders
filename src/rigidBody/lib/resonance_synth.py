@@ -48,7 +48,7 @@ class ResonanceSynth:
             2: 0.8, # "scraping"
             3: 0.7, # "sliding"
             4: 0.5, # "rolling" 
-            5: 1.0 # mixed -> "static" 
+            5: 1.0, # mixed -> "static" 
             6: 1.0 # "static" 
         }
         type_scale = type_scales.get(synth_type)
