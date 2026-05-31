@@ -19,6 +19,7 @@
 import os
 import numpy as np
 import trimesh
+import math
 from scipy.spatial import cKDTree
 from typing import Any, List, Tuple, Dict
 from dataclasses import dataclass, field
@@ -278,6 +279,7 @@ class DistanceSolver:
         1. Short duration (typically < 0.1 seconds)
         2. Sharp distance change (high gradient)
         3. Distance goes significantly below threshold and back up
+          4. After impact the object stick
         """
         # Criterion 1: Duration threshold
         max_impact_duration = 1 / sfps
@@ -305,11 +307,15 @@ class DistanceSolver:
             # For impact, left slope should be negative, right slope positive
             is_v_shaped = left_slope < -0.1 and right_slope > 0.1
             
+            # Criterion 4: Distance profile - After impact the object stick
+            # Left slope should be negative, right slope should be 0
+            is_stick_after = left_slope < -0.1 and math.isclose(right_slope, 0, rel_tol=0.05)
+
             # Combined decision
             is_impact = (
                 (duration < max_impact_duration) and
                 (max_gradient > 1.0) and  # Rapid distance change
-                is_v_shaped and
+                (is_v_shaped or is_stick_after) and
                 (region_distances[min_idx] < threshold * 0.5)  # Goes well below threshold
             )
         else:

@@ -106,6 +106,7 @@ class Pym2f:
         else:
             raise ValueError(f'Error: {cmd}')
 
+        print('pym2f: obj.name', config_obj.name, 'resonance:', config_obj.resonance)
         if config_obj.resonance:
             resonance_obj_file = f"{obj_file.removesuffix('.obj')}_resonance.obj"
             if os.path.exists(resonance_obj_file):

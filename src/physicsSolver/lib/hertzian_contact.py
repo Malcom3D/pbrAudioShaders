@@ -463,7 +463,7 @@ class HertzianContact:
         """
         # Constants
         VELOCITY_THRESHOLD = 0.001  # 1 mm/s threshold for "static"
-        ANGULAR_VELOCITY_THRESHOLD = 0.01  # 0.01 rad/s threshold
+        ANGULAR_VELOCITY_THRESHOLD = 0.001  # 0.01 rad/s threshold
         
         # Calculate derived parameters
         angular_speed1 = np.linalg.norm(omega1)
@@ -535,9 +535,9 @@ class HertzianContact:
             # Factor 4: Intermittent contact (check if this is available from context)
             # This would require additional data about contact stability
             
-            if scraping_score >= 0.6:
+            if scraping_score > 0.8:
                 return ContactType.SCRAPING
-            elif scraping_score < 0.6:
+            elif scraping_score <= 0.8:
                 return ContactType.SLIDING
         
         # Mixed contact conditions
