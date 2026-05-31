@@ -319,7 +319,7 @@ class HertzianContact:
         
         # Classify contact type
         contact_type = self._classify_contact_type(relative_velocity, tangential_velocity, normal_force_mag, tangential_force_mag, omega1, omega2, roughness1, roughness2, friction1, friction2, R1, R2)
-        print('Classify contact type', config_obj1.name, sample_idx, contact_type)
+        print('Classify contact type', config_obj1.name, sample_idx, contact_type, relative_velocity, tangential_velocity, normal_force_mag, tangential_force_mag, omega1, omega2, roughness1, roughness2, friction1, friction2, R1, R2)
         
         # Compute coupling strength for continuous contact
         coupling_strength = self._compute_coupling_strength(config_obj1, config_obj2, normal_force_mag, a_contact, relative_velocity, is_continuous=True, contact_type=contact_type)

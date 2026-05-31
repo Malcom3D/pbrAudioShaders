@@ -152,6 +152,7 @@ class DistanceSolver:
             
             # Check if this is an impact (short duration, sharp distance change)
             is_impact = self._is_impact_event(region_distances, region_times, duration, threshold, sfps)
+            print(f"impact {config_objs[0].name} and {config_objs[1].name}", is_impact)
             
             if is_impact:
                 # For impacts, find the exact impact time (minimum distance)
