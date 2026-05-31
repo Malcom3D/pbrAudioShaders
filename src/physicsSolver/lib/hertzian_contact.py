@@ -494,9 +494,7 @@ class HertzianContact:
         
         # Pure rolling condition
         # Rolling condition: tangential velocity matches angular velocity * radius
-        rolling_speed1 = R1 * angular_speed1 / 2
-        rolling_speed2 = R2 * angular_speed2 / 2
-        if (tangential_velocity > VELOCITY_THRESHOLD and (is_rolling1 or is_rolling2)) and (math.isclose(rolling_speed1, relative_velocity, rel_tol=0.5) or math.isclose(rolling_speed2, relative_velocity, rel_tol=0.5)):
+        if (tangential_velocity > VELOCITY_THRESHOLD and (is_rolling1 or is_rolling2)) and (math.isclose(rolling_velocity1, relative_velocity, rel_tol=0.5) or math.isclose(rolling_velocity2, relative_velocity, rel_tol=0.5)):
             # Check if it it's pure rolling (minimal slip)
             slip_ratio1, slip_ratio2 = (0 for _ in range(2))
             if is_rolling1 and rolling_velocity1 > 0:
