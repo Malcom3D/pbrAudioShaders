@@ -467,7 +467,7 @@ class HertzianContact:
     
         is_static_angular = (avg_angular_speed < ANGULAR_VELOCITY_THRESHOLD)
     
-        is_static_force = (tangential_force_mag < 0.001)  # Very low tangential force
+        is_static_force = (tangential_force < 0.001)  # Very low tangential force
     
         # If the object has effectively stopped, classify as static
         if is_static_velocity and is_static_angular:
@@ -501,7 +501,7 @@ class HertzianContact:
     
         # Check if either object is rolling
         is_rolling1 = (R1 > 0 and angular_speed1 > ANGULAR_VELOCITY_THRESHOLD)
-        is_rolling2 = (R2 > 0 and angular_speed2 > ANGULAR_VELOCITYITY_THRESHOLD)
+        is_rolling2 = (R2 > 0 and angular_speed2 > ANGULAR_VELOCITY_THRESHOLD)
     
         # For rolling, we need significant angular velocity AND
         # the tangential velocity should be close to the rolling velocity
@@ -594,8 +594,10 @@ class HertzianContact:
         }
     
         # Constants
-        VELOCITY_STATIC_THRESHOLD = 0.001
-        ANGULAR_VELOCITY_THRESHOLD = 0.01
+        VELOCITY_STATIC_THRESHOLD = 0.001  # 1 mm/s - objects below this are considered stopped
+        VELOCITY_IMPACT_THRESHOLD = 0.1    # 10 cm/s - threshold for impact-like behavior
+        ANGULAR_VELOCITY_THRESHOLD = 0.01  # 0.01 rad/s - minimum rotation to consider
+        MIN_ROLLING_VELOCITY = 0.01        # Minimum velocity for rolling to be meaningful
     
         # Calculate angular speeds
         angular_speed1 = np.linalg.norm(omega1)
