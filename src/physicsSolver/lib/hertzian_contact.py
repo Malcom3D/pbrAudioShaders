@@ -444,7 +444,7 @@ class HertzianContact:
         - Proper handling of impact-stick scenarios
         """
         # Constants - tuned for better classification
-        VELOCITY_STATIC_THRESHHOLD = 0.001  # 1 mm/s - threshold for static
+        VELOCITY_STATIC_THRESHOLD = 0.001  # 1 mm/s - threshold for static
         VELOCITY_MOTION_THRESHOLD = 0.0001  # 0.1 mm/s - absolute motion threshold
         ANGULAR_VELOCITY_THRESHOLD = 0.001  # 0.001 rad/s threshold for rotation
         MIN_ROLLING_VELOCITY = 0.01  # Minimum velocity for rolling to be meaningful
