@@ -364,6 +364,8 @@ class DistanceSolver:
         # Calculate minimum distance between transformed meshes
         min_distance, closest_points = self._calculate_min_distance(mesh1=mesh1, mesh2=mesh2)
 
+        print('_calculate_min_distance', frame_idx, min_distance)
+
         return min_distance, closest_points
 
     def _calculate_min_distance(self, mesh1: trimesh.Trimesh, mesh2: trimesh.Trimesh, workers: int = -1) -> Tuple[float, Dict[str, np.ndarray]]:
@@ -382,35 +384,6 @@ class DistanceSolver:
         Tuple[float, Dict[str, np.ndarray]]
             Minimum distance and closest points information
         """
-#        method = 'rtree'
-#        pq1 = trimesh.proximity.ProximityQuery(mesh1)
-#        pq2 = trimesh.proximity.ProximityQuery(mesh2)
-#
-#        closest_points1, distances1, faces_id1 = pq1.on_surface(mesh2.vertices)
-#        closest_points2, distances2, faces_id2 = pq1.on_surface(mesh1.vertices)
-#
-#        min_dist_idx1 = np.argmin(distances1)
-#        min_dist_idx2 = np.argmin(distances2)
-#        mesh1_vertex_idx = np.argmin(np.abs(mesh1.vertices - closest_points1[min_dist_idx1]))
-#        mesh2_vertex_idx = np.argmin(np.abs(mesh2.vertices - closest_points1[min_dist_idx2]))
-#
-#        dist1 = distances1[min_dist_idx1]
-#        dist2 = distances2[min_dist_idx2]
-#        min_distance = min(dist1, dist2) if dist1 > 0 and dist2 > 0 else (dist1 if dist1 > 0 else dist2)
-#
-#        closest_point1 = closest_points1[min_dist_idx1]
-#        closest_point2 = closest_points2[min_dist_idx2]
-#
-#        closest_points = {
-#            'method': method,
-#            'mesh1_point': closest_point1,
-#            'mesh2_point': closest_point2,
-#            'mesh1_vertex_idx': mesh1_vertex_idx,
-#            'mesh2_vertex_idx': mesh2_vertex_idx
-#        }
-#
-#        return min_distance, closest_points
-#
         method = 'approx'
         # Use KDTree for efficient distance calculation
         from scipy.spatial import cKDTree
@@ -450,6 +423,26 @@ class DistanceSolver:
             min_distance = distances[min_dist_idx]
             closest_point1 = mesh1.vertices[mask1][min_dist_idx]
             closest_point2 = nearby_vertices2[indices[min_dist_idx]]
+
+        else:
+            method = 'rtree'
+            pq1 = trimesh.proximity.ProximityQuery(mesh1)
+            pq2 = trimesh.proximity.ProximityQuery(mesh2)
+
+            closest_points1, distances1, faces_id1 = pq1.on_surface(mesh2.vertices)
+            closest_points2, distances2, faces_id2 = pq1.on_surface(mesh1.vertices)
+
+            min_dist_idx1 = np.argmin(distances1)
+            min_dist_idx2 = np.argmin(distances2)
+            mesh1_vertex_idx = np.argmin(np.abs(mesh1.vertices - closest_points1[min_dist_idx1]))
+            mesh2_vertex_idx = np.argmin(np.abs(mesh2.vertices - closest_points1[min_dist_idx2]))
+
+            dist1 = distances1[min_dist_idx1]
+            dist2 = distances2[min_dist_idx2]
+            min_distance = min(dist1, dist2) if dist1 > 0 and dist2 > 0 else (dist1 if dist1 > 0 else dist2)
+
+            closest_point1 = closest_points1[min_dist_idx1]
+            closest_point2 = closest_points2[min_dist_idx2]
         
         closest_points = {
             'method': method,
