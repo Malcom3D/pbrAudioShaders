@@ -21,10 +21,13 @@ import numpy as np
 import trimesh
 import math
 from scipy.spatial import cKDTree
-from typing import Any, List, Tuple, Dict
+#from typing import Any, List, Tuple, Dict
 from dataclasses import dataclass, field
 from scipy import stats
 from scipy.signal import find_peaks
+
+from numba import njit, prange, float64, int64, boolean
+from numba.core.types import Tuple
 
 from ..core.entity_manager import EntityManager
 from ..utils.config import Config, ObjectConfig
@@ -32,11 +35,240 @@ from ..lib.collision_data import CollisionData, CollisionType
 
 from ..lib.functions import _load_pose, _load_mesh
 
+@njit(fastmath=True, cache=True)
+def point_point_distance(p1, p2):
+    """Compute squared distance between two points"""
+    diff = p1 - p2
+    return diff[0] * diff[0] + diff[1] * diff[1] + diff[2] * diff[2]
+
+@njit(fastmath=True, cache=True)
+def point_triangle_distance(point, v0, v1, v2):
+    """Compute squared distance from point to triangle"""
+    # Compute vectors
+    v0v1 = v1 - v0
+    v0v2 = v2 - v0
+    n = np.cross(v0v1, v0v2)
+    
+    # Check if degenerate triangle
+    n_len_sq = np.dot(n, n)
+    if n_len_sq < 1e-10:
+        return min(point_point_distance(point, v0),
+                   point_point_distance(point, v1),
+                   point_point_distance(point, v2))
+    
+    # Compute barycentric coordinates
+    v0p = point - v0
+    d00 = np.dot(v0v1, v0v1)
+    d01 = np.dot(v0v1, v0v2)
+    d11 = np.dot(v0v2, v0v2)
+    d20 = np.dot(v0p, v0v1)
+    d21 = np.dot(v0p, v0v2)
+    
+    denom = d00 * d11 - d01 * d01
+    if denom < 1e-10:
+        return min(point_point_distance(point, v0),
+                   point_point_distance(point, v1),
+                   point_point_distance(point, v2))
+    
+    v = (d11 * d20 - d01 * d21) / denom
+    w = (d00 * d21 - d01 * d20) / denom
+    u = 1.0 - v - w
+    
+    # Clamp to triangle
+    if u >= 0 and v >= 0 and w >= 0:
+        # Point inside triangle
+        closest = v0 + v * v0v1 + w * v0v2
+    else:
+        # Point outside triangle - compute distance to edges
+        dists = []
+        
+        # Edge v0-v1
+        t = np.dot(point - v0, v0v1) / d00
+        t = max(0.0, min(1.0, t))
+        closest_edge = v0 + t * v0v1
+        dists.append(point_point_distance(point, closest_edge))
+        
+        # Edge v1-v2
+        v1v2 = v2 - v1
+        d = np.dot(point - v1, v1v2) / np.dot(v1v2, v1v2)
+        d = max(0.0, min(1.0, d))
+        closest_edge = v1 + d * v1v2
+        dists.append(point_point_distance(point, closest_edge))
+        
+        # Edge v2-v0
+        v2v0 = v0 - v2
+        d = np.dot(point - v2, v2v0) / np.dot(v2v0, v2v0)
+        d = max(0.0, min(1.0, d))
+        closest_edge = v2 + d * v2v0
+        dists.append(point_point_distance(point, closest_edge))
+        
+        return min(dists)
+    
+    return point_point_distance(point, closest)
+
+@njit(parallel=True, fastmath=True, cache=True)
+def compute_vertex_triangle_distances(vertices, triangles, tri_indices):
+    """Compute minimum distances from vertices to triangles"""
+    n_vertices = vertices.shape[0]
+    n_triangles = triangles.shape[0]
+    min_dist = np.inf
+    
+    for i in prange(n_vertices):
+        vertex = vertices[i]
+        for j in range(n_triangles):
+            tri_idx = tri_indices[j]
+            v0, v1, v2 = triangles[tri_idx]
+            dist = point_triangle_distance(vertex, v0, v1, v2)
+            if dist < min_dist:
+                min_dist = dist
+    
+    return np.sqrt(min_dist)
+
+@njit(parallel=True, fastmath=True, cache=True)
+def compute_triangle_triangle_distances(triangles1, triangles2):
+    """Compute minimum distances between triangles of two meshes"""
+    n_tri1 = triangles1.shape[0]
+    n_tri2 = triangles2.shape[0]
+    min_dist = np.inf
+    
+    for i in prange(n_tri1):
+        v0_1, v1_1, v2_1 = triangles1[i]
+        
+        for j in range(n_tri2):
+            v0_2, v1_2, v2_2 = triangles2[j]
+            
+            # Compute distances between all vertex pairs
+            dists = [
+                point_point_distance(v0_1, v0_2),
+                point_point_distance(v0_1, v1_2),
+                point_point_distance(v0_1, v2_2),
+                point_point_distance(v1_1, v0_2),
+                point_point_distance(v1_1, v1_2),
+                point_point_distance(v1_1, v2_2),
+                point_point_distance(v2_1, v0_2),
+                point_point_distance(v2_1, v1_2),
+                point_point_distance(v2_1, v2_2)
+            ]
+            
+            # Check if we can use vertex-vertex distances
+            min_vertex_dist = min(dists)
+            if min_vertex_dist < min_dist:
+                min_dist = min_vertex_dist
+            
+            # Compute edge-edge distances
+            edges1 = [(v0_1, v1_1), (v1_1, v2_1), (v2_1, v0_1)]
+            edges2 = [(v0_2, v1_2), (v1_2, v2_2), (v2_2, v0_2)]
+            
+            for e1 in edges1:
+                for e2 in edges2:
+                    dist = edge_edge_distance(e1[0], e1[1], e2[0], e2[1])
+                    if dist < min_dist:
+                        min_dist = dist
+    
+    return np.sqrt(min_dist)
+
+@njit(fastmath=True, cache=True)
+def edge_edge_distance(p1, p2, p3, p4):
+    """Compute distance between two line segments"""
+    u = p2 - p1
+    v = p4 - p3
+    w = p1 - p3
+    
+    a = np.dot(u, u)
+    b = np.dot(u, v)
+    c = np.dot(v, v)
+    d = np.dot(u, w)
+    e = np.dot(v, w)
+    
+    denom = a * c - b * b
+    
+    if denom < 1e-10:
+        # Parallel edges
+        t = 0.0
+        s = d / a if a > 1e-10 else 0.0
+    else:
+        s = (b * e - c * d) / denom
+        t = (a * e - b * d) / denom
+    
+    # Clamp to segment parameters
+    s = max(0.0, min(1.0, s))
+    t = max(0.0, min(1.0, t))
+    
+    closest1 = p1 + s * u
+    closest2 = p3 + t * v
+    
+    return point_point_distance(closest1, closest2)
+
+@njit(parallel=True, fastmath=True, cache=True)
+def compute_min_distance_numba(vertices1, vertices2, triangles1, triangles2):
+    """
+    Pure Numba implementation for maximum performance
+    This releases the GIL automatically
+    """
+    n_v1 = vertices1.shape[0]
+    n_v2 = vertices2.shape[0]
+    n_t1 = triangles1.shape[0]
+    n_t2 = triangles2.shape[0]
+    
+    min_dist_sq = np.inf
+    
+    # Vertex-Vertex distances
+    for i in prange(n_v1):
+        v1 = vertices1[i]
+        for j in range(n_v2):
+            v2 = vertices2[j]
+            dist = point_point_distance(v1, v2)
+            if dist < min_dist_sq:
+                min_dist_sq = dist
+    
+    # Vertex-Triangle distances
+    for i in prange(n_v1):
+        v = vertices1[i]
+        for j in range(n_t2):
+            tri = triangles2[j]
+            dist = point_triangle_distance(v, tri[0], tri[1], tri[2])
+            if dist < min_dist_sq:
+                min_dist_sq = dist
+    
+    for i in prange(n_v2):
+        v = vertices2[i]
+        for j in range(n_t1):
+            tri = triangles1[j]
+            dist = point_triangle_distance(v, tri[0], tri[1], tri[2])
+            if dist < min_dist_sq:
+                min_dist_sq = dist
+    
+    # Triangle-Triangle distances
+    for i in prange(n_t1):
+        tri1 = triangles1[i]
+        for j in range(n_t2):
+            tri2 = triangles2[j]
+            
+            # Vertex pairs
+            for v1 in tri1:
+                for v2 in tri2:
+                    dist = point_point_distance(v1, v2)
+                    if dist < min_dist_sq:
+                        min_dist_sq = dist
+            
+            # Edge-edge
+            edges1 = [(tri1[0], tri1[1]), (tri1[1], tri1[2]), (tri1[2], tri1[0])]
+            edges2 = [(tri2[0], tri2[1]), (tri2[1], tri2[2]), (tri2[2], tri2[0])]
+            
+            for e1 in edges1:
+                for e2 in edges2:
+                    dist = edge_edge_distance(e1[0], e1[1], e2[0], e2[1])
+                    if dist < min_dist_sq:
+                        min_dist_sq = dist
+    
+    return np.sqrt(min_dist_sq)
+
 @dataclass
 class DistanceSolver:
     entity_manager: EntityManager
 
     def __post_init__(self):
+        from typing import Any, List, Tuple, Dict
         config = self.entity_manager.get('config')
         self.output_dir = f"{config.system.cache_path}/distances"
         os.makedirs(self.output_dir, exist_ok=True)
@@ -380,35 +612,70 @@ class DistanceSolver:
         Tuple[float, Dict[str, np.ndarray]]
             Minimum distance and closest points information
         """
-        method = 'rtree'
-        pq1 = trimesh.proximity.ProximityQuery(mesh1)
-        pq2 = trimesh.proximity.ProximityQuery(mesh2)
+        method = 'numba'
+        vertices1 = np.ascontiguousarray(mesh1.vertices, dtype=np.float64)
+        vertices2 = np.ascontiguousarray(mesh2.vertices, dtype=np.float64)
+        triangles1 = vertices1[mesh1.faces]
+        triangles2 = vertices2[mesh2.faces]
+        
+        min_distance = compute_min_distance_numba(vertices1, vertices2, triangles1, triangles2)
 
-        closest_points1, distances1, faces_id1 = pq1.on_surface(mesh2.vertices)
-        closest_points2, distances2, faces_id2 = pq1.on_surface(mesh1.vertices)
+        # Use KDTree for efficient distance calculation
+        from scipy.spatial import cKDTree
 
-        min_dist_idx1 = np.argmin(distances1)
-        min_dist_idx2 = np.argmin(distances2)
-        mesh1_vertex_idx = np.argmin(np.abs(mesh1.vertices - closest_points1[min_dist_idx1]))
-        mesh2_vertex_idx = np.argmin(np.abs(mesh2.vertices - closest_points1[min_dist_idx2]))
+        # Create KDTree for mesh2 vertices
+        tree2 = cKDTree(mesh2.vertices)
 
-        dist1 = distances1[min_dist_idx1]
-        dist2 = distances2[min_dist_idx2]
-        min_distance = min(dist1, dist2) if dist1 > 0 and dist2 > 0 else (dist1 if dist1 > 0 else dist2)
+        # Query distances from mesh1 vertices to mesh2
+        distances, indices = tree2.query(mesh1.vertices, workers=workers)
 
-        closest_point1 = closest_points1[min_dist_idx1]
-        closest_point2 = closest_points2[min_dist_idx2]
+        # Find minimum distance
+        min_dist_idx = np.argmin(distances)
+        min_distance = distances[min_dist_idx]
+
+        # Get closest points
+        closest_point1 = mesh1.vertices[min_dist_idx]
+        closest_point2 = mesh2.vertices[indices[min_dist_idx]]
 
         closest_points = {
             'method': method,
             'mesh1_point': closest_point1,
             'mesh2_point': closest_point2,
-            'mesh1_vertex_idx': mesh1_vertex_idx,
-            'mesh2_vertex_idx': mesh2_vertex_idx
+            'mesh1_vertex_idx': 0,
+            'mesh2_vertex_idx': 0
         }
 
         return min_distance, closest_points
 
+#        method = 'rtree'
+#        pq1 = trimesh.proximity.ProximityQuery(mesh1)
+#        pq2 = trimesh.proximity.ProximityQuery(mesh2)
+#
+#        closest_points1, distances1, faces_id1 = pq1.on_surface(mesh2.vertices)
+#        closest_points2, distances2, faces_id2 = pq1.on_surface(mesh1.vertices)
+#
+#        min_dist_idx1 = np.argmin(distances1)
+#        min_dist_idx2 = np.argmin(distances2)
+#        mesh1_vertex_idx = np.argmin(np.abs(mesh1.vertices - closest_points1[min_dist_idx1]))
+#        mesh2_vertex_idx = np.argmin(np.abs(mesh2.vertices - closest_points1[min_dist_idx2]))
+#
+#        dist1 = distances1[min_dist_idx1]
+#        dist2 = distances2[min_dist_idx2]
+#        min_distance = min(dist1, dist2) if dist1 > 0 and dist2 > 0 else (dist1 if dist1 > 0 else dist2)
+#
+#        closest_point1 = closest_points1[min_dist_idx1]
+#        closest_point2 = closest_points2[min_dist_idx2]
+#
+#        closest_points = {
+#            'method': method,
+#            'mesh1_point': closest_point1,
+#            'mesh2_point': closest_point2,
+#            'mesh1_vertex_idx': mesh1_vertex_idx,
+#            'mesh2_vertex_idx': mesh2_vertex_idx
+#        }
+#
+#        return min_distance, closest_points
+#
 #        method = 'approx'
 #        # Use KDTree for efficient distance calculation
 #        from scipy.spatial import cKDTree
