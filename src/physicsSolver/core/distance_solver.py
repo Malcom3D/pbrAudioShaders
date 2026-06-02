@@ -360,6 +360,7 @@ class DistanceSolver:
 
         # Calculate minimum distance between transformed meshes
         min_distance, closest_points = self._calculate_min_distance(mesh1=mesh1, mesh2=mesh2)
+        print('_calculate_min_distance', sample_idx, min_distance)
     
         return min_distance, closest_points
 
@@ -388,6 +389,8 @@ class DistanceSolver:
 
         min_dist_idx1 = np.argmin(distances1)
         min_dist_idx2 = np.argmin(distances2)
+        mesh1_vertex_idx = np.argmin(np.abs(mesh1.vertices - closest_points1[min_dist_idx1]))
+        mesh2_vertex_idx = np.argmin(np.abs(mesh2.vertices - closest_points1[min_dist_idx2]))
 
         min_distance = min(distances1[min_dist_idx1], distances2[min_dist_idx2])
 
@@ -398,12 +401,11 @@ class DistanceSolver:
             'method': method,
             'mesh1_point': closest_point1,
             'mesh2_point': closest_point2,
-            'mesh1_vertex_idx': min_dist_idx1,
-            'mesh2_vertex_idx': min_dist_idx2
+            'mesh1_vertex_idx': mesh1_vertex_idx,
+            'mesh2_vertex_idx': mesh2_vertex_idx
         }
-    
-        return min_distance, closest_points
 
+        return min_distance, closest_points
 
 #        method = 'approx'
 #        # Use KDTree for efficient distance calculation
