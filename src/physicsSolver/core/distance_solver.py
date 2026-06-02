@@ -360,7 +360,7 @@ class DistanceSolver:
 
         # Calculate minimum distance between transformed meshes
         min_distance, closest_points = self._calculate_min_distance(mesh1=mesh1, mesh2=mesh2)
-        print('_calculate_min_distance', sample_idx, min_distance)
+        print('_calculate_min_distance', frame_idx, min_distance)
     
         return min_distance, closest_points
 
