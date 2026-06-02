@@ -440,7 +440,7 @@ class HertzianContact:
         """
         # Constants - adjusted thresholds for better classification
         VELOCITY_STATIC_THRESHOLD = 0.001  # 1 mm/s - objects below this are considered stopped
-        VELOCITY_IMPACT_THRESHOLD = 0.1    # 10 cm/s - threshold for impact-like behavior
+        VELOCITY_IMPACT_THRESHOLD = 0.01    # 10 cm/s - threshold for impact-like behavior
         ANGULAR_VELOCITY_THRESHOLD = 0.01  # 0.01 rad/s - minimum rotation to consider
         MIN_ROLLING_VELOCITY = 0.01        # Minimum velocity for rolling to be meaningful
     
@@ -595,7 +595,7 @@ class HertzianContact:
     
         # Constants
         VELOCITY_STATIC_THRESHOLD = 0.001  # 1 mm/s - objects below this are considered stopped
-        VELOCITY_IMPACT_THRESHOLD = 0.1    # 10 cm/s - threshold for impact-like behavior
+        VELOCITY_IMPACT_THRESHOLD = 0.01    # 10 cm/s - threshold for impact-like behavior
         ANGULAR_VELOCITY_THRESHOLD = 0.01  # 0.01 rad/s - minimum rotation to consider
         MIN_ROLLING_VELOCITY = 0.01        # Minimum velocity for rolling to be meaningful
     
