@@ -362,7 +362,7 @@ class DistanceSolver:
         mesh2 = trimesh.Trimesh(vertices=vertices2, vertex_normals=normals2, faces=faces2)
 
         # Calculate minimum distance between transformed meshes
-        min_distance, closest_points = self._calculate_min_distance(mesh1=mesh1, mesh2=mesh2, collision_margin)
+        min_distance, closest_points = self._calculate_min_distance(mesh1=mesh1, mesh2=mesh2, collision_margin=collision_margin)
 
         print('_calculate_min_distance', closest_points['method'], frame_idx, min_distance)
 
