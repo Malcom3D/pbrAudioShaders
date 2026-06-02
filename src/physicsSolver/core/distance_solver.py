@@ -263,12 +263,12 @@ def compute_min_distance_numba(vertices1, vertices2, triangles1, triangles2):
     
     return np.sqrt(min_dist_sq)
 
+from typing import Any, List, Tuple, Dict
 @dataclass
 class DistanceSolver:
     entity_manager: EntityManager
 
     def __post_init__(self):
-        from typing import Any, List, Tuple, Dict
         config = self.entity_manager.get('config')
         self.output_dir = f"{config.system.cache_path}/distances"
         os.makedirs(self.output_dir, exist_ok=True)
