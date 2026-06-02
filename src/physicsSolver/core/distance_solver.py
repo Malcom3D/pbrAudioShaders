@@ -21,13 +21,13 @@ import numpy as np
 import trimesh
 import math
 from scipy.spatial import cKDTree
-#from typing import Any, List, Tuple, Dict
+from typing import Any, List, Tuple, Dict
 from dataclasses import dataclass, field
 from scipy import stats
 from scipy.signal import find_peaks
 
 from numba import njit, prange, float64, int64, boolean
-from numba.core.types import Tuple
+#from numba.core.types import Tuple
 
 from ..core.entity_manager import EntityManager
 from ..utils.config import Config, ObjectConfig
@@ -263,7 +263,6 @@ def compute_min_distance_numba(vertices1, vertices2, triangles1, triangles2):
     
     return np.sqrt(min_dist_sq)
 
-from typing import Any, List, Tuple, Dict
 @dataclass
 class DistanceSolver:
     entity_manager: EntityManager
