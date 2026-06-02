@@ -392,7 +392,7 @@ class DistanceSolver:
         mesh1_vertex_idx = np.argmin(np.abs(mesh1.vertices - closest_points1[min_dist_idx1]))
         mesh2_vertex_idx = np.argmin(np.abs(mesh2.vertices - closest_points1[min_dist_idx2]))
 
-        print('dist1', distances1[min_dist_idx1], 'dist2' distances2[min_dist_idx2])
+        print('dist1', distances1[min_dist_idx1], 'dist2', distances2[min_dist_idx2])
         min_distance = min(distances1[min_dist_idx1], distances2[min_dist_idx2])
 
         closest_point1 = closest_points1[min_dist_idx1]
