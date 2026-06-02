@@ -362,13 +362,13 @@ class DistanceSolver:
         mesh2 = trimesh.Trimesh(vertices=vertices2, vertex_normals=normals2, faces=faces2)
 
         # Calculate minimum distance between transformed meshes
-        min_distance, closest_points = self._calculate_min_distance(mesh1=mesh1, mesh2=mesh2)
+        min_distance, closest_points = self._calculate_min_distance(mesh1=mesh1, mesh2=mesh2, collision_margin)
 
         print('_calculate_min_distance', closest_points['method'], frame_idx, min_distance)
 
         return min_distance, closest_points
 
-    def _calculate_min_distance(self, mesh1: trimesh.Trimesh, mesh2: trimesh.Trimesh, workers: int = -1) -> Tuple[float, Dict[str, np.ndarray]]:
+    def _calculate_min_distance(self, mesh1: trimesh.Trimesh, mesh2: trimesh.Trimesh, collision_margin: float, workers: int = -1) -> Tuple[float, Dict[str, np.ndarray]]:
         """
         Calculate minimum distance between two meshes using KDTree.
     
@@ -387,7 +387,7 @@ class DistanceSolver:
         method = 'approx'
         # Use KDTree for efficient distance calculation
         from scipy.spatial import cKDTree
-    
+
         # Create KDTree for mesh2 vertices
         tree2 = cKDTree(mesh2.vertices)
     
@@ -398,33 +398,7 @@ class DistanceSolver:
         min_dist_idx = np.argmin(distances)
         min_distance = distances[min_dist_idx]
 
-        # Get closest points
-        closest_point1 = mesh1.vertices[min_dist_idx]
-        closest_point2 = mesh2.vertices[indices[min_dist_idx]]
-    
-        # Create bounding boxes around approximate closest points
-        search_radius = min_distance * 2.0  # Search in twice the approximate distance
-
-        # Find vertices near the approximate closest points
-        mask1 = np.linalg.norm(mesh1.vertices - closest_point1, axis=1) < search_radius
-        mask2 = np.linalg.norm(mesh2.vertices - closest_point2, axis=1) < search_radius
-
-        if np.any(mask1) and np.any(mask2):
-            method = 'refine'
-            # Build KD-tree for nearby vertices
-            nearby_vertices2 = mesh2.vertices[mask2]
-            tree2 = cKDTree(nearby_vertices2)
-        
-            # Query nearby vertices from mesh1
-            distances, indices = tree2.query(mesh1.vertices[mask1], workers=workers)
-        
-            # Find minimal distance
-            min_dist_idx = np.argmin(distances)
-            min_distance = distances[min_dist_idx]
-            closest_point1 = mesh1.vertices[mask1][min_dist_idx]
-            closest_point2 = nearby_vertices2[indices[min_dist_idx]]
-
-        else:
+        if min_distance > collision_margin * 2.0:
             method = 'rtree'
             pq1 = trimesh.proximity.ProximityQuery(mesh1)
             pq2 = trimesh.proximity.ProximityQuery(mesh2)
@@ -443,7 +417,34 @@ class DistanceSolver:
 
             closest_point1 = closest_points1[min_dist_idx1]
             closest_point2 = closest_points2[min_dist_idx2]
+
+        else:
+            # Get closest points
+            closest_point1 = mesh1.vertices[min_dist_idx]
+            closest_point2 = mesh2.vertices[indices[min_dist_idx]]
+    
+            # Create bounding boxes around approximate closest points
+            search_radius = min_distance * 2.0  # Search in twice the approximate distance
+
+            # Find vertices near the approximate closest points
+            mask1 = np.linalg.norm(mesh1.vertices - closest_point1, axis=1) < search_radius
+            mask2 = np.linalg.norm(mesh2.vertices - closest_point2, axis=1) < search_radius
+
+            if np.any(mask1) and np.any(mask2):
+                method = 'refine'
+                # Build KD-tree for nearby vertices
+                nearby_vertices2 = mesh2.vertices[mask2]
+                tree2 = cKDTree(nearby_vertices2)
         
+                # Query nearby vertices from mesh1
+                distances, indices = tree2.query(mesh1.vertices[mask1], workers=workers)
+        
+                # Find minimal distance
+                min_dist_idx = np.argmin(distances)
+                min_distance = distances[min_dist_idx]
+                closest_point1 = mesh1.vertices[mask1][min_dist_idx]
+                closest_point2 = nearby_vertices2[indices[min_dist_idx]]
+
         closest_points = {
             'method': method,
             'mesh1_point': closest_point1,
