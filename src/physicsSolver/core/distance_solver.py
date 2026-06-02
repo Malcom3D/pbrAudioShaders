@@ -360,7 +360,6 @@ class DistanceSolver:
 
         # Calculate minimum distance between transformed meshes
         min_distance, closest_points = self._calculate_min_distance(mesh1=mesh1, mesh2=mesh2)
-        print('_calculate_min_distance', frame_idx, min_distance)
     
         return min_distance, closest_points
 
@@ -392,8 +391,9 @@ class DistanceSolver:
         mesh1_vertex_idx = np.argmin(np.abs(mesh1.vertices - closest_points1[min_dist_idx1]))
         mesh2_vertex_idx = np.argmin(np.abs(mesh2.vertices - closest_points1[min_dist_idx2]))
 
-        print('dist1', distances1[min_dist_idx1], 'dist2', distances2[min_dist_idx2])
-        min_distance = min(distances1[min_dist_idx1], distances2[min_dist_idx2])
+        dist1 = distances1[min_dist_idx1]
+        dist2 = distances2[min_dist_idx2]
+        min_distance = min(dist1, dist2) if dist1 > 0 and dist2 > 0 else (dist1 if dist1 > 0 else dist2)
 
         closest_point1 = closest_points1[min_dist_idx1]
         closest_point2 = closest_points2[min_dist_idx2]
