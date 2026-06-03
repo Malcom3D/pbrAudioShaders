@@ -33,6 +33,9 @@ from ..lib.functions import _parse_lib
 from ..lib.modal_vertices import ModalVertices
 from ..lib.score_data import ScoreEvent, ScoreTrack
 
+# for facing face logging
+from ..lib.force_data import ContactType
+
 
 @dataclass
 class CollisionSolver:
@@ -274,7 +277,7 @@ class CollisionSolver:
                     vertex1_id_list += cvidx1.tolist()
                     vertex2_id_list += cvidx2.tolist()
 
-                    print(f"facing faces between {config_obj1.name} and {config_obj2.name} at frame {sample_idx}: {mesh1_faces_idx.shape[0]} {mesh2_faces_idx.shape[0]} at distance {collision_margin}")
+                    print(f"facing faces between {config_obj1.name} and {config_obj2.name} at frame {sample_idx}: {mesh1_faces_idx.shape[0]} {mesh2_faces_idx.shape[0]} at distance {collision_margin} for {ContactType(contact_type).name.lower()}")
                     if sample_idx <= impact_end:
                         impact_type = np.array([1])
                         score_track1.add_event(ScoreEvent(type=impact_type, sample_idx=sample_idx, contact_area=face_area1, vertex_ids=cvidx1))
@@ -282,7 +285,7 @@ class CollisionSolver:
                     score_track1.add_event(ScoreEvent(type=contact_type, sample_idx=sample_idx, contact_area=face_area1, vertex_ids=cvidx1))
                     score_track2.add_event(ScoreEvent(type=contact_type, sample_idx=sample_idx, contact_area=face_area2, vertex_ids=cvidx2))
                 else:
-                    print(f"facing faces between {config_obj1.name} and {config_obj2.name} at frame {sample_idx}: 0 0 at distance {collision_margin}")
+                    print(f"no facing faces between {config_obj1.name} and {config_obj2.name} at frame {sample_idx} for {ContactType(contact_type).name.lower()}")
                     score_track1.add_event(ScoreEvent(type=contact_type, sample_idx=sample_idx, contact_area=0, vertex_ids=np.array([])))
                     score_track2.add_event(ScoreEvent(type=contact_type, sample_idx=sample_idx, contact_area=0, vertex_ids=np.array([])))
 
