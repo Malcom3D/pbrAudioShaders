@@ -478,7 +478,7 @@ class HertzianContact:
         V_STATIC = 0.0005              # m/s – below this, consider static
         ANGULAR_STATIC = 0.001         # rad/s
         V_ROLLING_MIN = 0.0001         # minimum tangential speed to consider rolling
-        SLIP_RATIO_THRESH = 0.10       # slip < 10% is pure rolling
+        SLIP_RATIO_THRESH = 0.15       # slip < 15% is pure rolling
         FRICTION_SCRAPE_THRESH = 0.65  # friction utilization above this is scraping
 
         # Compute angular speeds
