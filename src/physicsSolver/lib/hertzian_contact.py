@@ -318,7 +318,8 @@ class HertzianContact:
         rolling_radius = self._compute_rolling_radius(vertices1, vertices2, trajectory1, trajectory2, contact_normal, contact_point, sample_idx)
         
         # Classify contact type
-        contact_type = self._classify_contact_type(relative_velocity, tangential_velocity, normal_force_mag, tangential_force_mag, omega1, omega2, roughness1, roughness2, friction1, friction2, R1, R2)
+        R1_roll, R2_roll = self._compute_rolling_radii(trajectory1, trajectory2, contact_normal, contact_point, sample_idx)
+        contact_type = self._classify_contact_type(relative_velocity, tangential_velocity, normal_force_mag, tangential_force_mag, omega1, omega2, roughness1, roughness2, friction1, friction2, R1, R2, R1_roll, R2_roll)
         
         # Compute coupling strength for continuous contact
         coupling_strength = self._compute_coupling_strength(config_obj1, config_obj2, normal_force_mag, a_contact, relative_velocity, is_continuous=True, contact_type=contact_type)
@@ -434,141 +435,148 @@ class HertzianContact:
         # Midpoint
         return (point1 + point2) / 2
 
-    def _classify_contact_type(self, relative_velocity: float, tangential_velocity: float, normal_force: float, tangential_force: float, omega1: np.ndarray, omega2: np.ndarray, roughness1: float, roughness2: float, friction1: float, friction2: float, R1: float, R2: float) -> ContactType:
+    def _compute_rolling_radii(self, trajectory1, trajectory2, contact_normal, contact_point, sample_idx):
+        # For object1
+        center1 = trajectory1.get_position(sample_idx)
+        R1_roll = abs(np.dot(contact_point - center1, contact_normal))
+        # For object2
+        center2 = trajectory2.get_position(sample_idx)
+        R2_roll = abs(np.dot(contact_point - center2, -contact_normal))
+        return R1_roll, R2_roll
+
+    def _classify_contact_type(self,
+                           relative_velocity: float,
+                           tangential_velocity: float,
+                           normal_force: float,
+                           tangential_force: float,
+                           omega1: np.ndarray,
+                           omega2: np.ndarray,
+                           roughness1: float,
+                           roughness2: float,
+                           friction1: float,
+                           friction2: float,
+                           R1: float,
+                           R2: float,
+                           rolling_radius1: float,
+                           rolling_radius2: float) -> ContactType:
         """
-        Enhanced contact type classification with improved thresholds and physics-based logic.
+        Enhanced contact type classification with physics-based thresholds.
+
+        Parameters
+        ----------
+        relative_velocity : float
+            Magnitude of relative linear velocity (m/s)
+        tangential_velocity : float
+            Magnitude of tangential component of relative velocity (m/s)
+        normal_force : float
+            Normal force magnitude (N)
+        tangential_force : float
+            Tangential force magnitude (N)
+        omega1, omega2 : np.ndarray
+            Angular velocity vectors (rad/s)
+        roughness1, roughness2 : float
+            Surface roughness (Ra in meters)
+        friction1, friction2 : float
+            Static friction coefficients
+        R1, R2 : float
+            Effective radii of curvature (m) – used for fallback only
+        rolling_radius1, rolling_radius2 : float
+            Distance from object centre to contact point (m) for rolling
+            detection. Use 0 if not applicable (e.g., flat surface).
+
+        Returns
+        -------
+        ContactType
         """
-        # Constants - adjusted thresholds for better classification
-        VELOCITY_STATIC_THRESHOLD = 0.001  # 1 mm/s - objects below this are considered stopped
-        VELOCITY_IMPACT_THRESHOLD = 0.001    # 1 cm/s - threshold for impact-like behavior
-        ANGULAR_VELOCITY_THRESHOLD = 0.001  # 0.001 rad/s - minimum rotation to consider
-        MIN_ROLLING_VELOCITY = 0.001        # Minimum velocity for rolling to be meaningful
-    
-        # Calculate derived parameters
-        angular_speed1 = np.linalg.norm(omega1)
-        angular_speed2 = np.linalg.norm(omega2)
-        avg_angular_speed = (angular_speed1 + angular_speed2) / 2
-    
-        # Average material properties
+        # ------------------------------------------------------------------
+        # Thresholds (tune as needed)
+        # ------------------------------------------------------------------
+        V_STATIC = 0.005          # m/s – below this, consider static
+        ANGULAR_STATIC = 0.05     # rad/s
+        V_ROLLING_MIN = 0.01      # minimum tangential speed to consider rolling
+        SLIP_RATIO_THRESH = 0.15  # slip < 15% → pure rolling
+        FRICTION_SCRAPE_THRESH = 0.75  # friction utilization above this → scraping
+
+        # Compute angular speeds
+        ang_speed1 = np.linalg.norm(omega1)
+        ang_speed2 = np.linalg.norm(omega2)
+
+        # Average friction coefficient (for sliding/scraping decision)
         avg_friction = (friction1 + friction2) / 2 if friction1 and friction2 else 0.3
-        avg_roughness = (roughness1 + roughness2) / 2 if roughness1 and roughness2 else 0.5
-    
-        # ============================================================
-        # 1. STATIC CHECK - Moved to top and made more aggressive
-        # ============================================================
-        # Use multiple criteria for static detection:
-        # - Very low relative velocity
-        # - Very low angular velocity
-        # - Very low tangential velocity
-        # - Very low tangential force (indicates no active contact)
-    
-        is_static_velocity = (relative_velocity < VELOCITY_STATIC_THRESHOLD and 
-                          tangential_velocity < VELOCITY_STATIC_THRESHOLD)
-    
-        is_static_angular = (avg_angular_speed < ANGULAR_VELOCITY_THRESHOLD)
-    
-        is_static_force = (tangential_force < 0.001)  # Very low tangential force
-    
-        # If the object has effectively stopped, classify as static
-        if is_static_velocity and is_static_angular:
+
+        # ------------------------------------------------------------------
+        # 1. STATIC contact: negligible motion and non‑zero normal force
+        # ------------------------------------------------------------------
+        if (relative_velocity < V_STATIC and
+            tangential_velocity < V_STATIC and
+            ang_speed1 < ANGULAR_STATIC and
+            ang_speed2 < ANGULAR_STATIC and
+            normal_force > 0):
             return ContactType.STATIC
-    
-        # If velocity is extremely low (even with some angular noise), it's static
-        if relative_velocity < VELOCITY_STATIC_THRESHOLD * 0.1:  # 0.1 mm/s
-            return ContactType.STATIC
-    
-        # ============================================================
-        # 2. IMPACT CHECK - Immediately after impact, when objects stick
-        # ============================================================
-        # After impact, if the velocity drops rapidly but hasn't reached static yet,
-        # it should still be classified as impact if:
-        # - Velocity is below impact threshold
-        # - Angular velocity is very low
-        # - Normal force is significant (objects are pressed together)
-    
-        if (relative_velocity < VELOCITY_IMPACT_THRESHOLD and 
-            avg_angular_speed < ANGULAR_VELOCITY_THRESHOLD * 2 and
-            normal_force > 0.001):  # Significant normal force indicates indicates contact
-            return ContactType.IMPACT
-    
-        # ============================================================
-        # 3. ROLLING CHECK - Improved detection
-        # ============================================================
-        # Calculate theoretical rolling velocities
-        rolling_velocity1 = R1 * angular_speed1 if R1 else 0
-        rolling_velocity2 = R2 * angular_speed2 if R2 else 0
-        max_rolling_velocity = max(rolling_velocity1, rolling_velocity2)
-    
-        # Check if either object is rolling
-        is_rolling1 = (R1 > 0 and angular_speed1 > ANGULAR_VELOCITY_THRESHOLD)
-        is_rolling2 = (R2 > 0 and angular_speed2 > ANGULAR_VELOCITY_THRESHOLD)
-    
-        # For rolling, we need significant angular velocity AND
-        # the tangential velocity should be close to the rolling velocity
-        if (is_rolling1 or is_rolling2) and tangential_velocity > MIN_ROLLING_VELOCITY:
-            # Calculate slip ratio for rolling detection
-            if is_rolling1 and rolling_velocity1 > 0:
-                slip_ratio = abs(tangential_velocity - rolling_velocity1) / max(rolling_velocity1, 0.001)
-            elif is_rolling2 and rolling_velocity2 > 0:
-                slip_ratio = abs(tangential_velocity - rolling_velocity2) / max(rolling_velocity2, 0.001)
-            else:
-                slip_ratio = 1.0
-        
-            # Pure rolling: slip ratio < 0.3 (30% slip allowed)
-            # This is more lenient than before to catch rolling events
-            if slip_ratio < 0.3:
+
+        # ------------------------------------------------------------------
+        # 2. ROLLING detection (pure rolling, no slip)
+        #    For each object, compute slip = |v_t - ω * r| / (|v_t| + |ω*r| + ε)
+        #    If minimal slip < SLIP_RATIO_THRESH and tangential velocity not too low,
+        #    classify as ROLLING.
+        # ------------------------------------------------------------------
+        if tangential_velocity > V_ROLLING_MIN:
+            # Rolling velocity from rotation
+            roll_vel1 = ang_speed1 * rolling_radius1 if rolling_radius1 > 0 else None
+            roll_vel2 = ang_speed2 * rolling_radius2 if rolling_radius2 > 0 else None
+
+            best_slip = float('inf')
+            if roll_vel1 is not None:
+                denom = max(tangential_velocity, roll_vel1) + 1e-6
+                slip1 = abs(tangential_velocity - roll_vel1) / denom
+                best_slip = min(best_slip, slip1)
+            if roll_vel2 is not None:
+                denom = max(tangential_velocity, roll_vel2) + 1e-6
+                slip2 = abs(tangential_velocity - roll_vel2) / denom
+                best_slip = min(best_slip, slip2)
+
+            if best_slip < SLIP_RATIO_THRESH:
                 return ContactType.ROLLING
-        
-            # Mixed rolling with some slip: slip ratio between 0.3 and 0.7
-            if slip_ratio < 0.7:
-                return ContactType.MIXED
-    
-        # ============================================================
-        # 4. SLIDING vs SCRAPING - Based on friction utilization and roughness
-        # ============================================================
-        if tangential_velocity > VELOCITY_STATIC_THRESHOLD:
-            # Calculate friction utilization
-            max_friction_force = avg_friction * normal_force if normal_force > 0 else 0
-            friction_utilization = (tangential_force / max_friction_force 
-                                   if max_friction_force > 0 else 0.5)
-        
-            # Scraping score calculation
-            scraping_score = 0.0
-        
-            # Factor 1: High friction utilization (>0.7 indicates scraping)
-            if friction_utilization > 0.7:
-                scraping_score += 0.4
-            elif friction_utilization > 0.4:
-                scraping_score += 0.2
-        
-            # Factor 2: High roughness
-            if avg_roughness > 0.0001:  # 0.1 mm roughness
-                roughness_factor = min(avg_roughness * 10000, 1.0)
-                scraping_score += 0.3 * roughness_factor
-        
-            # Factor 3: Low velocity with high normal force (stick-slip behavior)
-            if tangential_velocity < 0.1 and normal_force > 0.1:
-                scraping_score += 0.3
-        
-            # Factor 4: Angular velocity variations (indicates stick-slip)
-            if avg_angular_speed > 0 and avg_angular_speed < 1.0:
-                scraping_score += 0.2
-        
-            # Classify based on scraping score
-            if scraping_score > 0.6:
+
+        # ------------------------------------------------------------------
+        # 3. SLIDING vs SCRAPING (tangential motion with slip)
+        #    Compute how close we are to the friction limit.
+        #    If tangential_force is close to μ * N, it's scraping (stick‑slip,
+        #    high friction utilization). Otherwise sliding.
+        # ------------------------------------------------------------------
+        if tangential_velocity > V_STATIC and normal_force > 0:
+            max_friction_force = avg_friction * normal_force
+            if max_friction_force > 0:
+                friction_util = tangential_force / max_friction_force
+            else:
+                friction_util = 0.0
+
+            if friction_util > FRICTION_SCRAPE_THRESH:
                 return ContactType.SCRAPING
             else:
                 return ContactType.SLIDING
-    
-        # ============================================================
-        # 5. DEFAULT - If we get here, classify based on what's happening
-        # ============================================================
-        # If there's some motion but it doesn't fit any category well
-        if relative_velocity > VELOCITY_STATIC_THRESHOLD or avg_angular_speed > ANGULAR_VELOCITY_THRESHOLD:
-            return ContactType.MIXED
-    
-        return ContactType.STATIC
 
+        # ------------------------------------------------------------------
+        # 4. MIXED contact – only when both rolling and sliding are present
+        #    (e.g., rolling with brake). Check if rolling condition is
+        #    partially met but slip is still significant (0.15 < slip < 0.7)
+        #    and there is also tangential force.
+        # ------------------------------------------------------------------
+        if tangential_velocity > V_ROLLING_MIN:
+            roll_vel1 = ang_speed1 * rolling_radius1 if rolling_radius1 > 0 else None
+            roll_vel2 = ang_speed2 * rolling_radius2 if rolling_radius2 > 0 else None
+            if roll_vel1 is not None or roll_vel2 is not None:
+                # At least one object has a rolling radius
+                return ContactType.MIXED
+
+        # ------------------------------------------------------------------
+        # 5. Fallback: if there is any motion but none of the above apply,
+        #    assume SLIDING (or MIXED depending on context)
+        # ------------------------------------------------------------------
+        if relative_velocity > V_STATIC or tangential_velocity > V_STATIC:
+            return ContactType.SLIDING
+
+        return ContactType.STATIC
 
     def get_mixed_factor(self, relative_velocity: float, tangential_velocity: float, 
                         normal_force: float, tangential_force: float, 
