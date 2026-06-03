@@ -444,21 +444,7 @@ class HertzianContact:
         R2_roll = abs(np.dot(contact_point - center2, -contact_normal))
         return R1_roll, R2_roll
 
-    def _classify_contact_type(self,
-                           relative_velocity: float,
-                           tangential_velocity: float,
-                           normal_force: float,
-                           tangential_force: float,
-                           omega1: np.ndarray,
-                           omega2: np.ndarray,
-                           roughness1: float,
-                           roughness2: float,
-                           friction1: float,
-                           friction2: float,
-                           R1: float,
-                           R2: float,
-                           rolling_radius1: float,
-                           rolling_radius2: float) -> ContactType:
+    def _classify_contact_type(self, relative_velocity: float, tangential_velocity: float, normal_force: float, tangential_force: float, omega1: np.ndarray, omega2: np.ndarray, roughness1: float, roughness2: float, friction1: float, friction2: float, R1: float, R2: float, rolling_radius1: float, rolling_radius2: float) -> ContactType:
         """
         Enhanced contact type classification with physics-based thresholds.
 
@@ -488,14 +474,12 @@ class HertzianContact:
         -------
         ContactType
         """
-        # ------------------------------------------------------------------
-        # Thresholds (tune as needed)
-        # ------------------------------------------------------------------
-        V_STATIC = 0.005          # m/s – below this, consider static
-        ANGULAR_STATIC = 0.05     # rad/s
-        V_ROLLING_MIN = 0.01      # minimum tangential speed to consider rolling
-        SLIP_RATIO_THRESH = 0.15  # slip < 15% → pure rolling
-        FRICTION_SCRAPE_THRESH = 0.75  # friction utilization above this → scraping
+        # Thresholds
+        V_STATIC = 0.0005              # m/s – below this, consider static
+        ANGULAR_STATIC = 0.001         # rad/s
+        V_ROLLING_MIN = 0.0001         # minimum tangential speed to consider rolling
+        SLIP_RATIO_THRESH = 0.10       # slip < 10% is pure rolling
+        FRICTION_SCRAPE_THRESH = 0.65  # friction utilization above this is scraping
 
         # Compute angular speeds
         ang_speed1 = np.linalg.norm(omega1)
@@ -504,22 +488,14 @@ class HertzianContact:
         # Average friction coefficient (for sliding/scraping decision)
         avg_friction = (friction1 + friction2) / 2 if friction1 and friction2 else 0.3
 
-        # ------------------------------------------------------------------
-        # 1. STATIC contact: negligible motion and non‑zero normal force
-        # ------------------------------------------------------------------
-        if (relative_velocity < V_STATIC and
-            tangential_velocity < V_STATIC and
-            ang_speed1 < ANGULAR_STATIC and
-            ang_speed2 < ANGULAR_STATIC and
-            normal_force > 0):
+        # STATIC contact: negligible motion and non‑zero normal force
+        if (relative_velocity < V_STATIC and tangential_velocity < V_STATIC and ang_speed1 < ANGULAR_STATIC and ang_speed2 < ANGULAR_STATIC and normal_force > 0):
             return ContactType.STATIC
 
-        # ------------------------------------------------------------------
-        # 2. ROLLING detection (pure rolling, no slip)
-        #    For each object, compute slip = |v_t - ω * r| / (|v_t| + |ω*r| + ε)
-        #    If minimal slip < SLIP_RATIO_THRESH and tangential velocity not too low,
-        #    classify as ROLLING.
-        # ------------------------------------------------------------------
+        # ROLLING detection (pure rolling, no slip)
+        # For each object, compute slip = |v_t - ω * r| / (|v_t| + |ω*r| + ε)
+        # If minimal slip < SLIP_RATIO_THRESH and tangential velocity not too low,
+        # classify as ROLLING.
         if tangential_velocity > V_ROLLING_MIN:
             # Rolling velocity from rotation
             roll_vel1 = ang_speed1 * rolling_radius1 if rolling_radius1 > 0 else None
@@ -537,13 +513,16 @@ class HertzianContact:
 
             if best_slip < SLIP_RATIO_THRESH:
                 return ContactType.ROLLING
+            else:
+                # MIXED contact – rolling and static/sliding/scraping are present and slip is still significant (slip > SLIP_RATIO_THRESH)
+                # (e.g., rolling with brake).
+                # and there is also tangential force.
+                if roll_vel1 is not None or roll_vel2 is not None:
+                    # At least one object has a rolling radius
+                    return ContactType.MIXED
 
-        # ------------------------------------------------------------------
-        # 3. SLIDING vs SCRAPING (tangential motion with slip)
-        #    Compute how close we are to the friction limit.
-        #    If tangential_force is close to μ * N, it's scraping (stick‑slip,
-        #    high friction utilization). Otherwise sliding.
-        # ------------------------------------------------------------------
+        # SLIDING vs SCRAPING (tangential motion with slip)
+        # If tangential_force is close to μ * N, it's scraping (stick‑slip, high friction utilization). Otherwise sliding.
         if tangential_velocity > V_STATIC and normal_force > 0:
             max_friction_force = avg_friction * normal_force
             if max_friction_force > 0:
@@ -556,34 +535,14 @@ class HertzianContact:
             else:
                 return ContactType.SLIDING
 
-        # ------------------------------------------------------------------
-        # 4. MIXED contact – only when both rolling and sliding are present
-        #    (e.g., rolling with brake). Check if rolling condition is
-        #    partially met but slip is still significant (0.15 < slip < 0.7)
-        #    and there is also tangential force.
-        # ------------------------------------------------------------------
-        if tangential_velocity > V_ROLLING_MIN:
-            roll_vel1 = ang_speed1 * rolling_radius1 if rolling_radius1 > 0 else None
-            roll_vel2 = ang_speed2 * rolling_radius2 if rolling_radius2 > 0 else None
-            if roll_vel1 is not None or roll_vel2 is not None:
-                # At least one object has a rolling radius
-                return ContactType.MIXED
-
-        # ------------------------------------------------------------------
-        # 5. Fallback: if there is any motion but none of the above apply,
-        #    assume SLIDING (or MIXED depending on context)
-        # ------------------------------------------------------------------
+        # Fallback: if there is any motion but none of the above apply,
+        # assume MIXED
         if relative_velocity > V_STATIC or tangential_velocity > V_STATIC:
-            return ContactType.SLIDING
+            return ContactType.MIXED
 
         return ContactType.STATIC
 
-    def get_mixed_factor(self, relative_velocity: float, tangential_velocity: float, 
-                        normal_force: float, tangential_force: float, 
-                        omega1: np.ndarray, omega2: np.ndarray, 
-                        roughness1: float, roughness2: float, 
-                        friction1: float, friction2: float, 
-                        vertices1: np.ndarray, vertices2: np.ndarray) -> Dict[str, float]:
+    def get_mixed_factor(self, relative_velocity: float, tangential_velocity: float, normal_force: float, tangential_force: float, omega1: np.ndarray, omega2: np.ndarray, roughness1: float, roughness2: float, friction1: float, friction2: float, vertices1: np.ndarray, vertices2: np.ndarray) -> Dict[str, float]:
         """
         Compute detailed mixed contact factors for simultaneous contact types.
         Returns normalized factors (0-1) indicating the proportion of each contact type.
