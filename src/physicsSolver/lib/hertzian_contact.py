@@ -465,20 +465,20 @@ class HertzianContact:
         friction1, friction2 : float
             Static friction coefficients
         R1, R2 : float
-            Effective radii of curvature (m) – used for fallback only
+            Effective radii of curvature (m).
         rolling_radius1, rolling_radius2 : float
-            Distance from object centre to contact point (m) for rolling
-            detection. Use 0 if not applicable (e.g., flat surface).
+            Distance from object centre to contact point (m) for rolling detection.
+            Use 0 if not applicable (e.g., flat surface). Used for fallback only.
 
         Returns
         -------
         ContactType
         """
         # Thresholds
-        V_STATIC = 0.0005              # m/s – below this, consider static
+        V_STATIC = 0.0005              # m/s below this, consider static
         ANGULAR_STATIC = 0.001         # rad/s
         V_ROLLING_MIN = 0.0001         # minimum tangential speed to consider rolling
-        SLIP_RATIO_THRESH = 0.15       # slip < 15% is pure rolling
+        SLIP_RATIO_THRESH = 0.30       # slip < 30% is pure rolling
         FRICTION_SCRAPE_THRESH = 0.65  # friction utilization above this is scraping
 
         # Compute angular speeds
@@ -488,27 +488,27 @@ class HertzianContact:
         # Average friction coefficient (for sliding/scraping decision)
         avg_friction = (friction1 + friction2) / 2 if friction1 and friction2 else 0.3
 
-        # STATIC contact: negligible motion and non‑zero normal force
+        # STATIC contact: negligible motion and non-zero normal force
         if (relative_velocity < V_STATIC and tangential_velocity < V_STATIC and ang_speed1 < ANGULAR_STATIC and ang_speed2 < ANGULAR_STATIC and normal_force > 0):
             return ContactType.STATIC
 
         # ROLLING detection (pure rolling, no slip)
-        # For each object, compute slip = |v_t - ω * r| / (|v_t| + |ω*r| + ε)
+        # For each object, compute slip = |v_t - w * r| / (|v_t| + |w*r| + ε)
         # If minimal slip < SLIP_RATIO_THRESH and tangential velocity not too low,
         # classify as ROLLING.
         if tangential_velocity > V_ROLLING_MIN:
             # Rolling velocity from rotation
-            roll_vel1 = ang_speed1 * rolling_radius1 if rolling_radius1 > 0 else None
-            roll_vel2 = ang_speed2 * rolling_radius2 if rolling_radius2 > 0 else None
+            roll_vel1 = ang_speed1 * R1 if R1 > 0 else rolling_radius1
+            roll_vel2 = ang_speed2 * R2 if R2 > 0 else rolling_radius2
 
             best_slip = float('inf')
             if roll_vel1 is not None:
-                denom = max(tangential_velocity, roll_vel1) + 1e-6
-                slip1 = abs(tangential_velocity - roll_vel1) / denom
+                denom = max(relative_velocity, roll_vel1) + 1e-6
+                slip1 = abs(relative_velocity - roll_vel1) / denom
                 best_slip = min(best_slip, slip1)
             if roll_vel2 is not None:
-                denom = max(tangential_velocity, roll_vel2) + 1e-6
-                slip2 = abs(tangential_velocity - roll_vel2) / denom
+                denom = max(relative_velocity, roll_vel2) + 1e-6
+                slip2 = abs(relative_velocity - roll_vel2) / denom
                 best_slip = min(best_slip, slip2)
 
             if best_slip < SLIP_RATIO_THRESH:
@@ -522,7 +522,7 @@ class HertzianContact:
                     return ContactType.MIXED
 
         # SLIDING vs SCRAPING (tangential motion with slip)
-        # If tangential_force is close to μ * N, it's scraping (stick‑slip, high friction utilization). Otherwise sliding.
+        # If tangential_force is close to μ * N, it's scraping (stick-slip, high friction utilization). Otherwise sliding.
         if tangential_velocity > V_STATIC and normal_force > 0:
             max_friction_force = avg_friction * normal_force
             if max_friction_force > 0:
