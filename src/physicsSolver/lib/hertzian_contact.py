@@ -692,8 +692,8 @@ class HertzianContact:
         
             # Distribute adjustment between sliding and scraping based on roughness
             if avg_roughness > 0.0001:
-                factors['scraping_factor'] += adjustment * 0.7
-                factors['sliding_factor'] += adjustment * 0.3
+                factors['scraping_factor'] += adjustment * 0.5
+                factors['sliding_factor'] += adjustment * 0.5
             else:
                 factors['sliding_factor'] += adjustment
     
