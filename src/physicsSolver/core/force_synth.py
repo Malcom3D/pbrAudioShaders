@@ -16,7 +16,6 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-
 import os, sys
 import json
 import math
@@ -29,6 +28,7 @@ from typing import List, Dict, Tuple, Optional, Any
 from ..core.entity_manager import EntityManager
 from ..lib.force_data import ContactType
 from ..lib.hertzian_contact import HertzianContact
+#from ..lib.denoise_audio_forces import DenoiseAudioForces
 
 @dataclass
 class ForceSynth:
@@ -217,18 +217,61 @@ class ForceSynth:
                     scraping_sound = self._apply_overlap_add(scraping_sound, synthesized_track['scraping_sound'], int(sample_idx), int(sample_idx + len(synthesized_track['scraping_sound'])))
                     rolling_sound = self._apply_overlap_add(rolling_sound, synthesized_track['rolling_sound'], int(sample_idx), int(sample_idx + len(synthesized_track['rolling_sound'])))
 
-        # Save tracks
-        tracks = {
-            'impact': impact_track,
-            'sliding': sliding_track,
-            'scraping': scraping_track,
-            'rolling': rolling_track,
-            'sliding_sound': sliding_sound,
-            'scraping_sound': scraping_sound,
-            'rolling_sound': rolling_sound,
-            'non_collision': non_collision_track,
-            'coupling_strength': coupling_strength_track
-        }
+#        # Initialize denoiser
+#        denoiser = DenoiseAudioForces(
+#            dc_blocker_alpha=0.999,
+#            gate_threshold_db=-60.0,
+#            gate_attack_ms=2.0,
+#            gate_release_ms=50.0,
+#            temporal_smoothing_window=5,
+#            spectral_fft_size=2048,
+#            spectral_hop_size=512,
+#            spectral_noise_floor_db=-80.0,
+#            spectral_reduction_strength=0.8,
+#            envelope_attack_ms=1.0,
+#            envelope_release_ms=20.0,
+#            gaussian_sigma_min=0.5,
+#            gaussian_sigma_max=3.0,
+#            gaussian_force_threshold=0.1
+#        )
+#        
+#        # Get force data sequence for this object
+#        forces = self.entity_manager.get('forces')
+#        force_data_sequence = None
+#        for f_idx in forces.keys():
+#            if forces[f_idx].obj_idx == obj_idx:
+#                force_data_sequence = forces[f_idx]
+#                break
+#        
+#        # Create tracks dictionary
+#        tracks = {
+#            'impact': impact_track,
+#            'sliding': sliding_track,
+#            'scraping': scraping_track,
+#            'rolling': rolling_track,
+#            'sliding_sound': sliding_sound,
+#            'scraping_sound': scraping_sound,
+#            'rolling_sound': rolling_sound,
+#            'non_collision': non_collision_track,
+#            'coupling_strength': coupling_strength_track
+#        }
+#        
+#        # Apply denoising if force data is available
+#        if force_data_sequence is not None:
+#            tracks = denoiser.process(tracks, force_data_sequence, sample_rate)
+#    
+#            # Save tracks
+#            tracks = {
+#                'impact': impact_track,
+#                'sliding': sliding_track,
+#                'scraping': scraping_track,
+#                'rolling': rolling_track,
+#                'sliding_sound': sliding_sound,
+#                'scraping_sound': scraping_sound,
+#                'rolling_sound': rolling_sound,
+#                'non_collision': non_collision_track,
+#                'coupling_strength': coupling_strength_track
+#            }
         
         self._save_tracks(config_obj, tracks, total_samples, int(sample_rate))
 
