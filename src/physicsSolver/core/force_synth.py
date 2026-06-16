@@ -28,7 +28,7 @@ from typing import List, Dict, Tuple, Optional, Any
 from ..core.entity_manager import EntityManager
 from ..lib.force_data import ContactType
 from ..lib.hertzian_contact import HertzianContact
-#from ..lib.denoise_audio_forces import DenoiseAudioForces
+from ..lib.denoise_audio_forces import DenoiseAudioForces
 
 @dataclass
 class ForceSynth:
@@ -40,88 +40,6 @@ class ForceSynth:
         os.makedirs(self.collisions_dir, exist_ok=True)
         self.audio_force_dir = f"{config.system.cache_path}/audio_force"
         os.makedirs(self.audio_force_dir, exist_ok=True)
-        
-        # Overlap-add parameters
-        self.overlap_size = int(0.005 * config.system.sample_rate)  # 5ms overlap
-        self.window = np.hanning(2 * self.overlap_size)  # Hanning window for smoothing
-
-    def _apply_overlap_add(self, track: np.ndarray, signal_to_add: np.ndarray, 
-                          start_idx: int, end_idx: int) -> np.ndarray:
-        """
-        Apply overlap-add processing to smoothly blend a signal into a track.
-        
-        Parameters:
-        -----------
-        track : np.ndarray
-            The main track to add the signal to
-        signal_to_add : np.ndarray
-            The signal segment to add
-        start_idx : int
-            Start index in the track
-        end_idx : int
-            End index in the track
-            
-        Returns:
-        --------
-        np.ndarray : Updated track with smooth transitions
-        """
-        signal_len = len(signal_to_add)
-        
-        # Create fade-in window
-        fade_in_len = min(self.overlap_size, signal_len // 2)
-        if fade_in_len > 0:
-            fade_in = np.linspace(0, 1, fade_in_len)
-            signal_to_add[:fade_in_len] *= fade_in
-        
-        # Create fade-out window
-        fade_out_len = min(self.overlap_size, signal_len // 2)
-        if fade_out_len > 0:
-            fade_out = np.linspace(1, 0, fade_out_len)
-            signal_to_add[-fade_out_len:] *= fade_out
-        
-        # Add signal to track
-        actual_end = min(end_idx, len(track))
-        actual_len = actual_end - start_idx
-        if actual_len > 0:
-            track[start_idx:actual_end] += signal_to_add[:actual_len]
-        
-        return track
-
-    def _create_smooth_window(self, n_samples: int) -> np.ndarray:
-        """
-        Create a smooth window for envelope shaping with cosine-tapered edges.
-        
-        Parameters:
-        -----------
-        n_samples : int
-            Total number of samples in the window
-            
-        Returns:
-        --------
-        np.ndarray : Smooth window array
-        """
-        if n_samples <= 2 * self.overlap_size:
-            # For very short signals, use full hanning
-            return np.hanning(n_samples)
-        
-        window = np.ones(n_samples)
-        
-        # Apply fade-in
-        fade_in = np.linspace(0, 1, self.overlap_size)
-        window[:self.overlap_size] = fade_in
-        
-        # Apply fade-out
-        fade_out = np.linspace(1, 0, self.overlap_size)
-        window[-self.overlap_size:] = fade_out
-        
-        # Apply cosine-tapered edges for smoother transitions
-        taper_size = min(self.overlap_size // 4, n_samples //  8)
-        if taper_size > 0:
-            taper = np.cos(np.linspace(0, np.pi/2, taper_size))**2
-            window[:taper_size] *= taper
-            window[-taper_size:] *= taper[::-1]
-        
-        return window
 
     def compute(self, obj_idx: int) -> None:
         config = self.entity_manager.get('config')
@@ -206,77 +124,64 @@ class ForceSynth:
                                 for key in synthesized_impact_track.keys():
                                     synthesized_track[key] += synthesized_impact_track[key]
 
-                    # Add to tracks with overlap-add processing
-                    impact_track = self._apply_overlap_add(impact_track, synthesized_track['impact'], int(sample_idx), int(sample_idx + len(synthesized_track['impact'])))
-                    sliding_track = self._apply_overlap_add(sliding_track, synthesized synthesized_track['sliding'], int(sample_idx), int(sample_idx + len(synthesized_track['sliding'])))
-                    scraping_track = self._apply_overlap_add(scraping_track, synthesized_track['scraping'], int(sample_idx), int(sample_idx + len(synthesized_track['scraping'])))
-                    rolling_track = self._apply_overlap_add(rolling_track, synthesized_track['rolling'], int(sample_idx), int(sample_idx + len(synthesized_track['rolling'])))
-                    non_collision_track = self._apply_overlap_add(non_collision_track, synthesized_track['non_collision'], int(sample_idx), int(sample_idx + len(synthesized_track['non_collision'])))
-                    coupling_strength_track = self._apply_overlap_add(coupling_strength_track, synthesized_track['coupling_strength'], int(sample_idx), int(sample_idx + len(synthesized_track['coupling_strength'])))
-                    sliding_sound = self._apply_overlap_add(sliding_sound, synthesized_track['sliding_sound'], int(sample_idx), int(sample_idx + len(synthesized_track['sliding_sound'])))
-                    scraping_sound = self._apply_overlap_add(scraping_sound, synthesized_track['scraping_sound'], int(sample_idx), int(sample_idx + len(synthesized_track['scraping_sound'])))
-                    rolling_sound = self._apply_overlap_add(rolling_sound, synthesized_track['rolling_sound'], int(sample_idx), int(sample_idx + len(synthesized_track['rolling_sound'])))
+                    # Add to tracks
+                    impact_track += synthesized_track['impact']
+                    sliding_track += synthesized_track['sliding']
+                    scraping_track += synthesized_track['scraping']
+                    rolling_track += synthesized_track['rolling']
+                    non_collision_track += synthesized_track['non_collision']
+                    coupling_strength_track += synthesized_track['coupling_strength']
+                    sliding_sound += synthesized_track['sliding_sound']
+                    scraping_sound += synthesized_track['scraping_sound']
+                    rolling_sound += synthesized_track['rolling_sound']
 
-#        # Initialize denoiser
-#        denoiser = DenoiseAudioForces(
-#            dc_blocker_alpha=0.999,
-#            gate_threshold_db=-60.0,
-#            gate_attack_ms=2.0,
-#            gate_release_ms=50.0,
-#            temporal_smoothing_window=5,
-#            spectral_fft_size=2048,
-#            spectral_hop_size=512,
-#            spectral_noise_floor_db=-80.0,
-#            spectral_reduction_strength=0.8,
-#            envelope_attack_ms=1.0,
-#            envelope_release_ms=20.0,
-#            gaussian_sigma_min=0.5,
-#            gaussian_sigma_max=3.0,
-#            gaussian_force_threshold=0.1
-#        )
-#        
-#        # Get force data sequence for this object
-#        forces = self.entity_manager.get('forces')
-#        force_data_sequence = None
-#        for f_idx in forces.keys():
-#            if forces[f_idx].obj_idx == obj_idx:
-#                force_data_sequence = forces[f_idx]
-#                break
-#        
-#        # Create tracks dictionary
-#        tracks = {
-#            'impact': impact_track,
-#            'sliding': sliding_track,
-#            'scraping': scraping_track,
-#            'rolling': rolling_track,
-#            'sliding_sound': sliding_sound,
-#            'scraping_sound': scraping_sound,
-#            'rolling_sound': rolling_sound,
-#            'non_collision': non_collision_track,
-#            'coupling_strength': coupling_strength_track
-#        }
-#        
-#        # Apply denoising if force data is available
-#        if force_data_sequence is not None:
-#            tracks = denoiser.process(tracks, force_data_sequence, sample_rate)
-#    
-#            # Save tracks
-#            tracks = {
-#                'impact': impact_track,
-#                'sliding': sliding_track,
-#                'scraping': scraping_track,
-#                'rolling': rolling_track,
-#                'sliding_sound': sliding_sound,
-#                'scraping_sound': scraping_sound,
-#                'rolling_sound': rolling_sound,
-#                'non_collision': non_collision_track,
-#                'coupling_strength': coupling_strength_track
-#            }
-        
+        # Initialize denoiser
+        denoiser = DenoiseAudioForces(
+            dc_blocker_alpha=0.999,
+            gate_threshold_db=-60.0,
+            gate_attack_ms=2.0,
+            gate_release_ms=50.0,
+            temporal_smoothing_window=5,
+            spectral_fft_size=2048,
+            spectral_hop_size=512,
+            spectral_noise_floor_db=-80.0,
+            spectral_reduction_strength=0.8,
+            envelope_attack_ms=1.0,
+            envelope_release_ms=20.0,
+            gaussian_sigma_min=0.5,
+            gaussian_sigma_max=3.0,
+            gaussian_force_threshold=0.1
+        )
+
+        # Get force data sequence for this object
+        forces = self.entity_manager.get('forces')
+        force_data_sequence = None
+        for f_idx in forces.keys():
+            if forces[f_idx].obj_idx == obj_idx:
+                force_data_sequence = forces[f_idx]
+                break
+
+        # Create tracks dictionary
+        tracks = {
+            'impact': impact_track,
+            'sliding': sliding_track,
+            'scraping': scraping_track,
+            'rolling': rolling_track,
+            'sliding_sound': sliding_sound,
+            'scraping_sound': scraping_sound,
+            'rolling_sound': rolling_sound,
+            'non_collision': non_collision_track,
+            'coupling_strength': coupling_strength_track
+        }
+
+        # Apply denoising if force data is available
+        if force_data_sequence is not None:
+            tracks = denoiser.process(tracks, force_data_sequence, sample_rate)
+
         self._save_tracks(config_obj, tracks, total_samples, int(sample_rate))
 
     def _synthesize_impact(self, force: Any, collision: Any, config_obj: Any, other_config_obj: Any, sample_idx: float, total_samples: int, sample_rate: int) -> Dict[str, Any]:
-        """Synthesize Hertzian impact audio-force with smooth envelope."""
+        """Synthesize Hertzian impact audio-force."""
         # Hertzian impact parameters
         if config_obj.stochastic_variation:
             normal_force_mag = np.linalg.norm(force.get_stochastic_normal_force(sample_idx))
@@ -292,13 +197,13 @@ class ForceSynth:
         impulse = normal_force_mag * impact_duration
 
         # impact_duration in samples@sample_rate
-        total_impact_sample = int(sample_rate * impact_duration)
+        total_impact_sample = int(sample_rate*impact_duration)
 
-        # Generate impact envelope (Hertzian asymmetric force profile)
+        # Generate impact envelope (Hertzian asimmetric force profile)
         rise_sample = int(total_impact_sample / 2) + 1
         decay_sample = int(total_impact_sample / 2)
-        t_rise = np.linspace(0, 0.5, max(int(rise_sample), 2))
-        t_decay = np.linspace(0.5, 1, max(int(decay_sample), 2))
+        t_rise = np.linspace(0, 0.5, int(rise_sample))
+        t_decay = np.linspace(0.5, 1, int(decay_sample))
         t = np.concatenate((t_rise, t_decay[1:]))
 
         # Hertzian force profile: F(t) = F_max * (1 - (t/T)^(3/2))
@@ -312,31 +217,16 @@ class ForceSynth:
         if actual_impulse > 0:
             force_envelope = force_envelope * (impulse / actual_impulse)
         
-        # Apply smooth window to the envelope
-        smooth_window = self._create_smooth_window(len(force_envelope))
-        force_envelope *= smooth_window
-        
         # Create impact signal and coupling strength signal
         impact_samples, coupling_strength = (np.zeros(total_samples) for _ in range(2))
+        for force_idx in range(force_envelope.shape[0]):
+            idx = int(sample_idx - rise_sample) + force_idx
+            if not impact_samples.shape[0] <= idx:
+                impact_samples[idx] = force_envelope[force_idx]
+                coupling_strength[idx] = force.get_coupling_strength(idx)
         
-        # Calculate start and end indices with overlap consideration
-        start_idx = max(0, int(sample_idx - rise_sample))
-        end_idx = min(total_samples, start_idx + len(force_envelope))
-        actual_len = end_idx - start_idx
-        
-        if actual_len > 0:
-            # Apply overlap-add for the impact signal
-            impact_segment = np.zeros(actual_len)
-            impact_segment[:min(len(force_envelope), actual_len)] = force_envelope[:min(len(force_envelope), actual_len)]
-            impact_track = np.zeros(total_samples)
-            impact_track = self._apply_overlap_add(impact_track, impact_segment, start_idx, end_idx)
-            impact_samples = impact_track
-            
-            # Coupling strength with smooth transition
-            coupling_segment = np.full(actual_len, force.get_coupling_strength(sample_idx))
-            coupling_track = np.zeros(total_samples)
-            coupling_track = self._apply_overlap_add(coupling_track, coupling_segment, start_idx, end_idx)
-            coupling_strength = coupling_track
+#        # Normalize signal
+#        impact_samples = impact_samples / np.max(np.abs(impact_samples))
 
         # Create tracks
         result = {
@@ -354,7 +244,7 @@ class ForceSynth:
         return result
 
     def _synthesize_contact(self, trajectory: Any, force: Any, collision: Any, config_obj: Any, other_config_obj: Any, sample_idx: float, total_samples: int, sample_rate: int, sfps: float, spsf: float):
-        """Synthesize contact audio-force (scraping, sliding, rolling) with overlap-add."""
+        """Synthesize contact audio-force (scraping, sliding, rolling)."""
         
         if force.get_contact_type(sample_idx) in [ContactType.STATIC.value, ContactType.NO_CONTACT.value]:
             return self._create_empty_tracks(total_samples)
@@ -368,7 +258,7 @@ class ForceSynth:
             return self._synthesize_mixed(trajectory=trajectory, force=force, collision=collision, config_obj=config_obj, other_config_obj=other_config_obj, sample_idx=sample_idx, total_samples=total_samples, sample_rate=sample_rate)
 
     def _synthesize_mixed(self, trajectory: Any, force: Any, collision: Any, config_obj: Any, other_config_obj: Any, sample_idx: float, total_samples: int, sample_rate: int):
-        """Synthesize mixed contact audio-forces with overlap-add (rolling with scraping or sliding or static)."""
+        """Synthesize mixed contact audio-forces (rolling with scraping or sliding or static)."""
         mixed_tracks = self._create_empty_tracks(total_samples)
         rolling_tracks = self._create_empty_tracks(total_samples)
         scraping_tracks = self._create_empty_tracks(total_samples)
@@ -400,7 +290,6 @@ class ForceSynth:
         # Analyzes mixed contact HertzianContact lib.
         hertzian_contact = HertzianContact(self.entity_manager)
         mixed_factor = hertzian_contact.get_mixed_factor(relative_velocity, tangential_velocity, normal_force_magnitude, tangential_force_magnitude, omega1, omega2, roughness1, roughness2, friction1, friction2, vertices1, vertices2)
-        
         if mixed_factor['static_factor'] == 1:
             tmp_config_obj = config_obj
             config_obj = other_config_obj
@@ -417,7 +306,6 @@ class ForceSynth:
             elif mixed_factor['scraping_factor'] > 0:
                 scraping_tracks = self._synthesize_scraping(trajectory=trajectory, force=force, collision=collision, config_obj=config_obj, other_config_obj=other_config_obj, sample_idx=sample_idx, total_samples=total_samples, sample_rate=sample_rate)
 
-        # Apply overlap-add for mixed factors
         for key in mixed_tracks.keys():
             mixed_tracks[key] += rolling_tracks[key] * mixed_factor['rolling_factor']
             mixed_tracks[key] += sliding_tracks[key] * mixed_factor['sliding_factor']
@@ -444,7 +332,7 @@ class ForceSynth:
         return result
 
     def _synthesize_scraping(self, trajectory: Any, force: Any, collision: Any, config_obj: Any, other_config_obj: Any, sample_idx: float, total_samples: int, sample_rate: int):
-        """Synthesize scraping sound using fractal noise with resonant filter and overlap-add."""
+        """Synthesize scraping sound using fractal noise with resonant filter."""
     
         # Get material properties
         roughness = config_obj.acoustic_shader.roughness
@@ -457,7 +345,6 @@ class ForceSynth:
         roughness_rms = Rq_effective / 1.1
     
         # Normalize roughness to 0-1 range for parameter control
-
         B = (roughness_rms - 0.00001) / (0.99999 - 0.00001)
     
         # Get contact duration in samples
@@ -498,6 +385,7 @@ class ForceSynth:
         
             # Design resonant filters for scraping
             # Higher frequencies for scraping compared to sliding
+#            f0_base = 2000 + 8000 * np.abs(contact_velocities[start_idx:stop_idx])
             f0_base = 2000 + 8000 * np.abs(contact_velocities)
             f0 = f0_base * (1 + 0.5 * layer)  # Different center frequency for each layer
 
@@ -532,12 +420,10 @@ class ForceSynth:
             # Combine amplitude factors
             total_amplitude = amplitude * irregularity_mod
         
-            # Add this layer to total noise with overlap-add
+            # Add this layer to total noise
             start_idx = int(sample_idx)
             stop_idx = start_idx + n_samples
-            layer_segment = np.zeros(n_samples)
-            layer_segment[:n_samples] = layer_weights[layer] * resonant_noise * total_amplitude
-            total_noise = self._apply_overlap_add(total_noise, layer_segment, start_idx, stop_idx)
+            total_noise[start_idx:stop_idx] += layer_weights[layer] * resonant_noise * total_amplitude
     
         # Add transient spikes for scraping events (sudden catches/releases)
         if n_samples > 100:
@@ -558,14 +444,13 @@ class ForceSynth:
             
                 # Scale spike by tangential force at that moment
                 spike_scale = tangential_forces[spike_pos] / np.max(tangential_forces + 1e-10)
-                
-                # Apply overlap-add for spike
-                spike_segment = spike_signal * spike_scale * 2.0
-                total_noise = self._apply_overlaplap_add(total_noise, spike_segment, spike_start, spike_end)
+                total_noise[spike_start:spike_end] += spike_signal * spike_scale * 2.0
     
+#        # Normalize signal
+#        scraping_sound = total_noise / np.max(np.abs(total_noise))
         scraping_sound = total_noise
 
-        """Generate scraping vibration signal with overlap-add."""
+        """Generate scraping vibration signal."""
         # Base frequency depends on velocity and roughness
         base_freq = 2000 + 5000 * np.mean(contact_velocities) * Rq_effective
         
@@ -589,15 +474,13 @@ class ForceSynth:
         # Add noise component
         scraping_signal += noise * 0.3
         
-        # Apply smooth envelope
-        smooth_window = self._create_smooth_window(n_samples)
-        scraping_signal *= smooth_window
+        # Apply envelope
+        envelope = signal.windows.tukey(n_samples, alpha=0.3)
+        scraping_signal *= envelope
         
-        # Add scraping_signal to empty track with overlap-add
-        start_idx = int(sample_idx)
-        stop_idx = start_idx + n_samples
+        # Add scraping_signal to empty track
         scraping_vibration = np.zeros(total_samples)
-        scraping_vibration = self._apply_overlap_add(scraping_vibration, scraping_signal, start_idx, stop_idx)
+        scraping_vibration[start_idx:stop_idx] += scraping_signal
 
         # Create tracks
         result = {
@@ -615,7 +498,7 @@ class ForceSynth:
         return result
 
     def _synthesize_sliding(self, trajectory: Any, force: Any, collision: Any, config_obj: Any, other_config_obj: Any, sample_idx: float, total_samples: int, sample_rate: int):
-        """Synthesize sliding sound using fractal noise with resonant filter and overlap-add."""
+        """Synthesize sliding sound using fractal noise with resonant filter."""
 
         # Root Mean Square Roughness
         roughness = config_obj.acoustic_shader.roughness
@@ -671,23 +554,18 @@ class ForceSynth:
             resonant_noise = np.real(np.fft.ifft(resonant_noise_fft))
             resonant_noises[s_idx] = resonant_noise[s_idx]
 
-        # Apply amplitude scaling with overlap-add
+        # Apply amplitude scaling
         start_idx = int(sample_idx)
         stop_idx = start_idx + n_samples
         amplitude = np.sqrt(np.abs(contact_velocities) * normal_forces)
-        
-        # Create smooth segment
-        sliding_segment = resonant_noises * amplitude
-        smooth_window = self._create_smooth_window(n_samples)
-        sliding_segment *= smooth_window
-        
-        total_noise = self._apply_overlap_add(total_noise, sliding_segment, start_idx, stop_idx)
+        total_noise[start_idx:stop_idx] += resonant_noises * amplitude
 
+#        # Normalize signal
+#        sliding_sound = total_noise / np.max(np.abs(total_noise))
         sliding_sound = total_noise
 
-        """Generate sliding vibration signal with overlap-add."""
+        """Generate sliding vibration signal."""
         # Base frequency depends on velocity
-
         base_freq = 500 + 2000 * np.mean(contact_velocities)
 
         # Create modulated signal
@@ -710,13 +588,13 @@ class ForceSynth:
         # Add noise component (less than scraping)
         sliding_signal += noise * 0.1
 
-        # Apply smooth envelope
-        smooth_window = self._create_smooth_window(n_samples)
-        sliding_signal *= smooth_window
+        # Apply smoother envelope
+        envelope = signal.windows.hann(n_samples)
+        sliding_signal *= envelope
 
-        # Add sliding_signal to empty track with overlap-add
+        # Add sliding_signal to empty track
         sliding_vibration = np.zeros(total_samples)
-        sliding_vibration = self._apply_overlap_add(sliding_vibration, sliding_signal, start_idx, stop_idx)
+        sliding_vibration[start_idx:stop_idx] += sliding_signal
 
         # Create tracks
         result = {
@@ -732,14 +610,13 @@ class ForceSynth:
         }
 
         return result
-
+    
     def _synthesize_rolling(self, trajectory: Any, force: Any, collision: Any, config_obj: Any, other_config_obj: Any, sample_idx: float, total_samples: int, sample_rate: int):
-        """Synthesize rolling sound using Poisson pulse sequence filtered by second-order resonant filter with overlap-add."""
+        """Synthesize rolling sound using Poisson pulse sequence filtered by second-order resonant filter."""
         # Extract parameters
         n_samples = int(collision.frame_range)
         rolling_vibration, rolling_signal, coupling_strength = (np.zeros(total_samples) for _ in range(3))
         normal_forces, tangential_velocities, angular_velocities, contact_velocity = (np.zeros(n_samples) for _ in range(4))
-        
         for s_idx in range(n_samples):
             current_idx = int(sample_idx) + s_idx
             if config_obj.stochastic_variation:
@@ -771,11 +648,12 @@ class ForceSynth:
 
         # Scale by ovality: more irregular = more pulses per revolution
         pulse_rate = base_pulse_rate * (1.0 + 10.0 * ovality)
-        pulse_rate = np.clip(pulse_rate, 1.0, 1000.0)
+        pulse_rate = np.clip(pulse_rate, 1.0, 1000.0)  # Reasonable limits
 
         # Generate Poisson pulse sequence
         # Average pulse rate λ (pulses per second) depends on angular velocity
         # and surface irregularity (ovality)
+
         poisson_pulses = self._generate_poisson_pulse_sequence(n_samples=n_samples, sample_rate=sample_rate, pulse_rate=pulse_rate, amplitude_env=normal_forces / np.max(normal_forces + 1e-10))
 
         # Design spectral envelope S(w) = 1 / sqrt((w - p)² + d²)
@@ -785,20 +663,21 @@ class ForceSynth:
         # Higher normal force = higher frequency (stiffer contact)
         avg_normal_force = np.mean(normal_forces)
         p_base = 50.0 + 200.0 * avg_normal_force * 0.001  # Hz
-        p_variation = 0.2 * p_base
-
+        p_variation = 0.2 * p_base  # Some variation
+        
         # Damping d depends on material damping and velocity
         # Higher velocity = more damping
         avg_velocity = np.mean(tangential_velocities)
-        d_base = 10.0 + 20.0 * avg_velocity
+        d_base = 10.0 + 20.0 * avg_velocity  # Damping coefficient
         d_variation = 0.3 * d_base
 
         # Time-varying parameters for richer sound
-        p = p_base + p_variation * np.sin(2 * np.pi * 0.5 * t)
-        d = d_base + d_variation * np.sin(2 * np.pi * 0.3 * t)
+        p = p_base + p_variation * np.sin(2 * np.pi * 0.5 * t)  # Slow variation
+        d = d_base + d_variation * np.sin(2 * np.pi * 0.3 * t)  # Different slow variation
 
-        # Apply resonant filter to Poisson pulses with overlap-add
+        # Apply resonant filter to Poisson pulses
         filtered_pulses = np.zeros(n_samples)
+
         for s_idx in range(n_samples):
             # Create IIR filter that approximates the spectral envelope
             # Using a bandpass filter with specific Q
@@ -820,37 +699,37 @@ class ForceSynth:
         # Amplitude modulation
         # Modulation frequency proportional to relative speed/angular velocity
         # Modulation depth proportional to ovality
-
+    
         # Base modulation frequency (Hz)
         mod_freq_base = 1.0 + 5.0 * avg_angular_velocity / (2 * np.pi)
-
+    
         # Add some variation
         mod_freq = mod_freq_base * (1.0 + 0.3 * np.sin(2 * np.pi * 0.2 * t))
-
+    
         # Modulation depth: 0 = no modulation, 1 = full modulation
-        mod_depth = 0.3 + 0.7 * ovality
-
+        mod_depth = 0.3 + 0.7 * ovality  # More ovality = deeper modulation
+    
         # Create amplitude modulation signal
         mod_signal = 1.0 - mod_depth + mod_depth * np.sin(2 * np.pi * mod_freq * t)
-
+    
         # Apply amplitude modulation
         modulated_signal = filtered_pulses * mod_signal
 
         # Amplitude scales with tangential velocity (rolling speed)
         velocity_scale = tangential_velocities / np.max(tangential_velocities + 1e-10)
         velocity_scale = np.clip(velocity_scale, 0.1, 1.0)
-
+    
         # Apply velocity scaling
-        rolling_sound_segment = modulated_signal * velocity_scale
+        rolling_sound = modulated_signal * velocity_scale
 
         # Add some filtered noise for texture (surface roughness effects)
-        noise_level = 0.1 * ovality
+        noise_level = 0.1 * ovality  # More ovality = more noise
         texture_noise = np.random.randn(n_samples) * noise_level
-
+    
         # Apply same resonant filter to noise
         filtered_noise = np.zeros(n_samples)
         for s_idx in range(n_samples):
-            if s_idx % 100 == 0: # Update filter less frequently for efficiency
+            if s_idx % 100 == 0:  # Update filter less frequently for efficiency
                 nyquist = sample_rate / 2
                 center_normalized = p[s_idx] / nyquist
                 Q = p[s_idx] / (2 * d[s_idx]) if d[s_idx] > 0 else 10.0
@@ -862,26 +741,26 @@ class ForceSynth:
                 window_noise = texture_noise[s_idx:s_idx + window_size]
                 filtered_window = signal.lfilter(b, a, window_noise)
                 filtered_noise[s_idx] = filtered_window[0]
-
+    
         # Combine pulse signal and noise
-        rolling_sound_segment = rolling_sound_segment + 0.3 * filtered_noise
+        rolling_sound = rolling_sound + 0.3 * filtered_noise
 
-        # Apply smooth envelope
-        smooth_window = self._create_smooth_window(n_samples)
-        rolling_sound_segment *= smooth_window
+        # Apply smooth envelope to avoid clicks
+        envelope = signal.windows.tukey(n_samples, alpha=0.3)
+        rolling_sound *= envelope
+    
+#        # Normalize
+#        rolling_sound = rolling_sound / np.max(np.abs(rolling_sound))
 
-        # Add rolling_sound to track with overlap-add
+        # Add rolling_sound to empty track
         start_idx = int(sample_idx)
         stop_idx = start_idx + n_samples
-        rolling_signal = self._apply_overlap_add(rolling_signal, rolling_sound_segment, start_idx, stop_idx)
+        rolling_signal[start_idx:stop_idx] += rolling_sound
 
-        # Generate vibration signal with harmonic content related to rolling frequency and overlap-add
-
+        # Create vibration signal with harmonic content related to rolling frequency
         vibration_signal = self._generate_rolling_vibration(n_samples=n_samples, sample_rate=sample_rate, angular_velocities=angular_velocities, normal_forces=normal_forces, ovality=ovality)
-        
-        # Apply smooth envelope to vibration signal as well
-        vibration_signal *= smooth_window
-        rolling_vibration = self._apply_overlap_add(rolling_vibration, vibration_signal, start_idx, stop_idx)
+    
+        rolling_vibration[start_idx:stop_idx] += vibration_signal
 
         # Create tracks
         result = {
@@ -901,7 +780,6 @@ class ForceSynth:
     def _generate_poisson_pulse_sequence(self, n_samples: int, sample_rate: int, pulse_rate: float, amplitude_env: np.ndarray) -> np.ndarray:
         """
         Generate a Poisson pulse sequence with time-varying amplitude.
-        Pulses are shaped with smooth windows to avoid clicks.
     
         Parameters:
         -----------
@@ -918,35 +796,41 @@ class ForceSynth:
         --------
         np.ndarray : Poisson pulse sequence
         """
+        # Initialize output
         pulse_sequence = np.zeros(n_samples)
+    
+        # Convert pulse rate to probability per sample
+        prob_per_sample = pulse_rate / sample_rate
+    
+        # Generate random pulse positions
+        # Using exponential distribution for inter-pulse intervals
         current_sample = 0
-        
         while current_sample < n_samples:
-            interval_seconds = np.random.exponential(1.0 / max(pulse_rate, 0.001))
+            # Generate exponential random variable for next pulse
+            # Mean interval = 1 / pulse_rate seconds
+            interval_seconds = np.random.exponential(1.0 / pulse_rate)
             interval_samples = int(interval_seconds * sample_rate)
+        
             current_sample += interval_samples
         
             if current_sample < n_samples:
+                # Add pulse with amplitude from envelope
                 pulse_amplitude = amplitude_env[min(current_sample, len(amplitude_env)-1)]
             
-                # Create short pulse with smooth shape (Tukey window)
-                pulse_width = min(5, n_samples - current_sample)
-                if pulse_width > 1:
-                    pulse_shape = signal.windows.tukey(pulse_width, alpha=0.7)  # More taper for smoother edges
-                    for i in range(pulse_width):
-                        idx = current_sample + i
-                        if idx < n_samples:
-                            pulse_sequence[idx] += pulse_amplitude * pulse_shape[i] * np.random.randn()
-                else:
-                    # Single sample pulse - use a small impulse
-                    pulse_sequence[current_sample] += pulse_amplitude * 0.1 * np.random.randn()
+                # Create short pulse (3 samples to avoid delta function)
+                pulse_width = min(3, n_samples - current_sample)
+                for i in range(pulse_width):
+                    idx = current_sample + i
+                    if idx < n_samples:
+                        # Tukey window for smooth pulse
+                        pulse_shape = signal.windows.tukey(pulse_width, alpha=0.5)[i]
+                        pulse_sequence[idx] += pulse_amplitude * pulse_shape * np.random.randn()
     
         return pulse_sequence
 
     def _generate_rolling_vibration(self, n_samples: int, sample_rate: int, angular_velocities: np.ndarray, normal_forces: np.ndarray, ovality: float) -> np.ndarray:
         """
         Generate vibration signal for resonance synthesis from rolling contact.
-        Uses smooth envelopes to avoid clicks.
     
         Parameters:
         -----------
@@ -966,29 +850,46 @@ class ForceSynth:
         np.ndarray : Vibration signal for modal excitation
         """
         t = np.arange(n_samples) / sample_rate
-        base_freq = np.abs(angular_velocities) / (2 * np.pi)
-        
-        num_harmonics = int(3 + 7 * ovality)
+    
+        # Base vibration frequency from angular velocity
+        base_freq = np.abs(angular_velocities) / (2 * np.pi)  # Hz
+    
+        # Add harmonics due to ovality/irregularity
+        num_harmonics = int(3 + 7 * ovality)  # More ovality = more harmonics
         harmonics = np.arange(1, num_harmonics + 1)
-        
+    
+        # Initialize vibration signal
         vibration = np.zeros(n_samples)
+    
+        # Amplitude envelope from normal force
         amplitude_env = normal_forces / np.max(normal_forces + 1e-10)
 
+        # Generate signal with harmonics
         for i in range(n_samples):
-            if base_freq[i] > 0.1:
+            if base_freq[i] > 0.1:  # Only add if there's significant rotation
                 for harmonic in harmonics:
                     freq = base_freq[i] * harmonic
-                    if freq < sample_rate / 2:
+                    if freq < sample_rate / 2:  # Nyquist limit
+                        # Harmonic amplitude decays with harmonic number
                         harmonic_amp = amplitude_env[i] / (harmonic ** (1.5 - ovality))
+                    
+                        # Add some phase modulation for richness
                         phase_mod = 0.1 * ovality * np.sin(2 * np.pi * 2.0 * t[i])
+                    
                         vibration[i] += harmonic_amp * np.sin(2 * np.pi * freq * t[i] + phase_mod)
     
+        # Add some noise component for texture
         noise_level = 0.1 * ovality
         vibration += np.random.randn(n_samples) * noise_level * amplitude_env
     
-        # Apply smooth envelope to avoid boundary clicks
-        smooth_window = self._create_smooth_window(n_samples)
-        vibration *= smooth_window
+        # Apply smooth envelope
+        envelope = signal.windows.tukey(n_samples, alpha=0.4)
+        vibration *= envelope
+    
+#        # Normalize
+#        max_val = np.max(np.abs(vibration))
+#        if max_val > 0:
+#            vibration = vibration / max_val * 0.8
     
         return vibration
 
@@ -1024,7 +925,7 @@ class ForceSynth:
             track_file = f"{config_obj.name}_{track_name}.raw"
             wave_file = f"{self.audio_force_dir}/{track_file}"
             sf.write(wave_file, track_data, sample_rate, subtype='FLOAT')
-            project_data['tracksracks'].append({
+            project_data['tracks'].append({
                 'name': track_name,
                 'file': track_file,
                 'channels': 1,
@@ -1040,4 +941,3 @@ class ForceSynth:
             json.dump(project_data, f, indent=2)
 
         print(f"Created multitrack project: {json_file}")
-
