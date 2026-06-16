@@ -139,7 +139,7 @@ class DenoiseAudioForces:
         y = np.zeros_like(audio)
         alpha = self.dc_blocker_alpha
         
-        for n in range((1, len(audio)):
+        for n in range(1, len(audio)):
             y[n] = audio[n] - audio[n-1] + alpha * y[n-1]
         
         return y
@@ -472,7 +472,7 @@ class DenoiseAudioForces:
         force_factor = np.mean(self._get_force_correlation(track_name, magnitude.shape[1]))
         
         # Scale noise floor based on force activity
-        noise_floor = noise_floor * (1..0 + force_factor * 0.5)
+        noise_floor = noise_floor * (1.0 + force_factor * 0.5)
         
         return noise_floor
     
