@@ -28,6 +28,7 @@ from typing import List, Dict, Tuple, Optional, Any
 from ..core.entity_manager import EntityManager
 from ..lib.force_data import ContactType
 from ..lib.hertzian_contact import HertzianContact
+from ..lib.denoise_audio_forces import DenoiseAudioForces
 
 @dataclass
 class ForceSynth:
@@ -134,7 +135,36 @@ class ForceSynth:
                     scraping_sound += synthesized_track['scraping_sound']
                     rolling_sound += synthesized_track['rolling_sound']
 
-        # Save tracks
+        # Initialize denoiser
+        denoiser = DenoiseAudioForces(
+            dc_blocker_alpha=config.denoiser.dc_blocker_alpha,
+            gate_threshold_db=config.denoiser.gate_threshold_db,
+            gate_attack_ms=config.denoiser.gate_attack_ms,
+            gate_release_ms=config.denoiser.gate_release_ms,
+            gate_hold_ms=config.denoiser.gate_hold_ms,
+            temporal_smoothing_window=config.denoiser.temporal_smoothing_window,
+            spectral_fft_size=config.denoiser.spectral_fft_size,
+            spectral_hop_size=config.denoiser.spectral_hop_size,
+            spectral_noise_floor_db=config.denoiser.spectral_noise_floor_db,
+            spectral_reduction_strength=config.denoiser.spectral_reduction_strength,
+            spectral_smoothing=config.denoiser.spectral_smoothing,
+            envelope_attack_ms=config.denoiser.envelope_attack_ms,
+            envelope_release_ms=config.denoiser.envelope_release_ms,
+            envelope_smoothing=config.denoiser.envelope_smoothing,
+            gaussian_sigma_min=config.denoiser.gaussian_sigma_min,
+            gaussian_sigma_max=config.denoiser.gaussian_sigma_max,
+            gaussian_force_threshold=config.denoiser.gaussian_force_threshold
+        )
+
+        # Get force data sequence for this object
+        forces = self.entity_manager.get('forces')
+        force_data_sequence = None
+        for f_idx in forces.keys():
+            if forces[f_idx].obj_idx == obj_idx:
+                force_data_sequence = forces[f_idx]
+                break
+
+        # Create tracks dictionary
         tracks = {
             'impact': impact_track,
             'sliding': sliding_track,
@@ -146,7 +176,11 @@ class ForceSynth:
             'non_collision': non_collision_track,
             'coupling_strength': coupling_strength_track
         }
-        
+
+        # Apply denoising if force data is available
+        if force_data_sequence is not None:
+            tracks = denoiser.process(tracks, force_data_sequence, sample_rate)
+
         self._save_tracks(config_obj, tracks, total_samples, int(sample_rate))
 
     def _synthesize_impact(self, force: Any, collision: Any, config_obj: Any, other_config_obj: Any, sample_idx: float, total_samples: int, sample_rate: int) -> Dict[str, Any]:
