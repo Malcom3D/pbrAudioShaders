@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from ..lib.force_data import ForceDataSequence
 
 @dataclass
-class DenoiseAudioForces:
+class AudioForcesDenoiser:
     """
     Post-processing class for denoising synthesized audio forces.
     

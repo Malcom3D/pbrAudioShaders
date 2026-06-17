@@ -34,6 +34,7 @@ class SystemConfig:
     modal_modes: int = 20
     collision_margin: float = 0.05
     cache_path: str = "./pbrAudioCache/"
+    enable_denoiser: bool = False
 
 @dataclass
 class DenoiserConfig:
