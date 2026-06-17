@@ -607,8 +607,11 @@ class AudioForcesDenoiser:
         window_sum[window_sum < 1e-10] = 1.0
         audio = audio / window_sum
         
-        # Trim to original length
-        audio = audio[:original_length]
+        # Trim or pad to original length
+        if len(audio) > original_length:
+            audio = audio[:original_length]
+        elif len(audio) < original_length:
+            audio = np.append(audio, np.zeros(original_length - len(audio)))
         
         return audio
     
