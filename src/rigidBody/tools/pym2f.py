@@ -97,7 +97,7 @@ class Pym2f:
         try:
             exit_code = self._run_mesh2faust(cmd, output_name, obj_file, config_obj)
         except Exception as e:
-            print print(f"Warning: mesh2faust failed with error: {e}")
+            print(f"Warning: mesh2faust failed with error: {e}")
             print("Falling back to approximate modal model...")
             exit_code = -1
         

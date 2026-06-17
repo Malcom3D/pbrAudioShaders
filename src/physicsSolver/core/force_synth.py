@@ -180,7 +180,14 @@ class ForceSynth:
 
             # Apply denoising if force data is available
             if force_data_sequence is not None:
+
+                for key in tracks.keys():
+                    print(config_obj.name, key, tracks[key].shape)
+
                 tracks = denoiser.process(tracks, force_data_sequence, sample_rate)
+
+                for key in tracks.keys():
+                    print(config_obj.name, 'denoised', key, tracks[key].shape)
 
         self._save_tracks(config_obj, tracks, total_samples, int(sample_rate))
 
