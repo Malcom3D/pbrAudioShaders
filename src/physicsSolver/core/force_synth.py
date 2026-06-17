@@ -28,7 +28,6 @@ from typing import List, Dict, Tuple, Optional, Any
 from ..core.entity_manager import EntityManager
 from ..lib.force_data import ContactType
 from ..lib.hertzian_contact import HertzianContact
-from ..lib.denoise_audio_forces import DenoiseAudioForces
 
 @dataclass
 class ForceSynth:
@@ -135,33 +134,7 @@ class ForceSynth:
                     scraping_sound += synthesized_track['scraping_sound']
                     rolling_sound += synthesized_track['rolling_sound']
 
-        # Initialize denoiser
-        denoiser = DenoiseAudioForces(
-            dc_blocker_alpha=0.999,
-            gate_threshold_db=-60.0,
-            gate_attack_ms=2.0,
-            gate_release_ms=50.0,
-            temporal_smoothing_window=5,
-            spectral_fft_size=2048,
-            spectral_hop_size=512,
-            spectral_noise_floor_db=-80.0,
-            spectral_reduction_strength=0.8,
-            envelope_attack_ms=1.0,
-            envelope_release_ms=20.0,
-            gaussian_sigma_min=0.5,
-            gaussian_sigma_max=3.0,
-            gaussian_force_threshold=0.1
-        )
-
-        # Get force data sequence for this object
-        forces = self.entity_manager.get('forces')
-        force_data_sequence = None
-        for f_idx in forces.keys():
-            if forces[f_idx].obj_idx == obj_idx:
-                force_data_sequence = forces[f_idx]
-                break
-
-        # Create tracks dictionary
+        # Save tracks
         tracks = {
             'impact': impact_track,
             'sliding': sliding_track,
@@ -173,11 +146,7 @@ class ForceSynth:
             'non_collision': non_collision_track,
             'coupling_strength': coupling_strength_track
         }
-
-        # Apply denoising if force data is available
-        if force_data_sequence is not None:
-            tracks = denoiser.process(tracks, force_data_sequence, sample_rate)
-
+        
         self._save_tracks(config_obj, tracks, total_samples, int(sample_rate))
 
     def _synthesize_impact(self, force: Any, collision: Any, config_obj: Any, other_config_obj: Any, sample_idx: float, total_samples: int, sample_rate: int) -> Dict[str, Any]:
