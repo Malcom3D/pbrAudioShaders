@@ -98,24 +98,31 @@ class AudioForcesDenoiser:
                 
             # Apply denoising pipeline
             processed = track_data.copy()
+            print('copy', processed.shape)
             
             # Step 1: DC Offset Removal
             processed = self._remove_dc_offset(processed)
+            print('_remove_dc_offset', processed.shape)
             
             # Step 2: Adaptive Noise Gate with force correlation
             processed = self._adaptive_noise_gate(processed, track_name)
+            print('_adaptive_noise_gate', processed.shape)
             
             # Step 3: Temporal Smoothing
             processed = self._temporal_smoothing(processed)
+            print('_temporal_smoothing', processed.shape)
             
             # Step 4:: Spectral Noise Reduction
             processed = self._spectral_noise_reduction(processed, track_name)
+            print('_spectral_noise_reduction', processed.shape)
             
             # Step 5: Envelope Shaping
             processed = self._envelope_shaping(processed, track_name)
+            print('_envelope_shaping', processed.shape)
             
             # Step 6: Gaussian Adaptive Smoothing
             processed = self._gaussian_adaptive_smoothing(processed, track_name)
+            print('_gaussian_adaptive_smoothing', processed.shape)
             
             denoised_tracks[track_name] = processed
             
