@@ -298,35 +298,38 @@ class Pym2f:
         
         # Extract and validate frequencies
         import re
+
         freq_pattern = r'modeFreqsUnscaled.*?=.*?ba\.take.*?$$(.*?)$$'
-        freq_match = re.search(freq_pattern, content, re.DOTALL)
-
-        if not freq_match == None:
-            tuple_match = r'\d+\.?\d+'
-            freq_values = re.findall(tuple_match, freq_match.group())
-            
-            if len(freq_values) == 0:
-                print(f"Pym2f validation: {lib_file} has no valid frequencies")
-                return False
-            
-            # Check for reasonable frequency range
-            freqs = [float(f) for f in freq_values]
-            if max(freqs) < 1.0 or min(freqs) < 0:
-                print(f"Pym2f validation: {lib_file} has unreasonable frequencies")
-                return False
-
-        # Extract and validate gains
+        t60_pattern = r'modesT60s.*?=.*?t60Scale.*?ba\.take.*?$$(.*?)$$'
         gain_pattern = r'modesGains.*?=.*?waveform\{(.*?)\}'
-        gain_match = re.search(gain_pattern, line, re.DOTALL)
+        parentesis_match = r'\(([^()]+)\)'
+        tuple_match = r'\d+\.?\d+'
 
-        if not gain_match == None:
-            gain_tuple_match = re.findall(gain_pattern, gain_match.group())
-            gain_tuple_match = re.sub("'", "", gain_tuple_match[0])
+        with open(lib_content, 'r') as file:
+            lines = file.readlines()
+            frequencies, t60s, gains = ([] for _ in range(3))
+            for line in lines:
+                line = line.replace('-nan','1')
+                # Extract frequencies from modeFreqsUnscaled
+                freq_match = re.search(freq_pattern, line, re.DOTALL)
+                if not freq_match == None:
+                    freq_tuple_match = re.findall(tuple_match, freq_match.group())
+                    if not len(freq_tuple_match) == 0:
+                        # Check for reasonable frequency range
+                        freqs = [float(f) for f in freq_values]
+                        if max(freqs) < 1.0 or min(freqs) < 0:
+                            print(f"Pym2f validation: {lib_file} has unreasonable frequencies")
+                            return False
 
-            if not gain_tuple_match == None:
-                return True
-            else:
-                return False
+            for line in lines:
+                # Extract gains - this is complex due to the large waveform
+                gain_match = re.search(gain_pattern, line, re.DOTALL)
+                if not gain_match == None:
+                    gain_tuple_match = re.findall(gain_pattern, gain_match.group())
+                    gain_tuple_match = re.sub("'", "", gain_tuple_match[0])
+                    if gain_tuple_match == None:
+                        print(f"Pym2f validation: {lib_file} has unreasonable gains")
+                        return False
         
         return True
 
