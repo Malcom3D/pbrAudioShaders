@@ -305,7 +305,7 @@ class Pym2f:
         parentesis_match = r'\(([^()]+)\)'
         tuple_match = r'\d+\.?\d+'
 
-        validated = True
+        freq_validated, gains_validated = (False for _ in range(2))
         with open(lib_file, 'r') as file:
             lines = file.readlines()
             frequencies, t60s, gains = ([] for _ in range(3))
@@ -320,15 +320,9 @@ class Pym2f:
                         freqs = [float(f) for f in freq_tuple_match]
                         if max(freqs) < 1.0 or min(freqs) < 0:
                             print(f"Pym2f validation: {lib_file} has unreasonable frequencies")
-                            validated = False
-                    else:
-                        print(f"Pym2f validation: {lib_file} frequency value check failed")
-                        print("DEBUG: ", freq_tuple_match)
-                        validated = False
-                else:
-                    print(f"Pym2f validation: {lib_file} modeFreqsUnscaled check failed")
-                    print("DEBUG: ", freq_match)
-                    validated = False
+                            freq_validated = False
+                        else:
+                            freq_validated = True
 
             for line in lines:
                 # Extract gains - this is complex due to the large waveform
@@ -339,19 +333,12 @@ class Pym2f:
                     if not gain_tuple_match == None:
                         try:
                             gains = [float(f) for f in gain_tuple_match.split(",")]
+                            gains_validated = True
                         except:
                             print(f"Pym2f validation: {lib_file} has unreasonable gains")
-                            validated = False
-                    else:
-                        print(f"Pym2f validation: {lib_file} gains value check failed")
-                        print("DEBUG: ", gain_tuple_match)
-                        validated = False
-                else:
-                    print(f"Pym2f validation: {lib_file} modesGains check failed")
-                    print("DEBUG: ", gain_match)
-                    validated = False
+                            gains_validated = False
         
-        return validated
+        return (freq_validated and gains_validated)
 
     def _post_process_files(self, file_names: List[str], output_name: str, config_obj) -> None:
         """
