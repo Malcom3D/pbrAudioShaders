@@ -321,10 +321,12 @@ class Pym2f:
                             print(f"Pym2f validation: {lib_file} has unreasonable frequencies")
                             return False
                     else:
-                        print(f"Pym2f validation: {lib_file} failed")
+                        print(f"Pym2f validation: {lib_file} frequency value check failed")
+                        print("DEBUG: ", freq_tuple_match)
                         return False
                 else:
-                    print(f"Pym2f validation: {lib_file} failed")
+                    print(f"Pym2f validation: {lib_file} modeFreqsUnscaled check failed")
+                    print("DEBUG: ", freq_match)
                     return False
 
             for line in lines:
@@ -341,10 +343,12 @@ class Pym2f:
                             print(f"Pym2f validation: {lib_file} has unreasonable gains")
                             return False
                     else:
-                        print(f"Pym2f validation: {lib_file} failed")
+                        print(f"Pym2f validation: {lib_file} gains value check failed")
+                        print("DEBUG: ", gain_tuple_match)
                         return False
                 else:
-                    print(f"Pym2f validation: {lib_file} failed")
+                    print(f"Pym2f validation: {lib_file} modesGains check failed")
+                    print("DEBUG: ", gain_match)
                     return False
         
         return True
