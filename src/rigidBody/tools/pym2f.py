@@ -305,7 +305,7 @@ class Pym2f:
         parentesis_match = r'\(([^()]+)\)'
         tuple_match = r'\d+\.?\d+'
 
-        with open(lib_content, 'r') as file:
+        with open(lib_file, 'r') as file:
             lines = file.readlines()
             frequencies, t60s, gains = ([] for _ in range(3))
             for line in lines:
@@ -316,10 +316,16 @@ class Pym2f:
                     freq_tuple_match = re.findall(tuple_match, freq_match.group())
                     if not len(freq_tuple_match) == 0:
                         # Check for reasonable frequency range
-                        freqs = [float(f) for f in freq_values]
+                        freqs = [float(f) for f in freq_tuple_match]
                         if max(freqs) < 1.0 or min(freqs) < 0:
                             print(f"Pym2f validation: {lib_file} has unreasonable frequencies")
                             return False
+                    else:
+                        print(f"Pym2f validation: {lib_file} failed")
+                        return False
+                else:
+                    print(f"Pym2f validation: {lib_file} failed")
+                    return False
 
             for line in lines:
                 # Extract gains - this is complex due to the large waveform
@@ -327,9 +333,19 @@ class Pym2f:
                 if not gain_match == None:
                     gain_tuple_match = re.findall(gain_pattern, gain_match.group())
                     gain_tuple_match = re.sub("'", "", gain_tuple_match[0])
-                    if gain_tuple_match == None:
-                        print(f"Pym2f validation: {lib_file} has unreasonable gains")
+                    if not gain_tuple_match == None:
+                        try:
+                            gains = [float(f) for f in gain_tuple_match.split(",")]
+                            return True
+                        except:
+                            print(f"Pym2f validation: {lib_file} has unreasonable gains")
+                            return False
+                    else:
+                        print(f"Pym2f validation: {lib_file} failed")
                         return False
+                else:
+                    print(f"Pym2f validation: {lib_file} failed")
+                    return False
         
         return True
 
