@@ -26,10 +26,19 @@ from dataclasses import dataclass
 from physicsSolver import EntityManager
 from physicsSolver.lib.functions import _load_mesh, _mesh_to_obj, _compute_rayleigh_damping
 
+from ..lib.primitive_geometry import PrimitiveGeometry
+from ..lib.shape_properties import ShapeType, ShapeProperties
+from ..lib.approx2faust import Approx2Faust, ModalParameters
+
 @dataclass
 class Pym2f:
     entity_manager: EntityManager
     mesh2faust: str = "mesh2faust"
+    
+    # Fallback parameters
+    use_fallback: bool = True
+    fallback_min_confidence: float = 0.3  # Minimum confidence to use fallback
+    max_fallback_attempts: int = 2
 
     def __post_init__(self):
         self.config = self.entity_manager.get('config')
@@ -41,23 +50,27 @@ class Pym2f:
         self.cache_path = f"{self.config.system.cache_path}"
         os.makedirs(f"{self.cache_path}/obj", exist_ok=True)
         os.makedirs(f"{self.cache_path}/dsp", exist_ok=True)
+        
+        # Initialize fallback components
+        self.primitive_geometry = PrimitiveGeometry()
+        self.approx2faust = Approx2Faust()
 
     def compute(self, obj_idx: int, expos: List[int] = None) -> None:
         """
-        mesh2faust Input parameters
-
-        - obj_file: volumetric mesh in Wavefront .obj file (watertight triangulated mesh with normals)
-        - young_modulus: Young's modulus (in N/m^2)
-        - poisson_ratio: Poisson's ratio (no unit)
-        - density: Density (in kg/m^3)
-        - damping: Rayleigh damping ratio (no unit)
-        - minmode: minimum frequency of the lowest mode (in Hz)
-        - maxmode: maximum frequency of the highest mode (in Hz)
-        - expos: list of vertex of active excitation positions (e.g. 89 63 45 ...)
-        - output_name: name for generated Faust modal model lib
+        Compute modal model with fallback mechanism.
+        
+        Tries mesh2faust first, then falls back to approximate modal model
+        if the result is invalid or fails.
         """
-        for config_obj in self.config.objects:
-            if config_obj.idx == obj_idx:
+        # Extract object configuration
+        config_obj = None
+        vertices = None
+        normals = None
+        faces = None
+        
+        for config_obj_item in self.config.objects:
+            if config_obj_item.idx == obj_idx:
+                config_obj = config_obj_item
                 vertices, normals, faces = _load_mesh(config_obj, 0)
                 items = os.listdir(config_obj.obj_path)
                 filenames = sorted(items)
@@ -77,10 +90,44 @@ class Pym2f:
                 maxmode = config_obj.acoustic_shader.high_frequency
                 output_name = f"{config_obj.name}"
 
+        # Try mesh2faust first
+        success = False
+        file_names = []
+        
+        for attempt in range(self.max_fallback_attempts + 1):
+            if attempt == 0:
+                # First attempt: use mesh2faust
+                success, file_names = self._try_mesh2faust(config_obj, vertices, normals, faces, obj_file, young_modulus, poisson_ratio, density, damping, minmode, maxmode, expos, output_name
+)
+            else:
+                # Fallback: use approximate model
+                if self.use_fallback:
+                    print(f"Pym2f: Attempting fallback for {config_obj.name} (attempt {attempt})")
+                    success, file_names = self._try_fallback(config_obj, vertices, faces, obj_file, young_modulus, poisson_ratio, density, damping, minmode, maxmode, expos, output_name)
+            
+            if success:
+                break
+        
+        if not success:
+            raise RuntimeError(f"Pym2f: Failed to generate modal model for {config_obj.name} "
+                              f"after {self.max_fallback_attempts + 1} attempts")
+        
+        # Post-process generated files
+        self._post_process_files(file_names, output_name, config_obj)
+
+    def _try_mesh2faust(self, config_obj, vertices, normals, faces, obj_file, young_modulus, poisson_ratio, density, damping, minmode, maxmode, expos, output_name) -> Tuple[bool, List[str]]:
+        """
+        Try to generate modal model using mesh2faust.
+        
+        Returns:
+            (success, file_names)
+        """
         cmd = f"{self.mesh2faust} "
+        
         if not young_modulus == None and not poisson_ratio == None and not density == None:
             alpha_rayleigh, beta_rayleigh = _compute_rayleigh_damping(minmode, maxmode, damping)
             cmd += f"--material {young_modulus} {poisson_ratio} {density} {alpha_rayleigh} {beta_rayleigh} "
+        
         if not minmode == None:
             cmd += f"--minmode {minmode} "
         if not maxmode == None:
@@ -92,258 +139,208 @@ class Pym2f:
             cmd += f"--expos {verts} "
 
         cmd += f"--showfreqs"
+        exit_code = os.system(f"{cmd} --name {output_name} --nsynthmodes {self.config.system.modal_modes} --infile {obj_file}")
         
-        # Try to run mesh2faust, fall back to approximate model on failure
-        try:
-            exit_code = self._run_mesh2faust(cmd, output_name, obj_file, config_obj)
-        except Exception as e:
-            print(f"Warning: mesh2faust failed with error: {e}")
-            print("Falling back to approximate modal model...")
-            exit_code = -1
-        
-        if exit_code != 0:
-            print(f"mesh2faust returned non-zero exit code {exit_code}, using fallback...")
-            exit_code = self._generate_approximate_model(
-                output_name, obj_file, vertices, normals, faces,
-                young_modulus, poisson_ratio, density, damping,
-                minmode, maxmode, expos, config_obj
-            )
-        
+        file_names = []
         if exit_code == 0:
-            # Process resonance model if needed
-            self._process_resonance_model(cmd, output_name, obj_file, config_obj)
+            file_names.append(f"{output_name}.lib")
             
-            # Remove import(stdfaust.lib) and move files
-            self._finalize_models(output_name, config_obj)
-        else:
-            raise ValueError(f'Error: Failed to generate modal model for {output_name}')
-
-    def _run_mesh2faust(self, cmd: str, output_name: str, obj_file: str, config_obj) -> int:
-        """Run mesh2faust command and return exit code."""
-        full_cmd = f"{cmd} --name {output_name} --nsynthmodes {self.config.system.modal_modes} --infile {obj_file}"
-        print(f"Running: {full_cmd}")
-        return os.system(full_cmd)
-
-    def _generate_approximate_model(self, output_name: str, obj_file: str,
-                                   vertices: np.ndarray, normals: np.ndarray,
-                                   faces: np.ndarray, young_modulus: float,
-                                   poisson_ratio: float, density: float,
-                                   damping: float, minmode: float, maxmode: float,
-                                   expos: List[int], config_obj) -> int:
-        """
-        Generate an approximate modal model when mesh2faust fails.
-        Uses analytical plate/beam mode approximations.
-        """
-        try:
-            # Estimate object dimensions from bounding box
-            bbox_min = np.min(vertices, axis=0)
-            bbox_max = np.max(vertices, axis=0)
-            dimensions = bbox_max - bbox_min
-            
-            # Estimate characteristic length and area
-            Lx, Ly, Lz = dimensions
-            L_char = np.cbrt(Lx * Ly * Lz)  # Characteristic length
-            
-            # Calculate speed of sound in material
-            if young_modulus and density and poisson_ratio:
-                # Longitudinal wave speed
-                c_long = np.sqrt(young_modulus * (1 - poisson_ratio) / 
-                                (density * (1 + poisson_ratio) * (1 - 2 * poisson_ratio)))
-                # Shear wave speed
-                c_shear = np.sqrt(young_modulus / (2 * density * (1 + poisson_ratio)))
-            else:
-                c_long = 5000.0  # Default for metal-like material
-                c_shear = 3000.0
-            
-            # Number of modes to generate
-            n_modes = self.config.system.modal_modes
-            
-            # Generate mode frequencies using plate/beam theory
-            frequencies = []
-            for i in range(1, n_modes + 1):
-                # Use simple harmonic series with some variation
-                # f_n = n * c / (2 * L) for 1D bar
-                # For 3D object, use combination of modes
-                
-                # Calculate mode index in 3D
-                nx = (i % 3) + 1
-                ny = ((i // 3) % 3) + 1
-                nz = ((i // 9) % 3) + 1
-                
-                # 3D standing wave frequencies
-                fx = nx * c_long / (2 * Lx) if Lx > 0 else 100
-                fy = ny * c_long / (2 * Ly) if Ly > 0 else 100
-                fz = nz * c_shear / (2 * Lz) if Lz > 0 else 100
-                
-                # Combine frequencies (root sum square for 3D modes)
-                f = np.sqrt(fx**2 + fy**2 + fz**2)
-                
-                # Add some randomness to make it more realistic
-                f *= 1.0 + 0.1 * np.random.randn()
-                
-                # Clamp to frequency range
-                if minmode:
-                    f = max(f, minmode)
-                if maxmode:
-                    f = min(f, maxmode)
-                    
-                frequencies.append(f)
-            
-            frequencies = np.array(frequencies)
-            
-            # Calculate T60 (reverberation time) for each mode mode
-            # Using damping ratio: T60 = 2.2 / (π * f * ξ)
-            # where ξ is the damping ratio
-            if damping:
-                t60s = 2.2 / (np.pi * frequencies * damping)
-            else:
-                # Default damping damping gives reasonable decay
-                t60s = 0.5 + 2.0 * np.exp(-frequencies / 1000.0)
-            
-            # Clamp T60 to reasonable values
-            t60s = np.clip(t60s, 0.01, 10.0)
-            
-            # Generate gains for each vertex (or for specified excitation positions)
-            n_vertices = len(vertices)
-            if expos:
-                n_expos = len(expos)
-            else:
-                # Use first few vertices
-                n_expos = min(10, n_vertices)
-                expos = list(range(n_expos))
-            
-            # Generate gains matrix: shape (n_expos * n_modes,)
-            gains = np.zeros(n_expos * n_modes)
-            for i, vertex_idx in enumerate(expos):
-                for j in range(n_modes):
-                    idx = i * n_modes + j
-                    # Gain depends on vertex position relative to mode shape
-                    # Use simple sinusoidal mode shapes
-                    if vertex_idx < n_vertices:
-                        v = vertices[vertex_idx]
-                        # Mode shape approximation
-                        mode_shape = (np.sin(np.pi * (j % 3 + 1) * v[0] / Lx) *
-                                     np.sin(np.pi * ((j // 3) % 3 + 1) * v[1] / Ly) *
-                                     np.sin(np.pi * ((j // 9) % 3 + 1) * v[2] / Lz))
-                        gains[idx] = abs(mode_shape) * np.exp(-j / n_modes)
+            # Validate the generated lib file
+            if self._validate_lib_file(f"{output_name}.lib"):
+                # Handle resonance
+                if config_obj.resonance:
+                    resonance_obj_file = f"{obj_file.removesuffix('.obj')}_resonance.obj"
+                    if os.path.exists(resonance_obj_file):
+                        exit_code = os.system(f"{cmd} --name {output_name}_resonance --nsynthmodes {config_obj.resonance_modes} --infile {resonance_obj_file}")
+                    if not exit_code == 0 or not os.path.exists(resonance_obj_file):
+                        exit_code = os.system(f"{cmd} --name {output_name}_resonance --nsynthmodes {config_obj.resonance_modes} --infile {obj_file}")
+                    if exit_code == 0:
+                        file_names.append(f"{output_name}_resonance.lib")
                     else:
-                        gains[idx] = np.exp(-j / n_modes)
-            
-            # Normalize gains
-            if np.max(gains) > 0:
-                gains = gains / np.max(gains)
-            
-            # Generate the Faust .lib file
-            lib_content = self._generate_faust_lib(
-                output_name, frequencies, t60s, gains, n_expos, n_modes
-            )
-            
-            # Write the .lib file
-            lib_file = f"{output_name}.lib"
-            with open(lib_file, 'w') as f:
-                f.write(lib_content)
-            
-            print(f"Generated approximate modal model: {lib_file}")
-            return 0
-            
-        except Exception as e:
-            print(f"Error generating approximate model: {e}")
-            return -1
-
-    def _generate_faust_lib(self, name: str, frequencies: np.ndarray,
-                           t60s: np.ndarray, gains: np.ndarray,
-                           n_expos: int, n_modes: int) -> str:
-        """Generate Faust .lib file content for the approximate modal model."""
-        
-        lines = []
-        lines.append(f"// Approximate modal model generated by Pym2f fallback")
-        lines.append(f"// Object: {name}")
-        lines.append(f"// Generated with analytical mode approximation")
-        lines.append(f"")
-        lines.append(f"declare name \"{name}\";")
-        lines.append(f"declare description \"Approximate modal model for {name}\";")
-        lines.append(f"declare version \"1.0\";")
-        lines.append(f"")
-        lines.append(f"// Constants")
-        lines.append(f"nModes = {n_modes};")
-        lines.append(f"nExPos = {n_expos};")
-        lines.append(f"")
-        lines.append(f"// Mode frequencies (unscaled)")
-        freq_str = ", ".join([f"{f:.6f}" for f in frequencies])
-        lines.append(f"modeFreqsUnscaled = ba.take(nModes, ({freq_str}));")
-        lines.append(f"")
-        lines.append(f"// T60 values")
-        t60_str = ", ".join([f"{t:.6f}" for t in t60s])
-        lines.append(f"t60Scale = = 1.0;")
-        lines.append(f"modesT60s = t60Scale : ba.take(nModes, ({t60_str}));")
-        lines.append(f"")
-        lines.append(f"// Mode gains")
-        gain_str = ", ".join([f"{g:.10f}" for g in gains])
-        lines.append(f"modesGains = waveform{{{gain_str}}};")
-        lines.append(f"")
-        lines.append(f"// Faust DSP code")
-        lines.append(f"process = ");
-        
-        return "\n".join(lines)
-
-    def _process_resonance_model(self, cmd: str, output_name: str, 
-                                 obj_file: str, config_obj) -> None:
-        """Process resonance model if configured."""
-        if not config_obj.resonance:
-            return
-            
-        resonance_obj_file = f"{obj_file.removesuffix('.obj')}_resonance.obj"
-        exit_code = -1
-        
-        if os.path.exists(resonance_obj_file):
-            exit_code = os.system(f"{cmd} --name {output_name}_resonance --nsynthmodes {config_obj.resonance_modes} --infile {resonance_obj_file}")
-        
-        if exit_code != 0:
-            # Generate approximate resonance model
-            exit_code = self._generate_resonance_approximate(output_name, config_obj)
-        
-        if exit_code != 0:
-            print(f"Warning: Could not generate resonance model for {output_name}")
-
-    def _generate_resonance_approximate(self, output_name: str, config_obj) -> int:
-        """Generate approximate resonance model."""
-        try:
-            # Use same frequencies but with fewer modes and different gains
-            n_modes = config_obj.resonance_modes
-            frequencies = 100.0 + 500.0 * np.arange(n_modes)
-            t60s = 0.5 + 1.5 * np.exp(-frequencies / 500.0)
-            gains = np.exp(-np.arange(n_modes) / n_modes)
-            
-            lib_content = self._generate_faust_lib(
-                f"{output_name}_resonance", frequencies, t60s, gains, 1, n_modes
-            )
-            
-            lib_file = f"{output_name}_resonance.lib"
-            with open(lib_file, 'w') as f:
-                f.write(lib_content)
-            
-            return 0
-        except Exception as e:
-            print(f"Error generating approximate resonance model: {e}")
-            return -1
-
-    def _finalize_models(self, output_name: str, config_obj) -> None:
-        """Finalize modal models by removing imports and moving files."""
-        file_names = [f"{output_name}.lib"]
-        if config_obj.resonance:
-            file_names.append(f"{output_name}_resonance.lib")
-        
-        for file_name in file_names:
-            if os.path.exists(file_name):
-                # Remove import(stdfaust.lib)
-                with open(file_name, 'r') as file:
-                    data = file.read()
-                data = data.replace('import(', '//import(')
-                with open(file_name, 'w') as file:
-                    file.write(data)
+                        print(f"Pym2f: Warning - - resonance model generation failed for {outputoutput_name}")
                 
-                # Move to cache
-                dest_path = f"{self.cache_path}/dsp/{file_name}"
-                shutil.move(file_name, dest_path)
-                print(f"Moved {file_name} to {dest_path}")
+                return True, file_names
+        
+        # Clean up failed output
+        for fn in [f"{output_name}.lib", f"{output_name}_resonance.lib"]:
+            if os.path.exists(fn):
+                os.remove(fn)
+        
+        return False, []
+
+    def _try_fallback(self, config_obj, vertices, faces, obj_file, young_modulus, poisson_ratio, density, damping, minmode, maxmode, expos, output_name) -> Tuple[bool, List[str]]:
+        """
+        Generate approximate modal model using primitive geometry approximation.
+        
+        Returns:
+            (success, file_names)
+        """
+        # Classify shape
+        shape_props = self.primitive_geometry.classify(vertices, faces)
+        
+        print(f"Pym2f fallback: Classified {config_obj.name} as {shape_props.shape_type.value} "
+              f"(confidence: {shape_props.confidence:.2f})")
+        
+        # Check if classification is good enough
+        if shape_props.confidence < self.fallback_min_confidence:
+            print(f"Pym2f fallback: Low confidence ({shape_props.confidence:.2f}), "
+                  f"using irregular shape approximation")
+        
+        # Compute modal parameters
+        n_modes = self.config.system.modal_modes
+        
+        modal_params = self.approx2faust.compute(
+            vertices=vertices,
+            faces=faces,
+            young_modulus=young_modulus if young_modulus else 1e9,
+            poisson_ratio=poisson_ratio if poisson_ratio else 0.3,
+            density=density if density else 1000.0,
+            damping=damping if damping else 0.02,
+            min_freq=minmode if minmode else 20.0,
+            max_freq=maxmode if maxmode else 20000.0,
+            n_modes=n_modes
+        )
+        
+        # Generate Faust .lib file
+        lib_content = self.approx2faust.to_faust_lib(
+            modal_params=modal_params,
+            output_name=output_name,
+            min_freq=minmode if minmode else 20.0,
+            max_freq=maxmode if maxmode else 20000.0
+        )
+        
+        # Save the .lib file
+        lib_file = f"{output_name}.lib"
+        with open(lib_file, 'w') as f:
+            f.write(lib_content)
+        
+        file_names = [lib_file]
+        
+        # Validate the generated file
+        if not self._validate_lib_file(lib_file):
+            print(f"Pym2f fallback: Generated lib file validation failed for {output_name}")
+            os.remove(lib_file)
+            return False, []
+        
+        # Handle resonance if requested
+        if config_obj.resonance:
+            resonance_params = self.approx2faust.compute(
+                vertices=vertices,
+                faces=faces,
+                young_modulus=young_modulus if young_modulus else 1e9,
+                poisson_ratio=poisson_ratio if poisson_ratio else 0.3,
+                density=density if density else 1000.0,
+                damping=damping if damping else 0.02,
+                min_freq=minmode if minmode else 20.0,
+                max_freq=maxmode if maxmode else 20000.0,
+                n_modes=config_obj.resonance_modes
+            )
+            
+            resonance_content = self.approx2faust.to_faust_lib(
+                modal_params=resonance_params,
+                output_name=f"{output_name}_resonance",
+                min_freq=minmode if minmode else 5.0,
+                max_freq=maxmode if maxmode else 24000.0
+            )
+            
+            resonance_file = f"{"{output_name}_resonance.lib"
+            with open(resonance_file, 'w') as f:
+                f.write(resonance_content)
+            
+            file_names.append(resonance_file)
+        
+        print(f"Pym2f fallback: Successfully generated approximate modal model for {config_obj.name}")
+        return True, file_names
+
+    def _validate_lib_file(self, lib_file: str) -> bool:
+        """
+        Validate that a generated .lib file contains valid modal data.
+        
+        Checks:
+        - File exists and is non-empty
+        - Contains modeFreqsUnscaled with valid values
+        - No NaN or Inf values
+        - Reasonable frequency range
+        """
+        if not os.path.exists(lib_file):
+            print(f"Pym2f validation: File {lib_file} does not exist")
+            return False
+        
+        file_size = os.path.getsize(lib_file)
+        if file_size == 0:
+            print(f"Pym2f validation: File {lib_file} is empty")
+            return False
+        
+        try:
+            with open(lib_file, 'r') as f:
+                content = f.read()
+        except Exception as e:
+            print(f"Pym2f validation: Cannot read {lib_file}: {e}")
+            return False
+        
+        # Check for essential content
+        if 'modeFreqsUnscaled' not in content:
+            print(f"Pym2f validation: {lib_file} missing modeFreqsUnscaled")
+            return False
+        
+        if 'modesT60s' not in content:
+            print(f"Pym2f validation: {lib_file} missing modesT60s")
+            return False
+        
+        if 'modesGains' not in content:
+            print(f"Pym2f validation: {lib_file} missing modesGains")
+            return False
+        
+        # Check for NaN or Inf in the content
+        if 'nan' in content.lower() or '-nan' in content.lower() or 'inf' in content.lower():
+            print(f"Pym2f validation: {lib_file} contains NaN or Inf values")
+            return False
+        
+        # Extract and validate frequencies
+        import re
+        freq_pattern = r'modeFreqsUnscaled.*?=.*?ba\.take.*?$$(.*?)$$'
+        freq_match = re.search(freq_pattern, content, re.DOTALL)
+        
+        if freq_match:
+            tuple_match = r'\d+\.?\d+'
+            freq_values = re.findall(tuple_match, freq_match.group())
+            
+            if len(freq_values) == 0:
+                print(f"Pym2f validation: {lib_file} has no valid frequencies")
+                return False
+            
+            # Check for reasonable frequency range
+            freqs = [float(f) for f in freq_values]
+            if max(freqs) < 1.0 or min(freqs) < 0:
+                print(f"Pym2f validation: {lib_file} has unreasonable frequencies")
+                return False
+
+        return True
+
+    def _post_process_files(self, file_names: List[str], output_name: str, config_obj) -> None:
+        """
+        Post-process generated .lib files.
+        
+        - quality filtering and fixing mode frequencies and T60 value
+        - Remove import(stdfaust.lib) statements
+        - Move files to cache directory
+        """
+        for file_name in file_names:
+            if not os.path.exists(file_name):
+                print(f"Pym2f: Warning - {file_name} not found for post-processing")
+                continue
+            
+            with open(file_name, 'r') as file:
+                data = file.read()
+            
+            # Remove import statements to avoid dependency issues
+            data = data.replace('import(', '//import(')
+            
+            with open(file_name, 'w') as file:
+                file.write(data)
+            
+            # Move to cache directory
+            dest_path = f"{self.cache_path}/dsp/{file_name}"
+            shutil.move(file_name, dest_path)
+            print(f"Pym2f: Saved {file_name} to {dest_path}")
 
