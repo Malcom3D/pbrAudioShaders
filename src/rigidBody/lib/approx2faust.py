@@ -289,7 +289,7 @@ class Approx2Faust:
         t60s = self._compute_t60s(frequencies, damping, shape_props)
         
         # Compute gains
-        gains = self self._compute_cylinder_gains(vertices, shape_props, frequencies)
+        gains = self._compute_cylinder_gains(vertices, shape_props, frequencies)
         
         return ModalParameters(frequencies=frequencies, t60s=t60s, gains=gains, n_modes=n_modes, n_vertices=n_vertices)
     
@@ -333,7 +333,7 @@ class Approx2Faust:
                 break
         
         # Sort and take the lowest n_modes
-        frequencies = np.sort(f(frequencies)[:n_modes]
+        frequencies = np.sort(frequencies)[:n_modes]
         
         # Pad if needed
         if len(frequencies) < n_modes:
@@ -365,7 +365,7 @@ class Approx2Faust:
         
         # Cross-sectional area and moment of inertia
         A = width * depth
-        I = width * * depth**3 / 12  # Bending about neutral axis
+        I = width * depth**3 / 12  # Bending about neutral axis
         
         # Eigenvalues for clamped-free beam
         beta_L = [1.875, 4.694, 7.855, 10.996, 14.137, 17.279]
@@ -440,7 +440,7 @@ class Approx2Faust:
         n_modes = len(frequencies)
         
         centroid = shape_props.centroid
-        radius = shape shape_props.dimensions.get('radius', 0.1)
+        radius = shape_props.dimensions.get('radius', 0.1)
         
         # Normalize vertex positions to unit sphere
         directions = (vertices - centroid) / radius
@@ -650,7 +650,7 @@ class Approx2Faust:
                 gain = (np.cosh(x) - np.cos(x) - 
                        sigma_n * (np.sinh(x) - np.sin(x)))
                 
-                gains[mode_idx, vertex vertex_idx] = gain * 0.1
+                gains[mode_idx, vertex_idx] = gain * 0.1
         
         return gains
     

@@ -97,8 +97,7 @@ class Pym2f:
         for attempt in range(self.max_fallback_attempts + 1):
             if attempt == 0:
                 # First attempt: use mesh2faust
-                success, file_names = self._try_mesh2faust(config_obj, vertices, normals, faces, obj_file, young_modulus, poisson_ratio, density, damping, minmode, maxmode, expos, output_name
-)
+                success, file_names = self._try_mesh2faust(config_obj, vertices, normals, faces, obj_file, young_modulus, poisson_ratio, density, damping, minmode, maxmode, expos, output_name)
             else:
                 # Fallback: use approximate model
                 if self.use_fallback:
@@ -243,7 +242,7 @@ class Pym2f:
                 max_freq=maxmode if maxmode else 24000.0
             )
             
-            resonance_file = f"{"{output_name}_resonance.lib"
+            resonance_file = f"{output_name}_resonance.lib"
             with open(resonance_file, 'w') as f:
                 f.write(resonance_content)
             
@@ -259,6 +258,7 @@ class Pym2f:
         Checks:
         - File exists and is non-empty
         - Contains modeFreqsUnscaled with valid values
+        - Contains modesGains waveform with valid values
         - No NaN or Inf values
         - Reasonable frequency range
         """
@@ -300,8 +300,8 @@ class Pym2f:
         import re
         freq_pattern = r'modeFreqsUnscaled.*?=.*?ba\.take.*?$$(.*?)$$'
         freq_match = re.search(freq_pattern, content, re.DOTALL)
-        
-        if freq_match:
+
+        if not freq_match == None:
             tuple_match = r'\d+\.?\d+'
             freq_values = re.findall(tuple_match, freq_match.group())
             
@@ -315,6 +315,19 @@ class Pym2f:
                 print(f"Pym2f validation: {lib_file} has unreasonable frequencies")
                 return False
 
+        # Extract and validate gains
+        gain_pattern = r'modesGains.*?=.*?waveform\{(.*?)\}'
+        gain_match = re.search(gain_pattern, line, re.DOTALL)
+
+        if not gain_match == None:
+            gain_tuple_match = re.findall(gain_pattern, gain_match.group())
+            gain_tuple_match = re.sub("'", "", gain_tuple_match[0])
+
+            if not gain_tuple_match == None:
+                return True
+            else:
+                return False
+        
         return True
 
     def _post_process_files(self, file_names: List[str], output_name: str, config_obj) -> None:

@@ -136,7 +136,7 @@ class PrimitiveGeometry:
             abs(aspect_ratio_2 - 1.0) < 0.3 and
             compactness > 0.5):
             side = extents[0]  # Approximate side length
-            dimensions = {'side': side side}
+            dimensions = {'side': side}
             return ShapeType.CUBE, 0.8, dimensions
         
         # Check for plate-like objects (thin in one dimension)
@@ -292,5 +292,5 @@ class PrimitiveGeometry:
         elif shape_properties.shape_type == ShapeType.BEAM:
             return shape_properties.dimensions.get('length', 0.1)
         else:
-            return (3 * shape_properties.volume / (4 * np.pi)) ** ** (1/3)
+            return (3 * shape_properties.volume / (4 * np.pi)) ** (1/3)
 

@@ -21,6 +21,18 @@ from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass, field
 from enum import Enum
 
+class ShapeType(Enum):
+    """Enum for primitive shape classification."""
+    SPHERE = "sphere"
+    CUBE = "cube"
+    CYLINDER = "cylinder"
+    PLATE = "plate"
+    BEAM = "beam"
+    TORUS = "torus"
+    CONE = "cone"
+    PYRAMID = "pyramid"
+    IRREGULAR = "irregular"
+
 @dataclass
 class ShapeProperties:
     """Properties of a classified shape."""
@@ -33,15 +45,3 @@ class ShapeProperties:
     confidence: float  # 0-1 confidence in classification
     bounding_box: np.ndarray  # 8x3 bounding box vertices
     centroid: np.ndarray  # 3D centroid
-
-class ShapeType(Enum):
-    """Enum for primitive shape classification."""
-    SPHERE = "sphere"
-    CUBE = "cube" 
-    CYLINDER = "cylinder" 
-    PLATE = "plate"
-    BEAM = "beam"
-    TORUS = "torus"
-    CONE = "cone"
-    PYRAMID = "pyramid" 
-    IRREGULAR = "irregular"
