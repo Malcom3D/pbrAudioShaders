@@ -17,7 +17,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import pickle
-import numpy as np
+from pbrAudioCommon import np
 from dataclasses import dataclass, field
 from typing import List, Tuple, Dict, Any, Optional
 

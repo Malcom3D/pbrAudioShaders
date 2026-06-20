@@ -19,7 +19,7 @@
 import os
 import pickle
 from enum import Enum
-import numpy as np
+from pbrAudioCommon import np
 from typing import Tuple, List, Union, Dict, Any
 from dataclasses import dataclass, field, asdict
 

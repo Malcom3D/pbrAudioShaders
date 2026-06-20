@@ -21,7 +21,7 @@ __author__ = "Malcom3D"
 __description__ = "Reverse physics engine"
 
 import os, sys
-import numpy as np
+from pbrAudioCommon import np
 
 decimals = 18
 np.set_printoptions(precision=decimals, floatmode='fixed', threshold=np.inf)

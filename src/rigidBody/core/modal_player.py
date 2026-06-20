@@ -19,7 +19,7 @@
 import os
 import json
 import time
-import numpy as np
+from pbrAudioCommon import np
 import soundfile as sf
 from typing import Any, List, Tuple, Dict, Optional
 from dataclasses import dataclass, field

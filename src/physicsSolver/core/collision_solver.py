@@ -18,7 +18,7 @@
 
 import os
 import trimesh
-import numpy as np
+from pbrAudioCommon import np
 from numba import jit, prange
 from scipy.spatial import cKDTree
 from scipy.integrate import solve_ivp

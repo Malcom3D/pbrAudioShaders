@@ -17,7 +17,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import json
-import numpy as np
+from pbrAudioCommon import np
 from typing import List, Dict, Any, Optional, Tuple, Union
 from dataclasses import dataclass, field
 

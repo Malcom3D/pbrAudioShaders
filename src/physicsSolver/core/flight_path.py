@@ -19,7 +19,7 @@
 
 import os
 import pickle
-import numpy as np
+from pbrAudioCommon import np
 from typing import List, Tuple, Dict, Optional
 from dataclasses import dataclass, field
 from scipy.interpolate import CubicSpline

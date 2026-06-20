@@ -16,7 +16,7 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import numpy as np
+from pbrAudioCommon import np
 from typing import Any, List, Tuple, Dict, Optional
 from dataclasses import dataclass, field
 

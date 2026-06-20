@@ -18,7 +18,7 @@
 
 import os
 import json
-import numpy as np
+from pbrAudioCommon import np
 from typing import Any, List, Tuple, Dict, Optional
 from dataclasses import dataclass, field
 

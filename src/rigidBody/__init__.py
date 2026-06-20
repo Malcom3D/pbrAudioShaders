@@ -21,7 +21,7 @@ __author__ = "Malcom3D"
 __description__ = "Physically plausible collision sound for rigid body simulation"
 
 import os, sys
-import numpy as np
+from pbrAudioCommon import np
 
 decimals = 18
 np.set_printoptions(precision=decimals, floatmode='fixed', threshold=np.inf)

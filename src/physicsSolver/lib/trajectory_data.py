@@ -18,7 +18,7 @@
 
 import os
 import pickle
-import numpy as np
+from pbrAudioCommon import np
 from typing import Union, List, Dict, Tuple, Optional, Any
 from dataclasses import dataclass, field
 from scipy.interpolate import interp1d

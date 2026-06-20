@@ -17,7 +17,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import os
-import numpy as np
+from pbrAudioCommon import np
 from typing import List, Tuple, Optional, Any
 from dataclasses import dataclass, field
 from scipy.spatial import ConvexHull

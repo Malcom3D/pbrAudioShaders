@@ -18,7 +18,7 @@
 
 import os, sys
 import stat
-import numpy as np
+from pbrAudioCommon import np
 import shutil
 from typing import List, Tuple, Optional
 from dataclasses import dataclass
