@@ -116,7 +116,8 @@ class CollisionSolver:
         total_samples = int(self.trajectory1.get_x()[-1] if not config_obj1.static else self.trajectory2.get_x()[-1])
 #        sample_counter.total_samples = total_samples
 
-        start_samples = max(int(collision.frame - collision.impulse_range / 2), 0)
+        start_samples = int(collision.frame - collision.impulse_range / 2)
+        start_samples = start_samples if start_samples >= 0 else 0
         stop_samples = int(collision.frame + collision.impulse_range)
         impact_end = stop_samples
 
