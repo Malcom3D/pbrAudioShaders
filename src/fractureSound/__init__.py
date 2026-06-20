@@ -5,7 +5,7 @@ __author__ = "Malcom3D"
 __description__ = "Physically plausible fracture sound synthesis"
 
 import os, sys
-from pbrAudioCommon import np
+from pbrAudioCommon.lib.import_helper import np
 
 decimals = 18
 np.set_printoptions(precision=decimals, floatmode='fixed', threshold=np.inf)

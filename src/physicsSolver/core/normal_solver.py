@@ -17,7 +17,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import math
-from pbrAudioCommon import np
+from pbrAudioCommon.lib.import_helper import np
 from scipy.spatial.transform import Rotation
 from typing import Tuple, Optional, List
 from dataclasses import dataclass, field

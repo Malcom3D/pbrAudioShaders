@@ -19,7 +19,7 @@
 from dataclasses import dataclass, field
 from typing import Union, Optional, Any
 from typing import List
-from pbrAudioCommon import np
+from pbrAudioCommon.lib.import_helper import np
 
 from ..lib.interpolator import FrequencyInterpolator
 

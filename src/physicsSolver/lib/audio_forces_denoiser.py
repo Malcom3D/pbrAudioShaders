@@ -16,7 +16,7 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from pbrAudioCommon import np
+from pbrAudioCommon.lib.import_helper import np
 from scipy import signal, ndimage
 from scipy.ndimage import gaussian_filter1d
 from typing import Dict, List, Tuple, Optional, Any

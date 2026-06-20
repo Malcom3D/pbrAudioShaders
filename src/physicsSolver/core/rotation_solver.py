@@ -19,7 +19,7 @@
 import os
 import math
 import trimesh
-from pbrAudioCommon import np
+from pbrAudioCommon.lib.import_helper import np
 from scipy.spatial.transform import Rotation, Slerp
 from scipy.optimize import minimize
 from typing import Tuple, Optional, List

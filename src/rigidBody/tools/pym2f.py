@@ -18,7 +18,7 @@
 
 import os, sys
 import stat
-from pbrAudioCommon import np
+from pbrAudioCommon.lib.import_helper import np
 import shutil
 from typing import List, Tuple, Optional
 from dataclasses import dataclass

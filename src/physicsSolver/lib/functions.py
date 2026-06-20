@@ -3,7 +3,7 @@ import re
 import random
 import string
 import trimesh
-from pbrAudioCommon import np
+from pbrAudioCommon.lib.import_helper import np
 import numba as nb
 import resampy
 import soundfile as sf

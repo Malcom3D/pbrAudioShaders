@@ -22,7 +22,7 @@ __description__ = "Ellipsoidal sound proxies preprocess for small shards and deb
 
 import os
 import sys
-from pbrAudioCommon import np
+from pbrAudioCommon.lib.import_helper import np
 
 decimals = 18
 np.set_printoptions(precision=decimals, floatmode='fixed', threshold=np.inf)
