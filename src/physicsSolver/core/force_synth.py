@@ -19,7 +19,7 @@
 import os, sys
 import json
 import math
-from pbrAudioCommon.lib.import_helper import np
+import numpy as np
 import soundfile as sf
 import scipy.signal as signal
 from dataclasses import dataclass 

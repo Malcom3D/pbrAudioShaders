@@ -18,7 +18,7 @@
 
 import os
 import pickle
-from pbrAudioCommon.lib.import_helper import np
+import numpy as np
 from enum import IntEnum
 from typing import Tuple, List, Optional
 from dataclasses import dataclass, field

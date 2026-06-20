@@ -19,7 +19,7 @@
 import os
 import math
 import trimesh
-from pbrAudioCommon.lib.import_helper import np
+import numpy as np
 from typing import Dict, Tuple, Optional, Any
 from dataclasses import dataclass
 from scipy.spatial import ConvexHull

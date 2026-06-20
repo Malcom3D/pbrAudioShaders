@@ -17,7 +17,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import os
-from pbrAudioCommon.lib.import_helper import np
+import numpy as np
 import trimesh
 import math
 from scipy.spatial import cKDTree

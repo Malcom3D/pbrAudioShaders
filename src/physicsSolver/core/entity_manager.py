@@ -18,7 +18,7 @@
 
 import copy
 #import threading
-from pbrAudioCommon.lib.import_helper import np
+import numpy as np
 from typing import List, Tuple, Any
 from ..utils.config import Config
 #from ..lib.functions import _soxel_grid_shape

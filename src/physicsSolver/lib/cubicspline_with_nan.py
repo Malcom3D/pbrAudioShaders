@@ -16,7 +16,7 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from pbrAudioCommon.lib.import_helper import np
+import numpy as np
 from scipy.interpolate import CubicSpline
 from typing import Optional, Union, Tuple
 

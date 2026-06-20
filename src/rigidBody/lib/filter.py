@@ -17,7 +17,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from typing import Dict, List, Tuple, Optional, Union
-from pbrAudioCommon.lib.import_helper import np
+import numpy as np
 import numba as nb
 import soundfile as sf
 from scipy import signal
