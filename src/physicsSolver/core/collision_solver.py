@@ -117,6 +117,7 @@ class CollisionSolver:
 #        sample_counter.total_samples = total_samples
 
         start_samples = int(collision.frame - collision.impulse_range / 2)
+        print('CollisionSolver: start_sample', config_obj1.idx, config_obj2.idx, 'collision.frame', collision.frame, 'collision.impulse_range', collision.impulse_range, 'start_samples', start_samples)
         stop_samples = int(collision.frame + collision.impulse_range)
         impact_end = stop_samples
 
