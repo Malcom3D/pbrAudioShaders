@@ -88,7 +88,10 @@ class ForceDataSequence:
     coupling_strength: CubicSpline
 
     def get_contact_type(self, frame_idx: float):
-        idx = np.where(self.frames == np.min(self.frames[0 < self.frames - frame_idx]))
+        if frame_idx < self.frames[-1]:
+            idx = np.where(self.frames == np.min(self.frames[0 < self.frames - frame_idx]))
+        else:
+            idx = np.where(self.frames == self.frames[-1])
         return self.contact_type[idx]
 
     def get_impact_duration(self, frame_idx: float):
