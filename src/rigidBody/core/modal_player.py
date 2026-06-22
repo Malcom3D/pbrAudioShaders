@@ -261,13 +261,13 @@ class ModalPlayer:
         return float(np.max(t60s))
 
     def save_synth_tracks(self):
-        self.save_synth_track(self.rigidbody_synth_track, 'rigidbody')
+        self.save_synth_track(self.rigidbody_synth_track, 'rigidbody', True)
         self.save_synth_track(self.resonance_synth_track, 'resonance')
         self.save_synth_track(self.sliding_synth_track, 'sliding')
         self.save_synth_track(self.scraping_synth_track, 'scraping')
         self.save_synth_track(self.rolling_synth_track, 'rolling')
 
-    def save_synth_track(self, track: np.ndarray, suffix: str):
+    def save_synth_track(self, track: np.ndarray, suffix: str, normalize: bool = False):
         """
         Save individual tracks as WAV files.
         Create a json multitrack project file (e.g., for Reaper, Ardour).
@@ -281,6 +281,10 @@ class ModalPlayer:
         if not np.any(track):
             print(f"Track {suffix} synth track for {config_obj.name} is empty, skipping")
             return
+
+        # Normalize if set
+        if normalize:
+            track /= np.max(abs(track))
 
 #        bit_depth = int(config.system.bit_depth)
 #        file_format = config.system.file_format
