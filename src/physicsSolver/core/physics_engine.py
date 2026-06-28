@@ -89,26 +89,43 @@ class physicsEngine:
 #        tasks_static = [self.fp.compute(obj_idx) for obj_idx in self.obj_static]
 #        results_static = compute(*tasks_static)
 
+        _static()
+        _pos()
+        _rot()
+        _vertex()
+        _traj()
+        _dists()
+        _force()
+        _collision()
+        _force_synth()
+        _save()
+
+    def _static(self):
         tasks_static = [self.static(obj_idx) for obj_idx in self.obj_static]
         results_static = compute(*tasks_static)
         _update_status(f"{self.status_dir}/bake", 9)
 
+    def _pos(self):
         tasks_pos = [self.position(obj_idx) for obj_idx in self.obj_dyn]
         results_pos = compute(*tasks_pos)
         _update_status(f"{self.status_dir}/bake", 18)
 
+    def _rot(self):
         tasks_rot = [self.rotation(obj_idx) for obj_idx in self.obj_dyn]
         results_rot = compute(*tasks_rot)
         _update_status(f"{self.status_dir}/bake", 27)
 
+    def _vertex(self):
         tasks_vertex = [self.vertex(obj_idx) for obj_idx in self.obj_dyn]
         results_vertex = compute(*tasks_vertex)
         _update_status(f"{self.status_dir}/bake", 36)
 
+    def _norm(self):
         tasks_norm = [self.normal(obj_idx) for obj_idx in self.obj_dyn]
         results_norm = compute(*tasks_norm)
         _update_status(f"{self.status_dir}/bake", 45)
 
+    def _traj(self):
         tasks_traj = [self.trajectory(obj_idx) for obj_idx in self.obj_dyn]
         results_traj = compute(*tasks_traj)
         _update_status(f"{self.status_dir}/bake", 54)
@@ -118,23 +135,28 @@ class physicsEngine:
             self._cleanup_tmp_trajectories(obj_idx)
         _update_status(f"{self.status_dir}/bake", 55)
 
+    def _dists(self):
         tasks_dists = [self.distances(objs_idx) for objs_idx in self.obj_pairs]
         results_dists = compute(*tasks_dists)
         _update_status(f"{self.status_dir}/bake", 72)
 
+    def _force(self):
         tasks_force = [self.force(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
         results_force = compute(*tasks_force)
         _update_status(f"{self.status_dir}/bake", 80)
 
+    def _collision(self):
         collisions = self.entity_manager.get('collisions')
         tasks_collision = [self.collision(collisions[collision_idx]) for collision_idx in collisions.keys()]
         results_collision = compute(*tasks_collision)
         _update_status(f"{self.status_dir}/bake", 90)
 
+    def _force_synth(self):
         tasks_force_synth = [self.force_synth(obj_idx) for obj_idx in self.obj_dyn]
         results_force_synth = compute(*tasks_force_synth)
         _update_status(f"{self.status_dir}/bake", 99)
 
+    def _save(self):
         # Ensure directory exists
         os.makedirs(self.collisions_dir, exist_ok=True)
         os.makedirs(self.modalvertices_dir, exist_ok=True)
