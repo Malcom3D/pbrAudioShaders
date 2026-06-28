@@ -89,16 +89,16 @@ class physicsEngine:
 #        tasks_static = [self.fp.compute(obj_idx) for obj_idx in self.obj_static]
 #        results_static = compute(*tasks_static)
 
-        _static()
-        _pos()
-        _rot()
-        _vertex()
-        _traj()
-        _dists()
-        _force()
-        _collision()
-        _force_synth()
-        _save()
+        self._static()
+        self._pos()
+        self._rot()
+        self._vertex()
+        self._traj()
+        self._dists()
+        self._force()
+        self._collision()
+        self._force_synth()
+        self._save()
 
     def _static(self):
         tasks_static = [self.static(obj_idx) for obj_idx in self.obj_static]
