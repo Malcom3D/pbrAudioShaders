@@ -400,9 +400,9 @@ class DistanceSolver:
 
         if min_distance > collision_margin * 2.0:
             """
-            Vectorized version for maximum speed.
+            Surface 2 surface vectorized version for maximum speed.
             """
-            method = 'rtree'
+            method = 'samples'
             n_samples = 500
 
             # Sample points
