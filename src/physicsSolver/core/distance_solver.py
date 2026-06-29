@@ -399,25 +399,46 @@ class DistanceSolver:
         min_distance = distances[min_dist_idx]
 
         if min_distance > collision_margin * 2.0:
+            """
+            Vectorized version for maximum speed.
+            """
             method = 'rtree'
-            pq1 = trimesh.proximity.ProximityQuery(mesh1)
-            pq2 = trimesh.proximity.ProximityQuery(mesh2)
+            n_samples=5000
 
-            closest_points1, distances1, faces_id1 = pq1.on_surface(mesh2.vertices)
-            closest_points2, distances2, faces_id2 = pq1.on_surface(mesh1.vertices)
+            # Sample points
+            samples1 = mesh1.sample(n_samples)
+            samples2 = mesh2.sample(n_samples)
+    
+            # Compute all pairwise distances using broadcasting
+            # This is memory intensive but very fast for moderate sample sizes
+            diff = samples1[:, np.newaxis, :] - samples2[np.newaxis, :, :]
+            distances = np.sqrt(np.sum(diff**2, axis=2))
+    
+            min_dist_idx = np.unravel_index(distances.argmin(), distances.shape)
+            min_distance = distances[min_dist_idx]
 
-            min_dist_idx1 = np.argmin(distances1)
-            min_dist_idx2 = np.argmin(distances2)
-            mesh1_vertex_idx = np.argmin(np.abs(mesh1.vertices - closest_points1[min_dist_idx1]))
-            mesh2_vertex_idx = np.argmin(np.abs(mesh2.vertices - closest_points1[min_dist_idx2]))
-
-            dist1 = distances1[min_dist_idx1]
-            dist2 = distances2[min_dist_idx2]
-            min_distance = min(dist1, dist2) if dist1 > 0 and dist2 > 0 else (dist1 if dist1 > 0 else dist2)
-
-            closest_point1 = closest_points1[min_dist_idx1]
-            closest_point2 = closest_points2[min_dist_idx2]
-
+            closest_point1 = samples1[min_idx[0]]
+            closest_point2 = samples1[min_idx[1]]
+    
+#            method = 'rtree'
+#            pq1 = trimesh.proximity.ProximityQuery(mesh1)
+#            pq2 = trimesh.proximity.ProximityQuery(mesh2)
+#
+#            closest_points1, distances1, faces_id1 = pq1.on_surface(mesh2.vertices)
+#            closest_points2, distances2, faces_id2 = pq1.on_surface(mesh1.vertices)
+#
+#            min_dist_idx1 = np.argmin(distances1)
+#            min_dist_idx2 = np.argmin(distances2)
+#            mesh1_vertex_idx = np.argmin(np.abs(mesh1.vertices - closest_points1[min_dist_idx1]))
+#            mesh2_vertex_idx = np.argmin(np.abs(mesh2.vertices - closest_points1[min_dist_idx2]))
+#
+#            dist1 = distances1[min_dist_idx1]
+#            dist2 = distances2[min_dist_idx2]
+#            min_distance = min(dist1, dist2) if dist1 > 0 and dist2 > 0 else (dist1 if dist1 > 0 else dist2)
+#
+#            closest_point1 = closest_points1[min_dist_idx1]
+#            closest_point2 = closest_points2[min_dist_idx2]
+#
         else:
             # Get closest points
             closest_point1 = mesh1.vertices[min_dist_idx]
@@ -449,8 +470,8 @@ class DistanceSolver:
             'method': method,
             'mesh1_point': closest_point1,
             'mesh2_point': closest_point2,
-            'mesh1_vertex_idx': min_dist_idx,
-            'mesh2_vertex_idx': indices[min_dist_idx]
+#            'mesh1_vertex_idx': min_dist_idx,
+#            'mesh2_vertex_idx': indices[min_dist_idx]
         }
     
         return min_distance, closest_points
