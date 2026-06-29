@@ -42,7 +42,7 @@ class fractureEngine:
     def __post_init__(self):
         config = self.entity_manager.get('config')
         self.status_dir = f"{config.system.cache_path}/status/{__class__.__name__}"
-        self.fracture_dir = f"{config.system.cache_path}/fracture"
+        self.fracture_dir = f"{config.system.cache_path}/fracture" # ToDo: add Collection name
         self.fracture_modal_dir = f"{config.system.cache_path}/fracture_modal"
         self.fracture_audio_dir = f"{config.system.cache_path}/fracture_audio"
         
@@ -128,6 +128,7 @@ class fractureEngine:
         
         if fracture_frame is None:
             # No fracture detected
+            print('No fracture detected for', original_obj.name)
             return []
         
         # Get collision data at fracture time

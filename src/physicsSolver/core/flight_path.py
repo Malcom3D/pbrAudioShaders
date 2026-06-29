@@ -160,6 +160,7 @@ class FlightPath:
         all_frame_times = np.array(all_frames)
         
         # Get positions and rotations at all frame times
+        all_true_frame_times = []
         all_positions = []
         all_rotations = []
         all_vertices = []
@@ -180,11 +181,13 @@ class FlightPath:
 #                    rot = np.eye(3) 
                 vert = solved_frames[idx][3]
                 norm = solved_frames[idx][4]
-            
-            all_positions.append(pos)
-            all_rotations.append(rot)
-            all_vertices.append(vert)
-            all_normals.append(norm)
+
+            if idx is not None and pos is not None and rot is not None and vert is not None and norm is not None:
+                all_true_frame_times.append(frame_time)
+                all_positions.append(pos)
+                all_rotations.append(rot)
+                all_vertices.append(vert)
+                all_normals.append(norm)
 
 #        # Get quaternion and normalize
 #        rot_from_quat = []
@@ -198,6 +201,7 @@ class FlightPath:
         all_rotations = Rotation.concatenate(all_rotations)
         all_vertices = np.array(all_vertices)  # Shape: (n_frames, n_vertices, 3)
         all_normals = np.array(all_normals)    # Shape: (n_frames, n_vertices, 3)
+        all_frame_times = np.array(all_true_frame_times)
         
         # Interpolate positions and rotations using CubicSpline and RotationSpline
         pos_interp = [CubicSpline(all_frame_times, all_positions[:, i], extrapolate=1) for i in range(all_positions.shape[1])]
