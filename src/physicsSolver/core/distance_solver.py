@@ -403,7 +403,7 @@ class DistanceSolver:
             Vectorized version for maximum speed.
             """
             method = 'rtree'
-            n_samples=5000
+            n_samples = 500
 
             # Sample points
             samples1 = mesh1.sample(n_samples)
@@ -417,8 +417,8 @@ class DistanceSolver:
             min_dist_idx = np.unravel_index(distances.argmin(), distances.shape)
             min_distance = distances[min_dist_idx]
 
-            closest_point1 = samples1[min_idx[0]]
-            closest_point2 = samples1[min_idx[1]]
+            closest_point1 = samples1[min_dist_idx[0]]
+            closest_point2 = samples1[min_dist_idx[1]]
     
 #            method = 'rtree'
 #            pq1 = trimesh.proximity.ProximityQuery(mesh1)

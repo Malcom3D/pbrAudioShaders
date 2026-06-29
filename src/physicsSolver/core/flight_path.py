@@ -158,14 +158,14 @@ class FlightPath:
         # Combine original and solved frames
         all_frames = sorted(set(list(original_frame_times) + frames))
         all_frame_times = np.array(all_frames)
-        
+
         # Get positions and rotations at all frame times
         all_true_frame_times = []
         all_positions = []
         all_rotations = []
         all_vertices = []
         all_normals = []
-        
+
         for frame_time in all_frame_times:
             # Find position at this time
             if frame_time in original_frame_times:
