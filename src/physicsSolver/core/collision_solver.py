@@ -218,7 +218,7 @@ class CollisionSolver:
                 tree2 = cKDTree(mesh2_vertices)
 
                 # Get contact type
-                # PUT THIS IN ForceDataSequence lib/force_data.py get_contact_type
+                # ToDo: PUT THIS IN ForceDataSequence lib/force_data.py get_contact_type
                 force_frames = force.frames
                 ctf = force_frames[np.where(force_frames <= sample_idx)]
                 if not ctf.shape[0] == 0 and not ctf[-1] == force_frames[-1]:

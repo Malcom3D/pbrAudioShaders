@@ -355,6 +355,8 @@ class DistanceSolver:
             frame_idx = int(frame_idx)
             vertices1, normals1, faces1 = _load_mesh(config_objs[0], frame_idx)
             vertices2, normals2, faces2 = _load_mesh(config_objs[1], frame_idx)
+            mesh1_name = config_objs[0].name
+            mesh2_name = config_objs[1].name
         else:
             vertices1 = trajectory1.get_vertices(frame)
             vertices2 = trajectory2.get_vertices(frame)
@@ -362,6 +364,8 @@ class DistanceSolver:
             normals2 = trajectory2.get_normals(frame)
             faces1 = trajectory1.get_faces(frame)
             faces2 = trajectory2.get_faces(frame)
+            mesh1_name = config_objs[0].name if config_objs[0].idx == trajectory1.obj_idx else config_objs[1].name
+            mesh2_name = config_objs[1].name if config_objs[1].idx == trajectory2.obj_idx else config_objs[0].name
 
         mesh1 = trimesh.Trimesh(vertices=vertices1, vertex_normals=normals1, faces=faces1)
         mesh2 = trimesh.Trimesh(vertices=vertices2, vertex_normals=normals2, faces=faces2)
@@ -369,7 +373,7 @@ class DistanceSolver:
         # Calculate minimum distance between transformed meshes
         min_distance, closest_points = self._calculate_min_distance(mesh1=mesh1, mesh2=mesh2, collision_margin=collision_margin, samples_per_sq_unit=samples_per_sq_unit)
 
-        print('_calculate_min_distance', closest_points['method'], frame_idx, min_distance)
+        print('_calculate_min_distance', mesh1_name, mesh2_name, closest_points['method'], frame_idx, min_distance)
 
         return min_distance, closest_points
 
