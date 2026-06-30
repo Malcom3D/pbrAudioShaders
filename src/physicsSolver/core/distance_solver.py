@@ -413,7 +413,7 @@ class DistanceSolver:
 
         if min_distance > collision_margin * 2.0:
             """
-            Surface 2 surface vectorized version for maximum speed.
+            Sampled surface 2 sampled surface vectorized version for maximum speed.
             """
             method = 'samples'
             n_samples = samples_per_sq_unit * (mesh1.area + mesh2.area) / 2
