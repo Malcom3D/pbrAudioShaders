@@ -412,7 +412,7 @@ class DistanceSolver:
             Surface 2 surface vectorized version for maximum speed.
             """
             method = 'samples'
-            n_sample = samples_per_sq_unit * (mesh1.area + mesh2.area) / 2
+            n_samples = samples_per_sq_unit * (mesh1.area + mesh2.area) / 2
 
             # Sample points
             samples1 = mesh1.sample(n_samples)
