@@ -341,7 +341,7 @@ class DistanceSolver:
         frame : float
             Frame number (can be fractional for subframes)
         samples_per_object : int
-            Number of samples per square unit (square meter)
+            Number of samples per object
         collision_margin : float
             System collision margin
     
@@ -388,7 +388,7 @@ class DistanceSolver:
         mesh2 : trimesh.Trimesh
             Second transformed mesh
         samples_per_object : int
-            Number of samples per square unit (square meter)
+            Number of samples per object
         collision_margin : float
             System collision margin
 
@@ -416,22 +416,40 @@ class DistanceSolver:
             Sampled surface 2 sampled surface vectorized version for maximum speed.
             """
             method = 'samples'
-            n_samples = int(samples_per_object * (mesh1.area + mesh2.area) / 2)
+            n_samples = samples_per_object
 
             # Sample points
             samples1 = mesh1.sample(n_samples)
             samples2 = mesh2.sample(n_samples)
 
-            # Compute all pairwise distances using broadcasting
-            # This is memory intensive but very fast for moderate sample sizes
-            diff = samples1[:, np.newaxis, :] - samples2[np.newaxis, :, :]
-            distances = np.sqrt(np.sum(diff**2, axis=2))
-    
-            min_dist_idx = np.unravel_index(distances.argmin(), distances.shape)
-            min_distance = distances[min_dist_idx]
+            pq1 = trimesh.proximity.ProximityQuery(mesh1)
+            pq2 = trimesh.proximity.ProximityQuery(mesh2)
 
-            closest_point1 = samples1[min_dist_idx[0]]
-            closest_point2 = samples2[min_dist_idx[1]]
+            closest_points1, distances1, faces_id1 = pq1.on_surface(samples1)
+            closest_points2, distances2, faces_id2 = pq1.on_surface(samples2)
+
+            min_dist_idx1 = np.argmin(distances1)
+            min_dist_idx2 = np.argmin(distances2)
+            mesh1_vertex_idx = np.argmin(np.abs(mesh1.vertices - closest_points1[min_dist_idx1]))
+            mesh2_vertex_idx = np.argmin(np.abs(mesh2.vertices - closest_points1[min_dist_idx2]))
+
+            dist1 = distances1[min_dist_idx1]
+            dist2 = distances2[min_dist_idx2]
+            min_distance = min(dist1, dist2) if dist1 > 0 and dist2 > 0 else (dist1 if dist1 > 0 else dist2)
+
+            closest_point1 = closest_points1[min_dist_idx1]
+            closest_point2 = closest_points2[min_dist_idx2]
+
+#            # Compute all pairwise distances using broadcasting
+#            # This is memory intensive but very fast for moderate sample sizes
+#            diff = samples1[:, np.newaxis, :] - samples2[np.newaxis, :, :]
+#            distances = np.sqrt(np.sum(diff**2, axis=2))
+#    
+#            min_dist_idx = np.unravel_index(distances.argmin(), distances.shape)
+#            min_distance = distances[min_dist_idx]
+#
+#            closest_point1 = samples1[min_dist_idx[0]]
+#            closest_point2 = samples2[min_dist_idx[1]]
     
 #            method = 'rtree'
 #            pq1 = trimesh.proximity.ProximityQuery(mesh1)
