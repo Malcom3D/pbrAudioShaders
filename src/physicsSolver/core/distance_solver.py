@@ -47,7 +47,7 @@ class DistanceSolver:
     def compute(self, objs_idx: Tuple[int, int]) -> List[Tuple[int, float]]:
         config = self.entity_manager.get('config')
         collision_margin = config.system.collision_margin
-        samples_per_sq_unit = config.system.samples_per_sq_unit
+        samples_per_object = config.system.samples_per_object
         fps = config.system.fps
         fps_base = config.system.fps_base
         subframes = config.system.subframes
@@ -76,7 +76,7 @@ class DistanceSolver:
 
         if isinstance(config_objs[1].connected, np.ndarray) and objs_idx[0] in config_objs[1].connected[:,0] and isinstance(config_objs[0].connected, np.ndarray) and objs_idx[1] in config_objs[0].connected[:,0]:
             frame = sample_rate / sfps
-            distance, closest_points = self._distance(config_objs=config_objs, trajectory1=trajectory1, trajectory2=trajectory2, frame=frame, sfps=sfps, sample_rate=sample_rate, collision_margin=collision_margin, samples_per_sq_unit=samples_per_sq_unit)
+            distance, closest_points = self._distance(config_objs=config_objs, trajectory1=trajectory1, trajectory2=trajectory2, frame=frame, sfps=sfps, sample_rate=sample_rate, collision_margin=collision_margin, samples_per_object=samples_per_object)
             distances = np.array(distance)
             closest_point1 = np.array(closest_points['mesh1_point'])
             closest_point2 = np.array(closest_points['mesh2_point'])
@@ -92,7 +92,7 @@ class DistanceSolver:
         if not config_objs[0].static or not config_objs[1].static:
             distances, closest_point1, closest_point2 = ([] for _ in range(3))
             for idx in range(len(frames)):
-                distance, closest_points = self._distance(config_objs=config_objs, trajectory1=trajectory1, trajectory2=trajectory2, frame=frames[idx], sfps=sfps, sample_rate=sample_rate, collision_margin=collision_margin, samples_per_sq_unit=samples_per_sq_unit)
+                distance, closest_points = self._distance(config_objs=config_objs, trajectory1=trajectory1, trajectory2=trajectory2, frame=frames[idx], sfps=sfps, sample_rate=sample_rate, collision_margin=collision_margin, samples_per_object=samples_per_object)
                 distances.append(distance)
                 closest_point1.append(closest_points['mesh1_point'])
                 closest_point2.append(closest_points['mesh2_point'])
@@ -328,7 +328,7 @@ class DistanceSolver:
         
         return is_impact
 
-    def _distance(self, config_objs: List[Any], trajectory1: Any, trajectory2: Any, frame: float, sfps: int, sample_rate: int, collision_margin: float, samples_per_sq_unit: int) -> Tuple[float, Dict[str, Any]]:
+    def _distance(self, config_objs: List[Any], trajectory1: Any, trajectory2: Any, frame: float, sfps: int, sample_rate: int, collision_margin: float, samples_per_object: int) -> Tuple[float, Dict[str, Any]]:
         """
         Calculate minimum distance between transformed meshes.
     
@@ -340,7 +340,7 @@ class DistanceSolver:
             TrajectoryData object for second object
         frame : float
             Frame number (can be fractional for subframes)
-        samples_per_sq_unit : int
+        samples_per_object : int
             Number of samples per square unit (square meter)
         collision_margin : float
             System collision margin
@@ -371,13 +371,13 @@ class DistanceSolver:
         mesh2 = trimesh.Trimesh(vertices=vertices2, vertex_normals=normals2, faces=faces2)
 
         # Calculate minimum distance between transformed meshes
-        min_distance, closest_points = self._calculate_min_distance(mesh1=mesh1, mesh2=mesh2, collision_margin=collision_margin, samples_per_sq_unit=samples_per_sq_unit)
+        min_distance, closest_points = self._calculate_min_distance(mesh1=mesh1, mesh2=mesh2, collision_margin=collision_margin, samples_per_object=samples_per_object)
 
         print('_calculate_min_distance', mesh1_name, mesh2_name, closest_points['method'], frame_idx, min_distance)
 
         return min_distance, closest_points
 
-    def _calculate_min_distance(self, mesh1: trimesh.Trimesh, mesh2: trimesh.Trimesh, collision_margin: float, samples_per_sq_unit: int, workers: int = -1) -> Tuple[float, Dict[str, np.ndarray]]:
+    def _calculate_min_distance(self, mesh1: trimesh.Trimesh, mesh2: trimesh.Trimesh, collision_margin: float, samples_per_object: int, workers: int = -1) -> Tuple[float, Dict[str, np.ndarray]]:
         """
         Calculate minimum distance between two meshes using KDTree.
     
@@ -387,7 +387,7 @@ class DistanceSolver:
             First transformed mesh
         mesh2 : trimesh.Trimesh
             Second transformed mesh
-        samples_per_sq_unit : int
+        samples_per_object : int
             Number of samples per square unit (square meter)
         collision_margin : float
             System collision margin
@@ -416,12 +416,12 @@ class DistanceSolver:
             Sampled surface 2 sampled surface vectorized version for maximum speed.
             """
             method = 'samples'
-            n_samples = samples_per_sq_unit * (mesh1.area + mesh2.area) / 2
+            n_samples = int(samples_per_object * (mesh1.area + mesh2.area) / 2)
 
             # Sample points
             samples1 = mesh1.sample(n_samples)
             samples2 = mesh2.sample(n_samples)
-    
+
             # Compute all pairwise distances using broadcasting
             # This is memory intensive but very fast for moderate sample sizes
             diff = samples1[:, np.newaxis, :] - samples2[np.newaxis, :, :]
@@ -431,7 +431,7 @@ class DistanceSolver:
             min_distance = distances[min_dist_idx]
 
             closest_point1 = samples1[min_dist_idx[0]]
-            closest_point2 = samples1[min_dist_idx[1]]
+            closest_point2 = samples2[min_dist_idx[1]]
     
 #            method = 'rtree'
 #            pq1 = trimesh.proximity.ProximityQuery(mesh1)

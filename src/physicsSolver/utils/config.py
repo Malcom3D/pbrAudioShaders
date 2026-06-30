@@ -33,7 +33,7 @@ class SystemConfig:
     subframes: int = 1 # video subframes
     modal_modes: int = 20
     collision_margin: float = 0.05
-    samples_per_sq_unit: int = 1000
+    samples_per_object: int = 1000
     cache_path: str = "./pbrAudioCache/"
     enable_denoiser: bool = False
 
