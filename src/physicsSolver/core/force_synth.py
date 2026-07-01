@@ -40,6 +40,8 @@ class ForceSynth:
         os.makedirs(self.collisions_dir, exist_ok=True)
         self.audio_force_dir = f"{config.system.cache_path}/audio_force"
         os.makedirs(self.audio_force_dir, exist_ok=True)
+        if config.system.enable_denoiser:
+            os.makedirs(f"{self.audio_force_dir}/unprocessed", exist_ok=True)
 
     def compute(self, obj_idx: int) -> None:
         config = self.entity_manager.get('config')
@@ -148,10 +150,10 @@ class ForceSynth:
             'coupling_strength': coupling_strength_track
         }
 
-        # Save unprocessed tracks
-        self._save_tracks(config_obj, tracks, total_samples, int(sample_rate))
-
         if config.system.enable_denoiser:
+            # Save unprocessed tracks
+            self._save_tracks(config_obj, tracks, total_samples, int(sample_rate), unprocessed=True)
+
             # Initialize denoiser
             denoiser = AudioForcesDenoiser(
                 dc_blocker_alpha=config.denoiser.dc_blocker_alpha,
@@ -192,7 +194,8 @@ class ForceSynth:
                 for key in tracks.keys():
                     print(config_obj.name, 'denoised', key, tracks[key].shape)
 
-            self._save_tracks(config_obj, tracks, total_samples, int(sample_rate), denoised=True)
+            self._save_tracks(config_obj, tracks, total_samples, int(sample_rate))
+        self._save_tracks(config_obj, tracks, total_samples, int(sample_rate))
 
     def _synthesize_impact(self, force: Any, collision: Any, config_obj: Any, other_config_obj: Any, sample_idx: float, total_samples: int, sample_rate: int) -> Dict[str, Any]:
         """Synthesize Hertzian impact audio-force."""
@@ -923,7 +926,7 @@ class ForceSynth:
         
         return result
 
-    def _save_tracks(self, config_obj: Any, tracks: Dict[str, np.ndarray], total_samples: int, sample_rate: int, denoised: bool = False):
+    def _save_tracks(self, config_obj: Any, tracks: Dict[str, np.ndarray], total_samples: int, sample_rate: int, unprocessed: bool = False):
         """
         Save individual tracks as WAV files.
         Create a json multitrack project file (e.g., for Reaper, Ardour).
@@ -936,11 +939,11 @@ class ForceSynth:
         }
         
         for track_name, track_data in tracks.items():
-            if denoised:
-                track_file = f"{config_obj.name}_{track_name}_denoised.raw"
+            track_file = f"{config_obj.name}_{track_name}.raw"
+            if unprocessed:
+                wave_file = f"{self.audio_force_dir}/unprocessed/{track_file}"
             else:
-                track_file = f"{config_obj.name}_{track_name}.raw"
-            wave_file = f"{self.audio_force_dir}/{track_file}"
+                wave_file = f"{self.audio_force_dir}/{track_file}"
             sf.write(wave_file, track_data, sample_rate, subtype='FLOAT')
             project_data['tracks'].append({
                 'name': track_name,
@@ -953,8 +956,8 @@ class ForceSynth:
             print(f"Saved {track_name} tracks to {self.audio_force_dir}")
 
         # Save project file
-        if denoised:
-            json_file = f"{self.audio_force_dir}/{config_obj.name}_denoised.json"
+        if unprocessed:
+            json_file = f"{self.audio_force_dir}/unprocessed/{config_obj.name}.json"
         else:
             json_file = f"{self.audio_force_dir}/{config_obj.name}.json"
 
