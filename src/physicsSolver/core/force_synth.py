@@ -148,6 +148,9 @@ class ForceSynth:
             'coupling_strength': coupling_strength_track
         }
 
+        # Save unprocessed tracks
+        self._save_tracks(config_obj, tracks, total_samples, int(sample_rate))
+
         if config.system.enable_denoiser:
             # Initialize denoiser
             denoiser = AudioForcesDenoiser(
@@ -189,7 +192,7 @@ class ForceSynth:
                 for key in tracks.keys():
                     print(config_obj.name, 'denoised', key, tracks[key].shape)
 
-        self._save_tracks(config_obj, tracks, total_samples, int(sample_rate))
+            self._save_tracks(config_obj, tracks, total_samples, int(sample_rate), denoised=True)
 
     def _synthesize_impact(self, force: Any, collision: Any, config_obj: Any, other_config_obj: Any, sample_idx: float, total_samples: int, sample_rate: int) -> Dict[str, Any]:
         """Synthesize Hertzian impact audio-force."""
@@ -920,7 +923,7 @@ class ForceSynth:
         
         return result
 
-    def _save_tracks(self, config_obj: Any, tracks: Dict[str, np.ndarray], total_samples: int, sample_rate: int):
+    def _save_tracks(self, config_obj: Any, tracks: Dict[str, np.ndarray], total_samples: int, sample_rate: int, denoised: bool = False):
         """
         Save individual tracks as WAV files.
         Create a json multitrack project file (e.g., for Reaper, Ardour).
@@ -933,7 +936,10 @@ class ForceSynth:
         }
         
         for track_name, track_data in tracks.items():
-            track_file = f"{config_obj.name}_{track_name}.raw"
+            if denoised:
+                track_file = f"{config_obj.name}_{track_name}_denoised.raw"
+            else:
+                track_file = f"{config_obj.name}_{track_name}.raw"
             wave_file = f"{self.audio_force_dir}/{track_file}"
             sf.write(wave_file, track_data, sample_rate, subtype='FLOAT')
             project_data['tracks'].append({
@@ -947,7 +953,11 @@ class ForceSynth:
             print(f"Saved {track_name} tracks to {self.audio_force_dir}")
 
         # Save project file
-        json_file = f"{self.audio_force_dir}/{config_obj.name}.json"
+        if denoised:
+            json_file = f"{self.audio_force_dir}/{config_obj.name}_denoised.json"
+        else:
+            json_file = f"{self.audio_force_dir}/{config_obj.name}.json"
+
         with open(json_file, 'w') as f:
             json.dump(project_data, f, indent=2)
 
