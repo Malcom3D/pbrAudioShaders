@@ -30,6 +30,8 @@ class FaustRender:
         bin_dir = f"{os.path.dirname(os.path.abspath(sys.modules[FaustRender.__module__].__file__))}/../bin"
         os.environ['LD_LIBRARY_PATH'] = bin_dir
         self.faust_render = f"{bin_dir}/{self.faust_render}"
+        if not os.access(self.faust_render, os.X_OK):
+            os.chmod(self.faust_render, stat.S_IXUSR)
 
     def compute(self, dsp_file: str, output_file: str, duration: float = None):
         """
@@ -44,5 +46,3 @@ class FaustRender:
         exit_code = os.system(cmd)
         if not exit_code == 0:
             print('Error')
-
-#audio_data = np.fromfile('yourfile.raw', dtype=np.float32)
