@@ -32,7 +32,7 @@ from scipy.ndimage import gaussian_filter1d
 import soundfile as sf
 import json
 
-fromfrom physicsSolver import EntityManager
+from physicsSolver import EntityManager
 
 @dataclass
 class PostProcess:
