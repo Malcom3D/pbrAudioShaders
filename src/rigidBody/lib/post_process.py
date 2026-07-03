@@ -67,9 +67,7 @@ class PostProcess:
         
         # Smoothing filter (low-pass)
         smoothing_cutoff = 1000.0 / (self.postprocess.smoothing_window_ms * 2.0)
-        self.smoothing_b, self.smoothing_a = signal.butter(
-            2, smoothing_cutoff / (self.sample_rate / 2), btype='low'
-        )
+        self.smoothing_b, self.smoothing_a = signal.butter(2, smoothing_cutoff / (self.sample_rate / 2), btype='low')
         
         # De-esser / high-frequency reduction
         self.deesser_b, self.deesser_a = signal.butter(2, 8000.0 / (self.sample_rate / 2), btype='low')

@@ -40,17 +40,14 @@ class PostProcessEngine:
     """
     
     entity_manager: EntityManager
-    config: PostProcessConfig = field(default_factory=PostProcessConfig)
     
     def __post_init__(self):
-        system_config = self.entity_manager.get('config').system
-        self.status_dir = f"{system_config.cache_path}/status/PostProcessEngineEngine"
+        config = self.entity_manager.get('config')
+        self.system_config = config.system
+        self.status_dir = f"{system_config.cache_path}/status/PostProcessEngine"
         os.makedirs(self.status_dir, exist_ok=True)
         
-        self.post_processor = PostProcess(
-            entity_manager=self.entity_manager,
-            config=self.config
-        )
+        self.post_processor = PostProcess(entity_manager=self.entity_manager)
     
     def process(self) -> Dict[str, Dict[str, np.ndarray]]:
         """
