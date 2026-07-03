@@ -615,7 +615,7 @@ class PostProcess:
         
         # Save project file
         project_file = f"{output_dir}/{obj_name}_post.json"
-        with open(project_file, 'w') as f f:
+        with open(project_file, 'w') as f:
             json.dump(project_data, f, indent=2)
         
         if self.postprocess.verbose:
