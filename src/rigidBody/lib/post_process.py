@@ -247,7 +247,7 @@ class PostProcess:
             padded[:len(signal_b)] = signal_b
             return padded
     
-    def _apply_noise_gate(self, signal: np.ndarray, force: np.ndarray) -> np.ndarray:
+    def _apply_noise_gate(self, signal_data: np.ndarray, force: np.ndarray) -> np.ndarray:
         """
         Apply noise gate using force envelope as sidechain.
         
@@ -269,16 +269,16 @@ class PostProcess:
         adaptive_threshold = threshold_linear * (1.0 - 0.9 * force_env)
         
         # Apply gate
-        signal_abs = np.abs(signal)
-        gate = np.ones_like(signal)
+        signal_abs = np.abs(signal_data)
+        gate = np.ones_like(signal_data)
         
         # Smooth gate transitions
         smooth_window = int(0.001 * self.sample_rate)  # 1ms
         if smooth_window > 0:
             # Create smooth gate envelope
-            gate_smooth = np.zeros_like(signal)
+            gate_smooth = np.zeros_like(signal_data)
             
-            for i in range(len(signal)):
+            for i in range(len(signal_data)):
                 if signal_abs[i] > adaptive_threshold[i]:
                     gate_smooth[i] = 1.0
                 else:
@@ -288,9 +288,9 @@ class PostProcess:
             gate_smooth = gaussian_filter1d(gate_smooth, sigma=smooth_window)
             gate = gate_smooth
         
-        return signal * gate
+        return signal_data * gate
     
-    def _spectral_denoise(self, signal: np.ndarray, force: np.ndarray) -> np.ndarray:
+    def _spectral_denoise(self, signal_data: np.ndarray, force: np.ndarray) -> np.ndarray:
         """
         Spectral noise reduction using force signal as reference.
         
@@ -301,12 +301,12 @@ class PostProcess:
         hop_length = n_fft // 4
         
         # Compute STFT
-        f, t, Zxx = signal.stft(signal, fs=self.sample_rate, 
+        f, t, Zxx = signal.stft(signal_data, fs=self.sample_rate, 
                                  nperseg=n_fft, noverlap=n_fft - hop_length)
         
         # Compute force envelope at STFT time points
         force_resampled = np.interp(
-            np.linspace(0, len(signal), Zxx.shape[1]),
+            np.linspace(0, len(signal_data), Zxx.shape[1]),
             np.arange(len(force)),
             force
         )
@@ -335,20 +335,20 @@ class PostProcess:
             0.0
         )
         
-        # Reconstruct signal
+        # Reconstruct signal_data
         Zxx_clean = magnitude_clean * np.exp(1j * phase)
         _, processed = signal.istft(Zxx_clean, fs=self.sample_rate, 
                                      nperseg=n_fft, noverlap=n_fft - hop_length)
         
         # Match length
-        if len(processed) > len(signal):
-            processed = processed[:len(signal)]
-        elif len(processed) < len(signal):
-            processed = np.pad(processed, (0, len(signal) - len(processed)))
+        if len(processed) > len(signal_data):
+            processed = processed[:len(signal_data)]
+        elif len(processed) < len(signal_data):
+            processed = np.pad(processed, (0, len(signal_data) - len(processed)))
         
         return processed
     
-    def _adaptive_smoothing(self, signal: np.ndarray, force: np.ndarray) -> np.ndarray:
+    def _adaptive_smoothing(self, signal_data: np.ndarray, force: np.ndarray) -> np.ndarray:
         """
         Adaptive smoothing that preserves transients during high-force events.
         
@@ -367,7 +367,7 @@ class PostProcess:
         smoothing_factor = np.clip(smoothing_factor, 0.0, 1.0)
         
         # Apply time-varying low-pass filter
-        processed = np.zeros_like(signal)
+        processed = np.zeros_like(signal_data)
         
         # Use exponential moving average with adaptive alpha
         alpha_min = 0.1  # Very little smoothing (fast response)
@@ -376,13 +376,13 @@ class PostProcess:
         alpha = alpha_min + (alpha_max - alpha_min) * smoothing_factor
         
         # Apply EMA
-        processed[0] = signal[0]
-        for i in range(1, len(signal)):
-            processed[i] = (1 - alpha[i]) * signal[i] + alpha[i] * processed[i-1]
+        processed[0] = signal_data[0]
+        for i in range(1, len(signal_data)):
+            processed[i] = (1 - alpha[i]) * signal_data[i] + alpha[i] * processed[i-1]
         
         return processed
     
-    def _phase_align(self, signal: np.ndarray, force: np.ndarray) -> np.ndarray:
+    def _phase_align(self, signal_data: np.ndarray, force: np.ndarray) -> np.ndarray:
         """
         Phase align signal using force envelope as reference.
         
@@ -393,7 +393,7 @@ class PostProcess:
         force_onset = force_diff > np.std(force_diff) * 2.0
         
         # Detect transients in audio signal
-        signal_diff = np.diff(np.abs(signal), prepend=0)
+        signal_diff = np.diff(np.abs(signal_data), prepend=0)
         signal_onset = signal_diff > np.std(signal_diff) * 2.0
         
         # Find onset indices
@@ -401,9 +401,9 @@ class PostProcess:
         signal_onset_idx = np.where(signal_onset)[0]
         
         if len(force_onset_idx) == 0 or len(signal_onset_idx) == 0:
-            return signal  # No transients to align
+            return signal_data  # No transients to align
         
-        processed = signal.copy()
+        processed = signal_data.copy()
         
         # Align each force onset to nearest audio onset
         for f_idx in force_onset_idx:
@@ -422,7 +422,7 @@ class PostProcess:
                 if abs(shift) < window // 2:
                     # Apply phase shift using crossfade
                     crossfade_len = min(self.postprocess.crossfade_samples, 
-                                        len(signal) - max(f_idx, nearest))
+                                        len(signal_data) - max(f_idx, nearest))
                     
                     if crossfade_len > 0:
                         # Create crossfade window
@@ -430,26 +430,26 @@ class PostProcess:
                         fade_out = 1 - fade_in
                         
                         # Apply shift with crossfade
-                        shifted = np.roll(signal, -shift)
+                        shifted = np.roll(signal_data, -shift)
                         
                         if shift > 0:
                             # Signal needs to start earlier
                             processed[f_idx:f_idx + crossfade_len] = (
-                                signal[f_idx:f_idx + crossfade_len] * fade_out +
+                                signal_data[f_idx:f_idx + crossfade_len] * fade_out +
                                 shifted[f_idx:f_idx + crossfade_len] * fade_in
                             )
                         else:
                             # Signal needs to start later
                             end = f_idx + crossfade_len
                             processed[f_idx:end] = (
-                                signal[f_idx:end] * fade_out +
+                                signal_data[f_idx:end] * fade_out +
                                 shifted[f_idx:end] * fade_in
                             )
         
         return processed
     
     def _dynamic_amplify(self, 
-                         signal: np.ndarray, 
+                         signal_data: np.ndarray, 
                          force: np.ndarray, 
                          track_name: str) -> np.ndarray:
         """
@@ -477,7 +477,7 @@ class PostProcess:
         target_rms = track_rms_targets.get(track_name, self.postprocess.target_rms)
         
         # Compute current RMS
-        current_rms = np.sqrt(np.mean(signal**2))
+        current_rms = np.sqrt(np.mean(signal_data**2))
         
         # Base gain to reach target RMS
         if current_rms > 0:
@@ -508,7 +508,7 @@ class PostProcess:
         total_gain = gaussian_filter1d(total_gain, sigma=3)
         
         # Apply gain
-        processed = signal * total_gain
+        processed = signal_data * total_gain
         
         return processed
     

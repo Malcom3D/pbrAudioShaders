@@ -64,7 +64,7 @@ class PostProcessEngine:
         # Create delayed tasks for each dynamic object
         for obj in config.objects:
             if not obj.static:
-                task = delayed(self._process_single_object)(obj.name, obj.idx)
+                task = self._process_single_object(obj.name, obj.idx)
                 tasks.append(task)
         
         # Compute all tasks in parallel
