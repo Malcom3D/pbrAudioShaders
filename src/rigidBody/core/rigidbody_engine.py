@@ -27,6 +27,7 @@ from ..core.mesh2modal import Mesh2Modal
 from ..core.modal_composer import ModalComposer
 from ..core.modal_luthier import ModalLuthier
 from ..core.modal_player import ModalPlayer
+from ..core.post_process_engine import PostProcessEngine
 
 from ..lib.sample_counter import SampleCounter
 from ..lib.connected_buffer import ConnectedBuffer
@@ -180,6 +181,10 @@ class rigidBodyEngine:
 #        tasks_save = [self.bake_save(player) for player in self.players]
         tasks_save = [self.bake_save(player) for player in players]
         results_save = compute(*tasks_save)
+        _update_status(f"{self.status_dir}/bake", 92)
+
+        post_engine = PostProcessEngine(self.entity_manager)
+        post_engine.process_with_modal_player()
 
         _update_status(f"{self.status_dir}/bake", 99)
 

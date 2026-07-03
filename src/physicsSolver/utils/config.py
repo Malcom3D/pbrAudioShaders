@@ -36,6 +36,7 @@ class SystemConfig:
     samples_per_object: int = 1000
     cache_path: str = "./pbrAudioCache/"
     enable_denoiser: bool = False
+    enable_postprocess: bool = False
 
 @dataclass
 class DenoiserConfig:
@@ -64,6 +65,37 @@ class DenoiserConfig:
     gaussian_force_threshold: float = 0.1  # Force threshold for adaptive smoothing
 
 @dataclass
+class PostProcessConfig:
+    """Configuration for post-processing parameters."""
+    # Denoising parameters
+    dynamic_denoise_enabled: bool = True
+    noise_gate_threshold_db: float = -60.0
+    noise_floor_estimate_db: float = -80.0
+    spectral_reduction_strength: float = 0.7
+    temporal_smoothing_window: int = 5
+    # Dynamic reference weighting
+    force_reference_weight: float = 0.3  # How much to trust force signals
+    min_force_threshold: float = 1e-6    # Minimum force to consider active
+    # Smoothing parameters
+    smoothing_enabled: bool = True
+    smoothing_window_ms: float = 2.0     # Window in milliseconds
+    adaptive_smoothing: bool = True      # Smooth more during quiet sections
+    # Phase alignment
+    phase_align_enabled: bool = True
+    crossfade_samples: int = 256         # Crossfade length for blending
+    # Amplification
+    target_rms: float = 0.15             # Target RMS level
+    max_gain_db: float = 20.0            # Maximum gain in dB
+    dynamic_range_compression: float = 0.5  # 0=no compression, 1=full
+    # Blending
+    blend_enabled: bool = True
+    dry_wet_mix: float = 0.85            # 0=dry only, 1=wet only
+    # Output
+    normalize_output: bool = True
+    # Debug
+    verbose: bool = False
+
+@dataclass
 class ObjectConfig:
     idx: int
     name: str
@@ -87,6 +119,7 @@ class Config:
 
         self.system = SystemConfig(**self.data.get('system', {}))
         self.denoiser = DenoiserConfig(**self.data.get('denoiser', {}))
+        self.postprocess = PostProcessConfig(**self.data.get('postprocess', {}))
 
         # Handle objects with nested acoustic_shader
         self.objects = []
