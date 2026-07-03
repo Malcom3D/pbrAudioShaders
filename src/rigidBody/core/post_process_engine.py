@@ -43,7 +43,7 @@ class PostProcessEngine:
     
     def __post_init__(self):
         config = self.entity_manager.get('config')
-        self.system_config = config.system
+        system_config = config.system
         self.status_dir = f"{system_config.cache_path}/status/PostProcessEngine"
         os.makedirs(self.status_dir, exist_ok=True)
         
