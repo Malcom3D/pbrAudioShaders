@@ -50,6 +50,7 @@ class PostProcess:
     
     def __post_init__(self):
         config = self.entity_manager.get('config')
+        self.postprocess = config.postprocess
         self.system_config = config.system
         self.sample_rate = self.system_config.sample_rate
         self.cache_path = self.system_config.cache_path
