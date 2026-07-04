@@ -282,9 +282,8 @@ class ModalPlayer:
             print(f"Track {suffix} synth track for {config_obj.name} is empty, skipping")
             return
 
-        # Normalize if set
-        if normalize:
-            track /= np.max(abs(track))
+        # Normalize track
+        track /= np.max(abs(track))
 
 #        bit_depth = int(config.system.bit_depth)
 #        file_format = config.system.file_format

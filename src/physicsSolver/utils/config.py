@@ -41,25 +41,31 @@ class SystemConfig:
 @dataclass
 class DenoiserConfig:
     # DC Offset Removal parameters
+    enable_dc_blocker: bool = False
     dc_blocker_alpha: float = 0.999  # DC blocker coefficient (higher = more aggressive)
     # Adaptive Noise Gate parameters
+    enable_noise_gate: bool = False
     gate_threshold_db: float = -60.0  # Noise gate threshold in dB
     gate_attack_ms: float = 2.0       # Attack time in ms
     gate_release_ms: float = 50.0     # Release time in ms
     gate_hold_ms: float = 10.0        # Hold time in ms
     # Temporal Smoothing parameters
+    enable_temporal_smoothing: bool = False
     temporal_smoothing_window: int = 5  # Window size for temporal smoothing (samples)
     # Spectral Noise Reduction parameters
+    enable_spectral_noise_reduction: bool = False
     spectral_fft_size: int = 2048      # FFT size for spectral processing
     spectral_hop_size: int = 512       # Hop size for spectral processing
     spectral_noise_floor_db: float = -80.0  # Noise floor estimate in dB
     spectral_reduction_strength: float = 0.8  # Reduction strength (0-1)
     spectral_smoothing: float = 0.3    # Spectral smoothing factor
     # Envelope Shaping parameters
+    enable_envelope_shaping: bool = False
     envelope_attack_ms: float = 1.0    # Attack time for envelope
     envelope_release_ms: float = 20.0  # Release time for envelope
     envelope_smoothing: float = 0.5    # Envelope smoothing factor
     # Gaussian Adaptive Smoothing parameters
+    enable_gaussian_adaptive_smoothing: bool = False
     gaussian_sigma_min: float = 0.5    # Minimum Gaussian sigma
     gaussian_sigma_max: float = 3.0    # Maximum Gaussian sigma
     gaussian_force_threshold: float = 0.1  # Force threshold for adaptive smoothing

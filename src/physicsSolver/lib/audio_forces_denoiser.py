@@ -34,18 +34,22 @@ class AudioForcesDenoiser:
     """
     
     # DC Offset Removal parameters
+    enable_dc_blocker: bool = False
     dc_blocker_alpha: float = 0.999  # DC blocker coefficient (higher = more aggressive)
     
     # Adaptive Noise Gate parameters
+    enable_noise_gate: bool = False
     gate_threshold_db: float = -60.0  # Noise gate threshold in dB
     gate_attack_ms: float = 2.0       # Attack time in ms
     gate_release_ms: float = 50.0     # Release time in ms
     gate_hold_ms: float = 10.0        # Hold time in ms
     
     # Temporal Smoothing parameters
+    enable_temporal_smoothing: bool = False
     temporal_smoothing_window: int = 5  # Window size for temporal smoothing (samples)
     
     # Spectral Noise Reduction parameters
+    enable_spectral_noise_reduction: bool = False
     spectral_fft_size: int = 2048      # FFT size for spectral processing
     spectral_hop_size: int = 512       # Hop size for spectral processing
     spectral_noise_floor_db: float = -80.0  # Noise floor estimate in dB
@@ -53,11 +57,13 @@ class AudioForcesDenoiser:
     spectral_smoothing: float = 0.3    # Spectral smoothing factor
     
     # Envelope Shaping parameters
+    enable_envelope_shaping: bool = False
     envelope_attack_ms: float = 1.0    # Attack time for envelope
     envelope_release_ms: float = 20.0  # Release time for envelope
     envelope_smoothing: float = 0.5    # Envelope smoothing factor
     
     # Gaussian Adaptive Smoothing parameters
+    enable_gaussian_adaptive_smoothing: bool = False
     gaussian_sigma_min: float = 0.5    # Minimum Gaussian sigma
     gaussian_sigma_max: float = 3.0    # Maximum Gaussian sigma
     gaussian_force_threshold: float = 0.1  # Force threshold for adaptive smoothing
@@ -97,32 +103,39 @@ class AudioForcesDenoiser:
                 continue
                 
             # Apply denoising pipeline
-            processed = track_data.copy()
-            print('copy', processed.shape)
+            if self.enable_dc_blocker:
+                processed = track_data.copy()
+                print('copy', processed.shape)
             
             # Step 1: DC Offset Removal
-            processed = self._remove_dc_offset(processed)
-            print('_remove_dc_offset', processed.shape)
+            if self.enable_noise_gate:
+                processed = self._remove_dc_offset(processed)
+                print('_remove_dc_offset', processed.shape)
             
             # Step 2: Adaptive Noise Gate with force correlation
-            processed = self._adaptive_noise_gate(processed, track_name)
-            print('_adaptive_noise_gate', processed.shape)
+            if self.enable_noise_gate:
+                processed = self._adaptive_noise_gate(processed, track_name)
+                print('_adaptive_noise_gate', processed.shape)
             
             # Step 3: Temporal Smoothing
-            processed = self._temporal_smoothing(processed)
-            print('_temporal_smoothing', processed.shape)
+            if self.enable_temporal_smoothing:
+                processed = self._temporal_smoothing(processed)
+                print('_temporal_smoothing', processed.shape)
             
             # Step 4:: Spectral Noise Reduction
-            processed = self._spectral_noise_reduction(processed, track_name)
-            print('_spectral_noise_reduction', processed.shape)
+            if self.enable_spectral_noise_reduction:
+                processed = self._spectral_noise_reduction(processed, track_name)
+                print('_spectral_noise_reduction', processed.shape)
             
             # Step 5: Envelope Shaping
-            processed = self._envelope_shaping(processed, track_name)
-            print('_envelope_shaping', processed.shape)
+            if self.enable_envelope_shaping:
+                processed = self._envelope_shaping(processed, track_name)
+                print('_envelope_shaping', processed.shape)
             
             # Step 6: Gaussian Adaptive Smoothing
-            processed = self._gaussian_adaptive_smoothing(processed, track_name)
-            print('_gaussian_adaptive_smoothing', processed.shape)
+            if self.enable_gaussian_adaptive_smoothing:
+                processed = self._gaussian_adaptive_smoothing(processed, track_name)
+                print('_gaussian_adaptive_smoothing', processed.shape)
             
             denoised_tracks[track_name] = processed
             
