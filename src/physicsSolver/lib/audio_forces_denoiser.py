@@ -103,12 +103,11 @@ class AudioForcesDenoiser:
                 continue
                 
             # Apply denoising pipeline
-            if self.enable_dc_blocker:
                 processed = track_data.copy()
                 print('copy', processed.shape)
             
             # Step 1: DC Offset Removal
-            if self.enable_noise_gate:
+            if self.enable_dc_blocker:
                 processed = self._remove_dc_offset(processed)
                 print('_remove_dc_offset', processed.shape)
             
