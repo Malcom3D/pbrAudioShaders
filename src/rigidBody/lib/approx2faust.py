@@ -464,7 +464,7 @@ class Approx2Faust:
                     # Legendre polynomial approximation
                     if l == 1:
                         if m == -1:
-                            gain = np.sin(theta) * np.sin(phiphi)
+                            gain = np.sin(theta) * np.sin(phi)
                         elif m == 0:
                             gain = np.cos(theta)
                         else:

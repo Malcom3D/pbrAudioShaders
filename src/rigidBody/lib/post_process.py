@@ -90,12 +90,12 @@ class PostProcess:
         # Load rendered tracks
         rendered_tracks = self._load_rendered_tracks(obj_name)
         
-        # Load force reference signals
-        force_signals = self._load_force_signals(obj_name)
-        
         if not rendered_tracks:
             print(f"PostProcess: No rendered tracks found for {obj_name}")
             return {}
+        
+        # Load force reference signals
+        force_signals = self._load_force_signals(obj_name)
         
         # Process each track
         processed_tracks = {}
@@ -498,7 +498,7 @@ class PostProcess:
         
         # Compress the gain envelope
         gain_db = 20 * np.log10(force_gain + 1e-10)
-        gain_db_compcompressed = gain_db * (1.0 - compression) + np.mean(gain_db) * compression
+        gain_db_compressed = gain_db * (1.0 - compression) + np.mean(gain_db) * compression
         force_gain_compressed = 10 ** (gain_db_compressed / 20.0)
         
         # Combine gains
@@ -594,7 +594,7 @@ class PostProcess:
             'tracks': []
         }
         
-        for track_name_name, signal_data in tracks.items():
+        for track_name, signal_data in tracks.items():
             if len(signal_data) == 0:
                 continue
             
