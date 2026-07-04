@@ -301,15 +301,10 @@ class PostProcess:
         hop_length = n_fft // 4
         
         # Compute STFT
-        f, t, Zxx = signal.stft(signal_data, fs=self.sample_rate, 
-                                 nperseg=n_fft, noverlap=n_fft - hop_length)
+        f, t, Zxx = signal.stft(signal_data, fs=self.sample_rate, nperseg=n_fft, noverlap=n_fft - hop_length)
         
         # Compute force envelope at STFT time points
-        force_resampled = np.interp(
-            np.linspace(0, len(signal_data), Zxx.shape[1]),
-            np.arange(len(force)),
-            force
-        )
+        force_resampled = np.interp(np.linspace(0, len(signal_data), Zxx.shape[1]), np.arange(len(force)), force)
         force_env = np.abs(force_resampled)
         if np.max(force_env) > 0:
             force_env = force_env / np.max(force_env)
@@ -337,8 +332,7 @@ class PostProcess:
         
         # Reconstruct signal_data
         Zxx_clean = magnitude_clean * np.exp(1j * phase)
-        _, processed = signal.istft(Zxx_clean, fs=self.sample_rate, 
-                                     nperseg=n_fft, noverlap=n_fft - hop_length)
+        _, processed = signal.istft(Zxx_clean, fs=self.sample_rate, nperseg=n_fft, noverlap=n_fft - hop_length)
         
         # Match length
         if len(processed) > len(signal_data):
@@ -448,10 +442,7 @@ class PostProcess:
         
         return processed
     
-    def _dynamic_amplify(self, 
-                         signal_data: np.ndarray, 
-                         force: np.ndarray, 
-                         track_name: str) -> np.ndarray:
+    def _dynamic_amplify(self, signal_data: np.ndarray, force: np.ndarray, track_name: str) -> np.ndarray:
         """
         Dynamic amplification based on force envelope.
         
@@ -470,9 +461,9 @@ class PostProcess:
         track_rms_targets = {
             'rigidbody': 0.15,
             'resonance': 0.08,
-            'sliding': 0.10,
-            'scraping': 0.12,
-            'rolling': 0.08
+            'sliding': 0.04,
+            'scraping': 0.04,
+            'rolling': 0.032
         }
         target_rms = track_rms_targets.get(track_name, self.postprocess.target_rms)
         
@@ -512,10 +503,7 @@ class PostProcess:
         
         return processed
     
-    def _force_weighted_blend(self, 
-                               dry: np.ndarray, 
-                               wet: np.ndarray, 
-                               force: np.ndarray) -> np.ndarray:
+    def _force_weighted_blend(self, dry: np.ndarray, wet: np.ndarray, force: np.ndarray) -> np.ndarray:
         """
         Blend dry and wet signals using force envelope.
         
@@ -555,9 +543,9 @@ class PostProcess:
         # Add other tracks with appropriate levels
         track_levels = {
             'resonance': 0.3,
-            'sliding': 0.5,
-            'scraping': 0.4,
-            'rolling': 0.3
+            'sliding': 0.2,
+            'scraping': 0.16,
+            'rolling': 0.12
         }
         
         for track_name, level in track_levels.items():
