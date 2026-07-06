@@ -34,14 +34,14 @@ from .core.modal_composer import ModalComposer
 from .core.modal_luthier import ModalLuthier
 from .core.modal_player import ModalPlayer
 from .core.mesh2modal import Mesh2Modal
-from .core.post_process_engine import PostProcessEngine
+#from .core.post_process_engine import PostProcessEngine
 from .lib.connected_buffer import ConnectedBuffer
 from .lib.rigidbody_synth import RigidBodySynth
 from .lib.filter import LinkwitzRileyFilter
 from .lib.modal_bank import ModalBank
 from .lib.resonance_synth import ResonanceSynth
 from .lib.sample_counter import SampleCounter
-from .lib.post_process import PostProcess
+#from .lib.post_process import PostProcess
 
 __all__ = [
      'Pym2f',
@@ -57,8 +57,8 @@ __all__ = [
      'ModalBank',
      'ResonanceSynth',
      'SampleCounter',
-     'PostProcess',
-     'PostProcessEngine'
+#     'PostProcess',
+#     'PostProcessEngine'
 ]
 #from physicsSolver import EntityManager, physicsEngine
 #from .core.rigidbody_engine import rigidBodyEngine

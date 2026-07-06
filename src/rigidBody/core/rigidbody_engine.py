@@ -27,7 +27,8 @@ from ..core.mesh2modal import Mesh2Modal
 from ..core.modal_composer import ModalComposer
 from ..core.modal_luthier import ModalLuthier
 from ..core.modal_player import ModalPlayer
-from ..core.post_process_engine import PostProcessEngine
+#from ..core.post_process_engine import PostProcessEngine
+from postProcess import PostProcessEngine
 
 from ..lib.sample_counter import SampleCounter
 from ..lib.connected_buffer import ConnectedBuffer

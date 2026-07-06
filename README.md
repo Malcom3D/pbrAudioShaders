@@ -173,7 +173,7 @@ If you use this software in your research, please cite:
  
 @software{pbrAudio,
   author = {Malcom3D},
-  title = {pbrAudio: Physically Audio Synthesis},
+  title = {pbrAudio: Physically Based Audio Rendering},
   year = {2025},
   url = {https://github.com/malcom3d/pbrAudio}
 }

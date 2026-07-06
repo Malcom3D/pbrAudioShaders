@@ -28,7 +28,8 @@ from typing import List, Dict, Tuple, Optional, Any
 from ..core.entity_manager import EntityManager
 from ..lib.force_data import ContactType
 from ..lib.hertzian_contact import HertzianContact
-from ..lib.audio_forces_denoiser import AudioForcesDenoiser
+#from ..lib.audio_forces_denoiser import AudioForcesDenoiser
+from postProcess import AudioForcesDenoiser
 
 @dataclass
 class ForceSynth:
