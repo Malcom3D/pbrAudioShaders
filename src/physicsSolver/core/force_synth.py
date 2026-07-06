@@ -29,7 +29,7 @@ from ..core.entity_manager import EntityManager
 from ..lib.force_data import ContactType
 from ..lib.hertzian_contact import HertzianContact
 #from ..lib.audio_forces_denoiser import AudioForcesDenoiser
-from postProcess.lib.audio_forces_denoiser import AudioForcesDenoiser
+#from postProcess.lib.audio_forces_denoiser import AudioForcesDenoiser
 #from postProcess import AudioForcesDenoiser
 
 @dataclass
@@ -157,6 +157,7 @@ class ForceSynth:
             self._save_tracks(config_obj, tracks, total_samples, int(sample_rate), unprocessed=True)
 
             # Initialize denoiser
+            from postProcess import AudioForcesDenoiser
             denoiser = AudioForcesDenoiser(
                 dc_blocker_alpha=config.denoiser.dc_blocker_alpha,
                 gate_threshold_db=config.denoiser.gate_threshold_db,
