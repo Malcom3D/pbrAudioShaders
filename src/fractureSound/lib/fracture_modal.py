@@ -211,7 +211,7 @@ class FractureModalModel:
         modified_freqs = original_freqs * freq_scale * stochastic_factor
         
         # Ensure frequencies are within reasonable range
-        modified_freqs = np.clip(modified_freqs, 20, 20000)
+        modified_freqs = np.clip(modified_freqs, 5, config.system.sample_rate/2)
         
         return modified_freqs
     

@@ -58,7 +58,7 @@ class ModalPlayer:
             self.player_id = id(self)
 
         # Set polling and timeout for synchronization mechanism
-        self.timeout = 30
+        self.timeout = 60
         self.poll_interval = 0.001
         
 #        self.synth_track = np.zeros(self.sample_counter.total_samples)
@@ -227,7 +227,7 @@ class ModalPlayer:
                 sample_idx = self.sample_counter.get_next(self.player_id)
             else:
                 if (time.time() - start_time) >= self.timeout:
-                    raise TimeoutError(f"No new sample_idx for {self.timeout} seconds")
+                    raise TimeoutError(f"No new sample_idx for {self.timeout} seconds, object:{config_obj.name}, sample_idx:{sample_idx}")
                 time.sleep(self.poll_interval)
             # Unregister when done
             if sample_idx >= self.end_idx:
