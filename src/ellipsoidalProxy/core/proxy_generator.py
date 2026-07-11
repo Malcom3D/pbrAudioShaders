@@ -39,7 +39,7 @@ class EllipsoidalProxy:
 
     def __post_init__(self):
         config = self.entity_manager.get('config')
-        self.size_threshold = config.system.ellipsoidal_size_threshold  # meters - objects smaller than this become proxies
+        self.size_threshold = config.system.proxy_size_threshold  # meters - objects smaller than this become proxies
         self.cache_path = config.system.cache_path
         self.proxy_path = f"{self.cache_path}/ellipsoidal_proxy"
         os.makedirs(self.proxy_path, exist_ok=True)

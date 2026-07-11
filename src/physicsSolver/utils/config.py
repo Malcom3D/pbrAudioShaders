@@ -37,6 +37,7 @@ class SystemConfig:
     cache_path: str = "./pbrAudioCache/"
     enable_denoiser: bool = False
     enable_postprocess: bool = False
+    proxy_size_threshold: float = 0.1
 
 @dataclass
 class DenoiserConfig:
@@ -108,6 +109,7 @@ class ObjectConfig:
     obj_path: str
     pose_path: str
     static: bool
+    proxy: Union[bool, int] = False # 0 = octahedron, 1 = icosahedron for < proxy_size_threshold, 2,3,4 for low,mid,hi manual selection and icosahedron subdivision
     ground: bool = False
     resonance: bool = False
     resonance_modes: int = 10
