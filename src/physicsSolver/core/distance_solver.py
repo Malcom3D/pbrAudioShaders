@@ -411,7 +411,7 @@ class DistanceSolver:
         min_dist_idx = np.argmin(distances)
         min_distance = distances[min_dist_idx]
 
-        if min_distance > collision_margin * 2.0:
+        if collision_margin * 10.0 > min_distance > collision_margin * 2.0:
             """
             Sampled surface 2 sampled surface vectorized version for maximum speed.
             """
