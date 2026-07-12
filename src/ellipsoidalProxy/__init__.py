@@ -16,7 +16,7 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 __author__ = "Malcom3D"
 __description__ = "Ellipsoidal sound proxies preprocess for small shards and debris sound synthesis"
 
@@ -27,8 +27,11 @@ import numpy as np
 decimals = 18
 np.set_printoptions(precision=decimals, floatmode='fixed', threshold=np.inf)
 
-from .core.proxy_generator import EllipsoidalProxy
+
+from .core.proxy_mesh import ProxyMesh
+from .core.modal4proxy import Modal4Proxy
 
 __all__ = [
-    'EllipsoidalProxy'
+    'ProxyMesh',
+    'Modal4Proxy'
 ]

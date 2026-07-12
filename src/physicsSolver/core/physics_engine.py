@@ -62,6 +62,8 @@ class physicsEngine:
         self.forces_dir = f"{config.system.cache_path}/forces_data"
         self.modalvertices_dir = f"{config.system.cache_path}/modalvertices"
         self.scoretracks_dir = f"{config.system.cache_path}/scoretracks"
+        self.progress_ratio = 100/13 # 100/num_functions
+        self.progress = 0
 
         # Ensure status directory exists
         os.makedirs(self.status_dir, exist_ok=True)
@@ -77,7 +79,7 @@ class physicsEngine:
                 self.obj_pairs.append([config.objects[i].idx, config.objects[j].idx])
 
     def bake(self):
-        _update_status(f"{self.status_dir}/bake", 0)
+        _update_status(f"{self.status_dir}/bake", self.progress)
 #        self.ps = PositionSolver(self.entity_manager)
 #        self.rs = RotationSolver(self.entity_manager)
 #        self.vs = VertexSolver(self.entity_manager)
@@ -89,6 +91,7 @@ class physicsEngine:
 #        tasks_static = [self.fp.compute(obj_idx) for obj_idx in self.obj_static]
 #        results_static = compute(*tasks_static)
 
+        self._proxy()
         self._static()
         self._pos()
         self._rot()
@@ -100,61 +103,67 @@ class physicsEngine:
         self._force_synth()
         self._save()
 
+    def _proxy(self):
+        from ellipsoidalProxy import ProxyMesh
+        tasks_proxy = [self.proxy(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
+        results_proxy = compute(*tasks_proxy)
+        _update_status(f"{self.status_dir}/proxy", self.progress + self.progress_ratio)
+
     def _static(self):
         tasks_static = [self.static(obj_idx) for obj_idx in self.obj_static]
         results_static = compute(*tasks_static)
-        _update_status(f"{self.status_dir}/bake", 9)
+        _update_status(f"{self.status_dir}/bake", self.progress + self.progress_ratio)
 
     def _pos(self):
         tasks_pos = [self.position(obj_idx) for obj_idx in self.obj_dyn]
         results_pos = compute(*tasks_pos)
-        _update_status(f"{self.status_dir}/bake", 18)
+        _update_status(f"{self.status_dir}/bake", self.progress + self.progress_ratio)
 
     def _rot(self):
         tasks_rot = [self.rotation(obj_idx) for obj_idx in self.obj_dyn]
         results_rot = compute(*tasks_rot)
-        _update_status(f"{self.status_dir}/bake", 27)
+        _update_status(f"{self.status_dir}/bake", self.progress + self.progress_ratio)
 
     def _vertex(self):
         tasks_vertex = [self.vertex(obj_idx) for obj_idx in self.obj_dyn]
         results_vertex = compute(*tasks_vertex)
-        _update_status(f"{self.status_dir}/bake", 36)
+        _update_status(f"{self.status_dir}/bake", self.progress + self.progress_ratio)
 
     def _norm(self):
         tasks_norm = [self.normal(obj_idx) for obj_idx in self.obj_dyn]
         results_norm = compute(*tasks_norm)
-        _update_status(f"{self.status_dir}/bake", 45)
+        _update_status(f"{self.status_dir}/bake", self.progress + self.progress_ratio)
 
     def _traj(self):
         tasks_traj = [self.trajectory(obj_idx) for obj_idx in self.obj_dyn]
         results_traj = compute(*tasks_traj)
-        _update_status(f"{self.status_dir}/bake", 54)
+        _update_status(f"{self.status_dir}/bake", self.progress + self.progress_ratio)
 
         # Remove temporary trajectory data for this object
         for obj_idx in self.obj_dyn + self.obj_static:
             self._cleanup_tmp_trajectories(obj_idx)
-        _update_status(f"{self.status_dir}/bake", 55)
+        _update_status(f"{self.status_dir}/bake", self.progress + self.progress_ratio)
 
     def _dists(self):
         tasks_dists = [self.distances(objs_idx) for objs_idx in self.obj_pairs]
         results_dists = compute(*tasks_dists)
-        _update_status(f"{self.status_dir}/bake", 72)
+        _update_status(f"{self.status_dir}/bake", self.progress + self.progress_ratio)
 
     def _force(self):
         tasks_force = [self.force(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
         results_force = compute(*tasks_force)
-        _update_status(f"{self.status_dir}/bake", 80)
+        _update_status(f"{self.status_dir}/bake", self.progress + self.progress_ratio)
 
     def _collision(self):
         collisions = self.entity_manager.get('collisions')
         tasks_collision = [self.collision(collisions[collision_idx]) for collision_idx in collisions.keys()]
         results_collision = compute(*tasks_collision)
-        _update_status(f"{self.status_dir}/bake", 90)
+        _update_status(f"{self.status_dir}/bake", self.progress + self.progress_ratio)
 
     def _force_synth(self):
         tasks_force_synth = [self.force_synth(obj_idx) for obj_idx in self.obj_dyn]
         results_force_synth = compute(*tasks_force_synth)
-        _update_status(f"{self.status_dir}/bake", 99)
+        _update_status(f"{self.status_dir}/bake", self.progress + self.progress_ratio)
 
     def _save(self):
         # Ensure directory exists
@@ -179,7 +188,7 @@ class physicsEngine:
         for s_idx in score_tracks.keys():
             score_tracks[s_idx].save(f"{self.scoretracks_dir}/{s_idx:05d}.pkl")
 
-        _update_status(f"{self.status_dir}/bake", 100)
+        _update_status(f"{self.status_dir}/bake", self.progress + self.progress_ratio)
 
 
     def _cleanup_tmp_trajectories(self, obj_idx: int):
@@ -191,6 +200,11 @@ class physicsEngine:
             if isinstance(tmp_trajectories[key], tmpTrajectoryData) and tmp_trajectories[key].obj_idx == obj_idx:
                 del tmp_trajectories[key]
         self.entity_manager._trajectories = tmp_trajectories
+
+    @delayed
+    def proxy(self, obj_idx: int):
+        pm = ProxyMesh(self.entity_manager)
+        pm.compute(obj_idx)
 
     @delayed
     def position(self, obj_idx: int):

@@ -124,6 +124,11 @@ class rigidBodyEngine:
 
         tasks_modal = [self.prebake_modal(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
         results_modal = compute(*tasks_modal)
+        _update_status(f"{self.status_dir}/prebake", 30)
+
+        from ellipsoidalProxy import Modal4Proxy
+        tasks_proxy = [self.prebake_proxy(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
+        results_proxy = compute(*tasks_proxy)
         _update_status(f"{self.status_dir}/prebake", 45)
 
         collisions = self.entity_manager.get('collisions')
@@ -193,6 +198,11 @@ class rigidBodyEngine:
     def prebake_modal(self, obj_idx: int):
         mm = Mesh2Modal(self.entity_manager)
         mm.compute(obj_idx)
+
+    @delayed
+    def prebake_proxy(self, obj_idx: int):
+        mp = Modal4Proxy(self.entity_manager)
+        mp.compute(obj_idx)
 
     @delayed
     def prebake_composer(self, collision: CollisionData):

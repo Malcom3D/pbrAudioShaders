@@ -17,9 +17,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """
-Ellipsoidal proxy generation module.
+Ellipsoidal proxy generation and modal adaptation module.
 """
-from .proxy_generator import EllipsoidalProxy
+from .proxy_mesh import ProxyMesh
+from .modal4proxy import Modal4Proxy
 
-__all__ = ['EllipsoidalProxy']
-
+__all__ = ['ProxyMesh', 'Modal4Proxy']
