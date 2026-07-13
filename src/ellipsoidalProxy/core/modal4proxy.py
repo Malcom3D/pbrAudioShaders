@@ -747,7 +747,7 @@ class Modal4Proxy:
 
         # Get material properties for documentation
         young_modulus = config_obj.acoustic_shader.young_modulus if config_obj.acoustic_shader else "N/A"
-        poisson_ratio = config_obj.acoustic_shaderader.poisson_ratio if config_obj.acoustic_shader else "N/A"
+        poisson_ratio = config_obj.acoustic_shader.poisson_ratio if config_obj.acoustic_shader else "N/A"
         density = config_obj.acoustic_shader.density if config_obj.acoustic_shader else "N/A"
 
         # Proxy shape name

@@ -27,13 +27,14 @@ from ..core.mesh2modal import Mesh2Modal
 from ..core.modal_composer import ModalComposer
 from ..core.modal_luthier import ModalLuthier
 from ..core.modal_player import ModalPlayer
-#from ..core.post_process_engine import PostProcessEngine
-from postProcess import PostProcessEngine
 
 from ..lib.sample_counter import SampleCounter
 from ..lib.connected_buffer import ConnectedBuffer
 
 from ..lib.functions import _update_status
+
+from postProcess import PostProcessEngine
+from ellipsoidalProxy import Modal4Proxy
 
 @dataclass
 class rigidBodyEngine:
@@ -41,6 +42,7 @@ class rigidBodyEngine:
     obj_dyn: List[int] = field(default_factory=list)
     obj_static: List[int] = field(default_factory=list)
     obj_pairs: List[int] = field(default_factory=list)
+    obj_modal: List[int] = field(default_factory=list)
 
     def __post_init__(self):
         config = self.entity_manager.get('config')
@@ -54,12 +56,14 @@ class rigidBodyEngine:
         # Ensure status directory exists
         os.makedirs(self.status_dir, exist_ok=True)
 
-        obj_static, obj_dyn, obj_pairs = ([] for _ in range(3))
+        obj_static, obj_dyn, obj_pairs, obj_modal = ([] for _ in range(4))
         for config_obj in config.objects:
             if not config_obj.static and not config_obj.idx in obj_dyn:
                 self.obj_dyn.append(config_obj.idx)
             if config_obj.static and not config_obj.idx in obj_static:
                 self.obj_static.append(config_obj.idx)
+            if config_obj.proxy_type is False or config_obj.proxy_type in [2,3,4]:
+                self.obj_modal.append(config_obj.idx)
         for i in range(len(config.objects)):
             for j in range(i + 1, len(config.objects)):
                 self.obj_pairs.append([config.objects[i].idx, config.objects[j].idx])
@@ -122,11 +126,10 @@ class rigidBodyEngine:
     def prebake(self):
         _update_status(f"{self.status_dir}/prebake", 0)
 
-        tasks_modal = [self.prebake_modal(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
+        tasks_modal = [self.prebake_modal(obj_idx) for obj_idx in self.obj_modal]
         results_modal = compute(*tasks_modal)
         _update_status(f"{self.status_dir}/prebake", 30)
 
-        from ellipsoidalProxy import Modal4Proxy
         tasks_proxy = [self.prebake_proxy(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
         results_proxy = compute(*tasks_proxy)
         _update_status(f"{self.status_dir}/prebake", 45)

@@ -53,19 +53,23 @@ class ModalLuthier:
 
         self.connected_buffer.add_obj(obj_idx)
 
-        print('ModalLuthier: init ', config_obj.name, 'RigidBodySynth')
-        rigidbody_synth = RigidBodySynth(entity_manager=self.entity_manager, obj_idx=obj_idx, modal_lib=f"{self.dsp_path}/{config_obj.name}.lib", vertex_list=vertex_list, sample_rate=sample_rate)
-        self.entity_manager.register('rigidbody_synth', rigidbody_synth)
-        print('ModalLuthier: ', config_obj.name, 'RigidBodySynth registered')
+        obj_name = config_obj.name
+        if config_obj.proxy_type is not False:
+            obj_name = f"{config_obj.name}_proxy_{config_obj.proxy_type}"
 
-        print('ModalLuthier: init ', config_obj.name, 'ResonanceSynth')
+        print('ModalLuthier: init ', obj_name, 'RigidBodySynth')
+        rigidbody_synth = RigidBodySynth(entity_manager=self.entity_manager, obj_idx=obj_idx, modal_lib=f"{self.dsp_path}/{obj_name}.lib", vertex_list=vertex_list, sample_rate=sample_rate)
+        self.entity_manager.register('rigidbody_synth', rigidbody_synth)
+        print('ModalLuthier: ', obj_name, 'RigidBodySynth registered')
+
+        print('ModalLuthier: init ', obj_name, 'ResonanceSynth')
         if not connected_area == 0:
             contact_area_scale = contact_area * len(vertex_list)
-            resonance_synth = ResonanceSynth(entity_manager=self.entity_manager, obj_idx=obj_idx, modal_lib=f"{self.dsp_path}/{config_obj.name}.lib", sample_rate=sample_rate, contact_area_scale=contact_area_scale)
+            resonance_synth = ResonanceSynth(entity_manager=self.entity_manager, obj_idx=obj_idx, modal_lib=f"{self.dsp_path}/{obj_name}.lib", sample_rate=sample_rate, contact_area_scale=contact_area_scale)
             self.entity_manager.register('resonance_synth', resonance_synth)
-            print('ModalLuthier: ', config_obj.name, 'Connected ResonanceSynth registered')
+            print('ModalLuthier: ', obj_name, 'Connected ResonanceSynth registered')
         elif config_obj.resonance:
-            resonance_synth = ResonanceSynth(entity_manager=self.entity_manager, obj_idx=obj_idx, modal_lib=f"{self.dsp_path}/{config_obj.name}_resonance.lib", sample_rate=sample_rate)
+            resonance_synth = ResonanceSynth(entity_manager=self.entity_manager, obj_idx=obj_idx, modal_lib=f"{self.dsp_path}/{obj_name}_resonance.lib", sample_rate=sample_rate)
             self.entity_manager.register('resonance_synth', resonance_synth)
-            print('ModalLuthier: ', config_obj.name, 'ResonanceSynth registered')
+            print('ModalLuthier: ', obj_name, 'ResonanceSynth registered')
 
