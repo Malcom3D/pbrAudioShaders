@@ -41,19 +41,19 @@ class ProxyMesh:
     """
     entity_manager: EntityManager
 
-    def process(self, obj_idx: int) -> List[int]:
+    def compute(self, obj_idx: int) -> List[int]:
         """
-        Process object and replace those with proxy_type enabled.
+        Compute object and replace those with proxy_type enabled.
         """
         config = self.entity_manager.get('config')
         proxy_objects = []
 
         for config_obj in config.objects:
             if config_obj.idx == obj_idx:
-                if config_obj.proxy is not False:
-                print(f"Creating proxy mesh for {config_obj.name} (idx={config_obj.idx}, f"proxy_type={config_obj.proxy_type})")"
-                self._create_proxy_sequence(config_obj)
-                proxy_objects.append(config_obj.idx)
+                if config_obj.proxy_type is not False:
+                    print(f"Creating proxy mesh for {config_obj.name} idx={config_obj.idx} proxy_type={config_obj.proxy_type}")
+                    self._create_proxy_sequence(config_obj)
+                    proxy_objects.append(config_obj.idx)
 
         return proxy_objects
 
@@ -111,7 +111,7 @@ class ProxyMesh:
             proxy_normals_world = (R @ proxy_normals.T).T
 
             # Save proxy mesh
-            output_file = f"{obj_proxy_path}/frame_{frame_idx:04d}.npz"
+            output_file = f"{obj_proxy_path}/{config_obj.name}_{frame_idx:04d}.npz"
             np.savez_compressed(
                 output_file,
                 vertices=proxy_vertices_world.astype(np.float32),
@@ -363,4 +363,4 @@ class ProxyMesh:
             new_faces.append([v2, v20, v12])
             new_faces.append([v01, v12, v20])
 
-        return np np.array(new_vertices), np.array(new_faces)
+        return np.array(new_vertices), np.array(new_faces)

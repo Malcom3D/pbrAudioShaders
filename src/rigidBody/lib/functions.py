@@ -50,6 +50,8 @@ def _load_mesh(obj_config: Any, frame_idx: int) -> Tuple[np.ndarray, np.ndarray,
     if obj_config.static:
         # For static, load once
         filename = obj_config.obj_path
+        if obj_config.proxy_type is not False:
+            filename = f"{obj_config.obj_path}/proxy"
         # Assume single npz file or directory with one file
         if os.path.isdir(obj_config.obj_path):
             files = [f for f in os.listdir(obj_config.obj_path) if f.endswith('.npz')]
@@ -58,10 +60,13 @@ def _load_mesh(obj_config: Any, frame_idx: int) -> Tuple[np.ndarray, np.ndarray,
             filename = obj_config.obj_path
     else:
         # For dynamic, load sequence
-        items = os.listdir(obj_config.obj_path)
+        obj_path = obj_config.obj_path
+        if obj_config.proxy_type is not False:
+            obj_path = f"{obj_config.obj_path}/proxy"
+        items = os.listdir(obj_path)
         items = [x for x in items if x.endswith('.npz')]
         filenames = sorted(items, key=lambda x: int(''.join(filter(str.isdigit, x))))
-        filename = os.path.join(obj_config.obj_path, filenames[frame_idx])
+        filename = os.path.join(obj_path, filenames[frame_idx])
 
     data = np.load(filename, allow_pickle=False)
     vertices = data[data.files[0]]

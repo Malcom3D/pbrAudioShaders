@@ -154,7 +154,7 @@ class Modal4Proxy:
         proxy_vertices_scaled = proxy_vertices_normalized * half_extents[np.newaxis, :]
 
         # Center at origin
-               proxy_vertices_scaled = proxy_vertices_scaled - np.mean(proxy_vertices_scaled, axis=0)
+        proxy_vertices_scaled = proxy_vertices_scaled - np.mean(proxy_vertices_scaled, axis=0)
 
         return proxy_vertices_scaled, proxy_faces
 
@@ -236,7 +236,7 @@ class Modal4Proxy:
         proxy_vertices: np.ndarray,
         original_vertices: np.ndarray,
         original_faces: np.ndarray,
-        young_modulus: float float,
+        young_modulus: float,
         poisson_ratio: float,
         density: float,
         damping: float,

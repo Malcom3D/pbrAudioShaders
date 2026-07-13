@@ -46,6 +46,7 @@ from ..lib.modal_vertices import ModalVertices
 from ..lib.score_data import ScoreTrack
 
 from ..lib.functions import _update_status
+from ellipsoidalProxy import ProxyMesh
 
 @dataclass
 class physicsEngine:
@@ -104,7 +105,6 @@ class physicsEngine:
         self._save()
 
     def _proxy(self):
-        from ellipsoidalProxy import ProxyMesh
         tasks_proxy = [self.proxy(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
         results_proxy = compute(*tasks_proxy)
         _update_status(f"{self.status_dir}/proxy", self.progress + self.progress_ratio)
