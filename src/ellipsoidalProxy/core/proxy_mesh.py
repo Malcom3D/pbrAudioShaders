@@ -75,7 +75,7 @@ class ProxyMesh:
         # Process each frame
         for frame_idx in range(n_frames):
             # Load original mesh for this frame
-            vertices, normals, faces = _load_mesh(config_obj, frame_idx)
+            vertices, normals, faces = _load_mesh(config_obj, frame_idx, proxy_path=False)
 
             # Get pose for this frame
             position = positions[frame_idx]

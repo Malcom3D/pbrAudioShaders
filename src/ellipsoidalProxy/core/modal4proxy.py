@@ -77,7 +77,7 @@ class Modal4Proxy:
         n_modes = proxy_type + 2
 
         # Load original mesh for shape analysis
-        vertices, normals, faces = _load_mesh(config_obj, 0)
+        vertices, normals, faces = _load_mesh(config_obj, 0, use_proxy_path=False)
 
         # Compute proxy mesh vertices (local coordinates)
         proxy_vertices, _ = self._get_proxy_vertices(config_obj, proxy_type)
@@ -127,7 +127,7 @@ class Modal4Proxy:
             Tuple of (vertices, faces) in local coordinates
         """
         # Load original mesh to get extents
-        vertices, normals, faces = _load_mesh(config_obj, 0)
+        vertices, normals, faces = _load_mesh(config_obj, 0, use_proxy_path=False)
 
         # Compute bounding box extents
         min_coords = np.min(vertices, axis=0)
@@ -135,28 +135,10 @@ class Modal4Proxy:
         extents = max_coords - min_coords
         center_local = (min_coords + max_coords) / 2
 
-        # Generate proxy vertices
-        if proxy_type == 0:
-            proxy_vertices, proxy_faces = self._create_octahedron()
-        elif proxy_type == 1:
-            proxy_vertices, proxy_faces = self._create_dodecahedron()
-        elif proxy_type in [2, 3, 4]:
-            subdivisions = proxy_type - 2
-            proxy_vertices, proxy_faces = self._create_icosahedron(subdivisions=subdivisions)
-        else:
-            proxy_vertices, proxy_faces = self._create_octahedron()
+        # Load proxy vertices
+        proxy_vertices, proxy_normals, proxy_faces = _load_mesh(config_obj, 0, use_proxy_path=True)
 
-        # Scale to match extents
-        norms = np.linalg.norm(proxy_vertices, axis=1, keepdims=True)
-        norms[norms == 0] = 1.0
-        proxy_vertices_normalized = proxy_vertices / norms
-        half_extents = extents / 2.0
-        proxy_vertices_scaled = proxy_vertices_normalized * half_extents[np.newaxis, :]
-
-        # Center at origin
-        proxy_vertices_scaled = proxy_vertices_scaled - np.mean(proxy_vertices_scaled, axis=0)
-
-        return proxy_vertices_scaled, proxy_faces
+        return proxy_vertices, proxy_faces
 
     def _generate_approximate_modal_model(
         self,

@@ -45,12 +45,12 @@ def _acoustic_domain_mesh(config: Any) -> trimesh.Trimesh:
     ac = trimesh.creation.box(bounds=(ac_min,ac_max))
     return ac
 
-def _load_mesh(obj_config: Any, frame_idx: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _load_mesh(obj_config: Any, frame_idx: int, use_proxy_path: bool = True) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Load mesh for an object at a given frame index."""
     if obj_config.static:
         # For static, load once
         filename = obj_config.obj_path
-        if obj_config.proxy_type is not False:
+        if use_proxy_path and obj_config.proxy_type is not False:
             filename = f"{obj_config.obj_path}/proxy"
         # Assume single npz file or directory with one file
         if os.path.isdir(obj_config.obj_path):
@@ -61,7 +61,7 @@ def _load_mesh(obj_config: Any, frame_idx: int) -> Tuple[np.ndarray, np.ndarray,
     else:
         # For dynamic, load sequence
         obj_path = obj_config.obj_path
-        if obj_config.proxy_type is not False:
+        if use_proxy_path and obj_config.proxy_type is not False:
             obj_path = f"{obj_config.obj_path}/proxy"
         items = os.listdir(obj_path)
         items = [x for x in items if x.endswith('.npz')]
