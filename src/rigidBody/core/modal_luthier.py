@@ -22,8 +22,8 @@ from typing import Any, List, Tuple, Dict, Optional
 from dataclasses import dataclass, field
 
 from physicsSolver import EntityManager
-from ..lib.rigidbody_synth import RigidBodySynth
-from ..lib.resonance_synth import ResonanceSynth
+from rigidBody import RigidBodySynth
+from rigidBody import ResonanceSynth
 
 @dataclass
 class ModalLuthier:

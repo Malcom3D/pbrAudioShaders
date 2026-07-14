@@ -249,7 +249,10 @@ class ModalPlayer:
         """
         # Get the path to the .lib file
         cache_path = self.entity_manager.get('config').system.cache_path
-        lib_file = f"{cache_path}/dsp/{config_obj.name}.lib"
+        obj_name = config_obj.name
+        if config_obj.proxy_type is not False:
+            obj_name = f"{config_obj.name}_proxy_{config_obj.proxy_type}"
+        lib_file = f"{cache_path}/dsp/{obj_name}.lib"
 
         # Parse the .lib file to get modal data
         modal_data = _parse_lib(lib_file)

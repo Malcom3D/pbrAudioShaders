@@ -24,13 +24,14 @@ from dask import delayed, compute
 
 from physicsSolver import EntityManager, ForceDataSequence, ModalVertices, CollisionData, TrajectoryData
 from ..core.mesh2modal import Mesh2Modal
-#from ..core.modal_composer import ModalComposer
-#from ..core.modal_luthier import ModalLuthier
-#from ..core.modal_player import ModalPlayer
-from synthMasters import ModalComposer, ModalLuthier, ModalPlayer, SampleCounter, ConnectedBuffer, ScoreTrack
 
-#from ..lib.sample_counter import SampleCounter
-#from ..lib.connected_buffer import ConnectedBuffer
+from ..core.modal_composer import ModalComposer
+from ..core.modal_luthier import ModalLuthier
+from ..core.modal_player import ModalPlayer
+from ..lib.sample_counter import SampleCounter
+from ..lib.connected_buffer import ConnectedBuffer
+from ..lib.score_data import ScoreTrack
+#from synthMasters import ModalComposer, ModalLuthier, ModalPlayer, SampleCounter, ConnectedBuffer, ScoreTrack
 
 from ..lib.functions import _update_status
 
@@ -46,6 +47,8 @@ class rigidBodyEngine:
     obj_modal: List[int] = field(default_factory=list)
 
     def __post_init__(self):
+        from physicsSolver import ForceDataSequence, ModalVertices, CollisionData, TrajectoryData
+
         config = self.entity_manager.get('config')
         self.status_dir = f"{config.system.cache_path}/status/{__class__.__name__}"
         self.collisions_dir = f"{config.system.cache_path}/collisions"
