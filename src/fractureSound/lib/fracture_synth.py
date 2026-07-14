@@ -24,7 +24,8 @@ import soundfile as sf
 
 from physicsSolver import EntityManager
 from physicsSolver.lib.functions import _parse_lib
-from rigidBody import ModalBank, ConnectedBuffer
+from rigidBody import ModalBank
+from synthMasters import ConnectedBuffer
 
 from .fracture_data import FractureEvent, FractureType
 

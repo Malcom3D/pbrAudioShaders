@@ -37,7 +37,7 @@ from .core.force_solver import ForceSolver
 from .core.force_synth import ForceSynth
 from .core.collision_solver import CollisionSolver
 from .core.physics_engine import physicsEngine
-from .lib.score_data import ScoreEvent, ScoreTrack
+#from .lib.score_data import ScoreEvent, ScoreTrack
 from .lib.contact_geometry import ContactGeometry
 from .lib.hertzian_contact import HertzianContact
 from .lib.cubicspline_with_nan import CubicSplineWithNaN
@@ -61,8 +61,8 @@ __all__ = [
     'ForceSynth',
     'CollisionSolver',
     'physicsEngine',
-    'ScoreEvent',
-    'ScoreTrack',
+#    'ScoreEvent',
+#    'ScoreTrack',
     'ContactGeometry',
     'HertzianContact',
     'CubicSplineWithNaN',

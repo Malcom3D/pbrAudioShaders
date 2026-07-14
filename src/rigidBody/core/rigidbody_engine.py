@@ -22,14 +22,15 @@ from typing import List, Tuple, Any, Dict
 from dataclasses import dataclass, field
 from dask import delayed, compute
 
-from physicsSolver import EntityManager, ForceDataSequence, ModalVertices, ScoreTrack, CollisionData, TrajectoryData
+from physicsSolver import EntityManager, ForceDataSequence, ModalVertices, CollisionData, TrajectoryData
 from ..core.mesh2modal import Mesh2Modal
-from ..core.modal_composer import ModalComposer
-from ..core.modal_luthier import ModalLuthier
-from ..core.modal_player import ModalPlayer
+#from ..core.modal_composer import ModalComposer
+#from ..core.modal_luthier import ModalLuthier
+#from ..core.modal_player import ModalPlayer
+from synthMasters import ModalComposer, ModalLuthier, ModalPlayer, SampleCounter, ConnectedBuffer, ScoreTrack
 
-from ..lib.sample_counter import SampleCounter
-from ..lib.connected_buffer import ConnectedBuffer
+#from ..lib.sample_counter import SampleCounter
+#from ..lib.connected_buffer import ConnectedBuffer
 
 from ..lib.functions import _update_status
 

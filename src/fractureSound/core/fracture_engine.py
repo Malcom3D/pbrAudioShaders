@@ -24,7 +24,7 @@ from dask import delayed, compute
 import trimesh
 
 from physicsSolver import EntityManager, TrajectoryData, CollisionData, ForceDataSequence
-from rigidBody import ModalPlayer, SampleCounter, ConnectedBuffer
+from synthMasters import ModalPlayer, SampleCounter, ConnectedBuffer
 
 from ..lib.fracture_data import FractureEvent, FractureType, FragmentData
 from ..lib.fracture_modal import FractureModalModel

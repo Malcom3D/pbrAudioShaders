@@ -31,7 +31,8 @@ from ..core.entity_manager import EntityManager
 from ..lib.collision_data import CollisionData
 from ..lib.functions import _parse_lib
 from ..lib.modal_vertices import ModalVertices
-from ..lib.score_data import ScoreEvent, ScoreTrack
+#from ..lib.score_data import ScoreEvent, ScoreTrack
+from synthMasters import ScoreEvent, ScoreTrack
 
 # for facing face logging
 from ..lib.force_data import ContactType

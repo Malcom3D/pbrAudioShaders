@@ -30,62 +30,33 @@ from .tools.pym2f import Pym2f
 from .tools.faust_render import FaustRender
 #from .core.force_synth import ForceSynth
 from .core.rigidbody_engine import rigidBodyEngine
-from .core.modal_composer import ModalComposer
-from .core.modal_luthier import ModalLuthier
-from .core.modal_player import ModalPlayer
+#from .core.modal_composer import ModalComposer
+#from .core.modal_luthier import ModalLuthier
+#from .core.modal_player import ModalPlayer
 from .core.mesh2modal import Mesh2Modal
 #from .core.post_process_engine import PostProcessEngine
-from .lib.connected_buffer import ConnectedBuffer
+#from .lib.connected_buffer import ConnectedBuffer
 from .lib.rigidbody_synth import RigidBodySynth
 from .lib.filter import LinkwitzRileyFilter
 from .lib.modal_bank import ModalBank
 from .lib.resonance_synth import ResonanceSynth
-from .lib.sample_counter import SampleCounter
+#from .lib.sample_counter import SampleCounter
 #from .lib.post_process import PostProcess
 
 __all__ = [
      'Pym2f',
      'FaustRender',
      'rigidBodyEngine',
-     'ModalComposer',
-     'ModalLuthier',
-     'ModalPlayer',
+#     'ModalComposer',
+#     'ModalLuthier',
+#     'ModalPlayer',
      'Mesh2Modal',
-     'ConnectedBuffer',
+#     'ConnectedBuffer',
      'RigidBodySynth',
      'LinkwitzRileyFilter',
      'ModalBank',
      'ResonanceSynth',
-     'SampleCounter',
+#     'SampleCounter',
 #     'PostProcess',
 #     'PostProcessEngine'
 ]
-#from physicsSolver import EntityManager, physicsEngine
-#from .core.rigidbody_engine import rigidBodyEngine
-#from .lib.sample_counter import SampleCounter
-#from .lib.connected_buffer import ConnectedBuffer
-#
-#class rigidBody:
-#    def __init__(self, config_file: str):
-#        self.em = EntityManager(config_file)
-#        sample_counter = SampleCounter()
-#        connected_buffer = ConnectedBuffer()
-#        self.em.register('sample_counter', sample_counter)
-#        self.em.register('connected_buffer', connected_buffer)
-#        self.physics_engine = PhysicsEngine(self.em)
-#        self.rigidbody_engine = rigidBodyEngine(self.em)
-#
-#    def prebake(self):
-#        self.physics_engine.prebake()
-#        self.rigidbody_engine.prebake()
-#
-#    def bake(self):
-#        self.physics_engine.bake()
-#        self.rigidbody_engine.bake()
-#
-#    def prerender(self):
-#        self.physics_engine.prerender()
-#        self.rigidbody_engine.prerender()
-#
-#    def render(self):
-#        self.rigidbody_engine.render()
