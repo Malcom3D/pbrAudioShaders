@@ -56,7 +56,7 @@ __all__ = [
      'RigidBodySynth',
      'LinkwitzRileyFilter',
      'ModalBank',
-     'ResonanceSynth',
+     'ResonanceSynth'
 #     'PostProcess',
 #     'PostProcessEngine'
 ]
