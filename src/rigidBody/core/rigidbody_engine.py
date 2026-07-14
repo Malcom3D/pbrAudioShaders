@@ -30,7 +30,7 @@ from ..core.modal_luthier import ModalLuthier
 from ..core.modal_player import ModalPlayer
 from ..lib.sample_counter import SampleCounter
 from ..lib.connected_buffer import ConnectedBuffer
-from ..lib.score_data import ScoreTrack
+from physicsSolver.lib.score_data import ScoreTrack
 #from synthMasters import ModalComposer, ModalLuthier, ModalPlayer, SampleCounter, ConnectedBuffer, ScoreTrack
 
 from ..lib.functions import _update_status
