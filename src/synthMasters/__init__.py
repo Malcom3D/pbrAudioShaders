@@ -26,21 +26,6 @@ import numpy as np
 decimals = 18
 np.set_printoptions(precision=decimals, floatmode='fixed', threshold=np.inf)
 
-from .core.modal_composer import ModalComposer
-from .core.modal_luthier import ModalLuthier
-from .core.modal_player import ModalPlayer
-
-from .lib.score_data import ScoreEvent, ScoreTrack
-from ..lib.sample_counter import SampleCounter
-from ..lib.connected_buffer import ConnectedBuffer
-
 __all__ = [
-     'ModalComposer',
-     'ModalLuthier',
-     'ModalPlayer',
-     'ScoreEvent',
-     'ScoreTrack',
-     'ConnectedBuffer',
-     'SampleCounter'
 ]
 
