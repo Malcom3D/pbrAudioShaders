@@ -28,35 +28,35 @@ np.set_printoptions(precision=decimals, floatmode='fixed', threshold=np.inf)
 
 from .tools.pym2f import Pym2f
 from .tools.faust_render import FaustRender
-#from .core.force_synth import ForceSynth
 from .core.rigidbody_engine import rigidBodyEngine
-#from .core.modal_composer import ModalComposer
-#from .core.modal_luthier import ModalLuthier
-#from .core.modal_player import ModalPlayer
 from .core.mesh2modal import Mesh2Modal
-#from .core.post_process_engine import PostProcessEngine
-#from .lib.connected_buffer import ConnectedBuffer
 from .lib.rigidbody_synth import RigidBodySynth
 from .lib.filter import LinkwitzRileyFilter
 from .lib.modal_bank import ModalBank
 from .lib.resonance_synth import ResonanceSynth
-#from .lib.sample_counter import SampleCounter
 #from .lib.post_process import PostProcess
+#from .core.post_process_engine import PostProcessEngine
+
+from .core.modal_composer import ModalComposer
+from .core.modal_luthier import ModalLuthier
+from .core.modal_player import ModalPlayer
+from .lib.connected_buffer import ConnectedBuffer
+from .lib.sample_counter import SampleCounter
 
 __all__ = [
      'Pym2f',
      'FaustRender',
      'rigidBodyEngine',
-#     'ModalComposer',
-#     'ModalLuthier',
-#     'ModalPlayer',
+     'ModalComposer',
+     'ModalLuthier',
+     'ModalPlayer',
+     'ConnectedBuffer',
+     'SampleCounter',
      'Mesh2Modal',
-#     'ConnectedBuffer',
      'RigidBodySynth',
      'LinkwitzRileyFilter',
      'ModalBank',
      'ResonanceSynth',
-#     'SampleCounter',
 #     'PostProcess',
 #     'PostProcessEngine'
 ]
