@@ -117,8 +117,12 @@ class CollisionSolver:
         total_samples = int(self.trajectory1.get_x()[-1] if not config_obj1.static else self.trajectory2.get_x()[-1])
         score_type1 = np.zeros((total_samples,1), dtype=np.int32)
         score_type2 = np.zeros((total_samples,1), dtype=np.int32)
+
+        mesh1_verts = self.trajectory1.get_vertices(0)
+        mesh2_verts = self.trajectory2.get_vertices(0)
         score_vertex_ids1 = np.zeros((total_samples,mesh1_verts.shape[0]), dtype=np.bool_)
         score_vertex_ids2 = np.zeros((total_samples,mesh2_verts.shape[0]), dtype=np.bool_)
+
         score_contact_area1 = np.zeros((total_samples,1), dtype=np.float32)
         score_contact_area2 = np.zeros((total_samples,1), dtype=np.float32)
 
@@ -293,7 +297,7 @@ class CollisionSolver:
                     score_type1[sample_idx] = contact_type
                     score_contact_area1[sample_idx] = face_area1
                     score_vertex_ids1[sample_idx,cvidx1] = 1
-                    score_type2[sample_idx] = impact_type
+                    score_type2[sample_idx] = contact_type
                     score_contact_area2[sample_idx] = face_area2
                     score_vertex_ids2[sample_idx,cvidx2] = 1
                 else:

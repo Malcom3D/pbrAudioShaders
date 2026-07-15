@@ -17,7 +17,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import os
-import re
 import numpy as np
 from typing import List, Tuple, Optional, Any, Dict
 from dataclasses import dataclass, field
@@ -32,7 +31,7 @@ class Modal4Proxy:
     """
     Adapt modal models for proxy shapes.
 
-    For proxy_type 0 (octahedron) and 1 (dodecahedron):
+    For proxy_type 0 (octahedron) and 1 (cube):
     - Generates an approximate modal model based on the original object's
       acoustic material and mesh shape using (proxy_type + 2) modal modes.
 
@@ -99,7 +98,7 @@ class Modal4Proxy:
                 n_modes=n_modes
             )
         elif proxy_type in [2, 3, 4]:
-            # Adapt mesh2faustust modal model for subdivided icosahedron
+            # Adapt mesh2faust modal model for subdivided icosahedron
             self._adapt_mesh2faust_modal_model(
                 config_obj=config_obj,
                 proxy_type=proxy_type,
@@ -157,8 +156,9 @@ class Modal4Proxy:
         """
         Generate an approximate modal model for simple proxy shapes (0, 1).
 
-        Uses analytical mode shapes for octahedron and dodecahedron,
-        scaled by material properties and object dimensions.
+        Uses analytical mode shapes for octahedron (proxy_type=0) and 
+        cube/hexahedron (proxy_type=1), scaled by material properties 
+        and object dimensions.
         """
         # Compute effective radius from original mesh volume
         volume = self._compute_volume(original_vertices)
@@ -169,8 +169,7 @@ class Modal4Proxy:
 
         # Generate modal frequencies based on proxy shape
         if proxy_type == 0:
-            # Octahedron modes (8 faces)
-            # Analytical approximation for octahedral vibrations
+            # Octahedron modes (6 vertices, 8 faces)
             frequencies = self._octahedron_mode_frequencies(
                 n_modes=n_modes,
                 c_shear=c_shear,
@@ -179,9 +178,9 @@ class Modal4Proxy:
                 min_freq=min_freq,
                 max_freq=max_freq
             )
-        else:
-            # Dodecahedron modes (12 faces)
-            frequencies = self._dodecahedron_mode_frequencies(
+        else:  # proxy_type == 1
+            # Cube modes (8 vertices, 6 faces)
+            frequencies = self._cube_mode_frequencies(
                 n_modes=n_modes,
                 c_shear=c_shear,
                 c_long=c_long,
@@ -305,7 +304,7 @@ class Modal4Proxy:
                 subdivisions=proxy_type - 2
             )
 
-            t60s = self._compute_t60s(frequencies, damping)
+            t60s = self._compute_t60s(frequrequencies, damping)
             gains = self._compute_proxy_gains(
                 vertices=proxy_vertices,
                 frequencies=frequencies,
@@ -377,30 +376,32 @@ class Modal4Proxy:
         """
         Compute approximate mode frequencies for an octahedron.
 
-        Octahedron has 8 triangular faces. Mode frequencies are approximated
-        using spherical harmonic-like patterns adapted for octahedral symmetry.
+        Octahedron has 6 vertices and 8 triangular faces. Mode frequencies 
+        are approximated using spherical harmonic-like patterns adapted 
+        for octahedral symmetry.
         """
         frequencies = []
 
         # Mode families for octahedral symmetry
-        # l = angular momentum number, m = magnetic quantum number
+        # Using analytical solutions for polyhedral vibrations
         mode_families = [
-            (1, 0, 1.0),    # Breathing mode
-            (1, 1, 1.5),    # Dipole mode
-            (2, 0, 2.0),    # Quadrupole mode 1
-            (2, 1, 2.3),    # Quadrupole mode 2
-            (2, 2, 2.7),    # Quadrupole mode 3
-            (3, 0, 3.0),    # Octupole mode 1
-            (3, 1, 3.4),    # Octupole mode 2
-            (3, 2, 3.8),    # Octupole mode 3
-            (4, 0, 4.2),    # Higher mode 1
-            (4, 1, 4.6),    # Higher mode 2
-            (4, 2, 5.0),    # Higher mode 3
-            (5, 0, 5.5),    # Higher mode 4
+            (1, 0, 1.0),    # Breathing mode (radial)
+            (1, 1, 1.5),    # Dipole mode (translational)
+            (2, 0, 2.0),    # Quadrupole mode (squashing)
+            (2, 1, 2.4),    # Quadrupole mode (twisting)
+            (2, 2, 2.8),    # Quadrupole mode (shearing)
+            (3, 0, 3.2),    # Octupole mode
+            (3, 1, 3.6),    # Octupole mode
+            (3, 2, 4.0),    # Octupole mode
+            (4, 0, 4.4),    # Higher mode
+            (4, 1, 4.8),    # Higher mode
+            (4, 2, 5.2),    # Higher mode
+            (5, 0, 5.6),    # Higher mode
         ]
 
         for l, m, factor in mode_families:
             # Base frequency for this mode family
+            # For octahedron, frequencies are proportional to (l+1)/R
             f_base = factor * c_shear / (2 * np.pi * radius)
 
             if f_base < min_freq:
@@ -420,7 +421,10 @@ class Modal4Proxy:
                 break
 
         # Sort and take the lowest n_modes
-        frequencies = np.sort(frequencies)[:n_modes]
+        if len(frequencies) > 0:
+            frequencies = np.sort(frequencies)[:n_modes]
+        else:
+            frequencies = np.array([min_freq])
 
         # Pad if needed
         if len(frequencies) < n_modes:
@@ -430,7 +434,7 @@ class Modal4Proxy:
 
         return frequencies
 
-    def _dodecahedron_mode_frequencies(
+    def _cube_mode_frequencies(
         self,
         n_modes: int,
         c_shear: float,
@@ -440,35 +444,55 @@ class Modal4Proxy:
         max_freq: float
     ) -> np.ndarray:
         """
-        Compute approximate mode frequencies for a dodecahedron.
+        Compute approximate mode frequencies for a cube (hexahedron).
 
-        Dodecahedron has 12 pentagonal faces. Mode frequencies are approximated
-        using icosahedral symmetry (dual to dodecahedron).
+        Cube has 8 vertices and 6 square faces. Mode frequencies are 
+        approximated using 3D standing wave patterns in a rectangular 
+        parallelepiped.
         """
         frequencies = []
 
-        # Mode families for icosahedral/dodecahedral symmetry
+        # Mode families for cubic symmetry
+        # Using analytical solutions for rectangular parallelepiped vibrations
+        # f_ijk = c/2 * sqrt((i/Lx)² + (j/Ly)² + (k/Lz)²)
+        # For a cube, Lx = Ly = Lz = 2*radius
+        
+        side = 2 * radius  # Cube side length
+
+        # Mode families for cubic symmetry
         mode_families = [
-            (1, 0, 1.0),    # Breathing mode
-            (1, 1, 1.4),    # Dipole mode
-            (2, 0, 1.8),    # Quadrupole mode 1
-            (2, 1, 2.1),    # Quadrupole mode 2
-            (2, 2, 2.5),    # Quadrupole mode 3
-            (3, 0, 2.8),    # Octupole mode 1
-            (3, 1, 3.2),    # Octupole mode 2
-            (3, 2, 3.6),    # Octupole mode 3
-            (4, 0, 4.0),    # Higher mode 1
-            (4, 1, 4.4),    # Higher mode 2
-            (4, 2, 4.8),    # Higher mode 3
-            (5, 0, 5.2),    # Higher mode 4
-            (5, 1, 5.6),    # Higher mode 5
-            (5, 2, 6.0),    # Higher mode 6
+            (1, 0, 0, 0.5),    # Fundamental bending (x-axis)
+            (0, 1, 0, 0.5),    # Fundamental bending (y-axis)
+            (0, 0, 1, 0.5),    # Fundamental bending (z-axis)
+            (1, 1, 0, 0.7),    # Diagonal bending
+            (1, 0, 1, 0.7),    # Diagonal bending
+            (0, 1, 1, 0.7),    # Diagonal bending
+            (1, 1, 1, 0.9),    # Triaxial bending
+            (2, 0, 0, 1.0),    # Second harmonic (x-axis)
+            (0, 2, 0, 1.0),    # Second harmonic (y-axis)
+            (0, 0, 2, 1.0),    # Second harmonic (z-axis)
+            (2, 1, 0, 1.2),    # Mixed harmonic
+            (1, 2, 0, 1.2),    # Mixed harmonic
+            (2, 0, 1, 1.2),    # Mixed harmonic
+            (0, 2, 1, 1.2),    # Mixed harmonic
+            (1, 0, 2, 1.2),    # Mixed harmonic
+            (0, 1, 2, 1.2),    # Mixed harmonic
+            (2, 2, 0, 1.5),    # Higher harmonic
+            (2, 0, 2, 1.5),    # Higher harmonic
+            (0, 2, 2, 1.5),    # Higher harmonic
+            (2, 2, 2, 1.8),    # Highest harmonic
         ]
 
-        for l, m, factor in mode_families:
-            # Base frequency for this mode family
-            # Dodecahedron has slightly higher frequencies than octahedron for same size
-            f_base = factor * c_shear / (2 * np.pi * radius)
+        for i, j, k, factor in mode_families:
+            # Standing wave pattern in 3D
+            # f = c_long / 2 * sqrt((i/side)² + (j/side)² + (k/side)²)
+            if i == 0 and j == 0 and k == 0:
+                continue  # Skip rigid body mode
+            
+            f_base = (c_long / 2) * np.sqrt((i/side)**2 + (j/side)**2 + (k/side)**2)
+            
+            # Apply mode-specific scaling scaling factor
+            f_base *= factor
 
             if f_base < min_freq:
                 continue
@@ -478,8 +502,8 @@ class Modal4Proxy:
             frequencies.append(f_base)
 
             # Add overtones
-            for k in range(1, 3):
-                f_ot = f_base * (1 + k * 0.25 * (l + 1) / (m + 1))
+            for n in range(1, 2):
+                f_ot = f_base * (1 + n * 0.2)
                 if f_ot <= max_freq:
                     frequencies.append(f_ot)
 
@@ -487,7 +511,10 @@ class Modal4Proxy:
                 break
 
         # Sort and take the lowest n_modes
-        frequencies = np.sort(frequencies)[:n_modes]
+        if len(frequencies) > 0:
+            frequencies = np.sort(frequencies)[:n_modes]
+        else:
+            frequencies = np.array([min_freq])
 
         # Pad if needed
         if len(frequencies) < n_modes:
@@ -559,7 +586,10 @@ class Modal4Proxy:
                 break
 
         # Sort and take the lowest n_modes
-        frequencies = np.sort(frequencies)[:n_modes]
+        if len(frequencies) > 0:
+            frequencies = np.sort(frequencies)[:n_modes]
+        else:
+            frequencies = np.array([min_freq])
 
         # Pad if needed
         if len(frequencies) < n_modes:
@@ -751,7 +781,7 @@ class Modal4Proxy:
         density = config_obj.acoustic_shader.density if config_obj.acoustic_shader else "N/A"
 
         # Proxy shape name
-        proxy_names = {0: "octahedron", 1: "dodecahedron", 2: "icosahedron", 3: "icosahedron_sub1", 4: "icosaosahedron_sub2"}
+        proxy_names = {0: "octahedron", 1: "cube", 2: "icosahedron", 3: "icosahedron_sub1", 4: "icosahedron_sub2"}
         proxy_name = proxy_names.get(proxy_type, "unknown")
 
         # Generate Faust code
@@ -765,7 +795,7 @@ class Modal4Proxy:
 // ------------------------------------------------------------
 
 declare name        "{output_name}";
-declare version     "0.1";
+declare version version     "0.1";
 declare author      "Modal4Proxy";
 declare license     "GPL";
 
@@ -800,7 +830,7 @@ process = no.process;
 
         # Also save a resonance version if needed
         if config_obj.resonance:
-            resonance_modes = config_obj.resononance_modes if config_obj.resonance_modes else max(5, n_modes // 2)
+            resonance_modes = config_obj.resonance_modes if config_obj.resonance_modes else max(5, n_modes // 2)
             resonance_frequencies = frequencies[:resonance_modes]
             resonance_t60s = t60s[:resonance_modes] * 1.2  # Slightly longer decay for resonance
             resonance_gains = gains[:resonance_modes]

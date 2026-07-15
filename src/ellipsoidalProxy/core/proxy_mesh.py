@@ -16,11 +16,14 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+# ./ellipsoidalProxy/core/proxy_mesh.py
+
 import os
 import numpy as np
 from typing import List, Tuple, Optional, Any, Dict
 from dataclasses import dataclass, field
-import trimesh
+from scipy.spatial import cKDTree
+from scipy.spatial.transform import Rotation
 
 from physicsSolver import EntityManager
 from physicsSolver.lib.functions import _load_mesh, _load_pose
@@ -29,21 +32,27 @@ from physicsSolver.lib.functions import _load_mesh, _load_pose
 @dataclass
 class ProxyMesh:
     """
-    Generate low-resolution proxy meshes for objects.
-
-    Replaces each selected object's mesh with a low-res axis-aligned proxy mesh
-    based on the proxy_type parameter, that inscribscribes the object.
+    Generate low-resolution proxy meshes with consistent vertex indexing.
 
     proxy_type values:
-    - 0: octahedron (no subdivision)
-    - 1: dodecahedron (no subdivision)
+    - 0: 6-vertex octahedron (axis-aligned, 6 vertices at extents)
+    - 1: 8-vertex hexahedron/cube (axis-aligned, 8 vertices at corners)
     - 2,3,4: icosahedron with subdivision of (proxy_type - 2)
+
+    The proxy mesh vertices maintain consistent indexing across frames
+    by mapping to the original mesh's extremal vertices.
     """
     entity_manager: EntityManager
 
     def compute(self, obj_idx: int) -> List[int]:
         """
-        Compute object and replace those with proxy_type enabled.
+        Compute proxy mesh for an object.
+
+        Args:
+            obj_idx: Object index
+
+        Returns:
+            List of object indices that had proxies created
         """
         config = self.entity_manager.get('config')
         proxy_objects = []
@@ -52,7 +61,7 @@ class ProxyMesh:
             if config_obj.idx == obj_idx:
                 if config_obj.proxy_type is not False:
                     print(f"Creating proxy mesh for {config_obj.name} idx={config_obj.idx} proxy_type={config_obj.proxy_type}")
-                    self._create_proxy_sequence(config_obj)
+                    self._create_pro_proxy_sequence(config_obj)
                     proxy_objects.append(config_obj.idx)
 
         return proxy_objects
@@ -61,8 +70,8 @@ class ProxyMesh:
         """
         Create proxy mesh sequence for an object.
 
-        For each frame, generates a proxy mesh that inscribes the object
-        at that frame's position and orientation.
+        For each frame, generates a proxy mesh that maintains consistent
+        vertex indexing by mapping to the original mesh's extremal vertices.
         """
         # Load pose data to get number of frames
         positions, rotations = _load_pose(config_obj)
@@ -71,6 +80,40 @@ class ProxyMesh:
         # Create output directory for proxy meshes
         obj_proxy_path = f"{config_obj.obj_path}/proxy"
         os.makedirs(obj_proxy_path, exist_ok=True)
+
+        # Process first frame to establish vertex mapping
+        vertices_0, normals_0, faces_0 = _load_mesh(config_obj, 0, use_proxy_path=False)
+        position_0 = positions[0]
+        rotation_0 = Rotation.from_euler('XYZ', rotations[0])
+
+        # Transform first frame vertices to local coordinates
+        R0 = rotation_0.as_matrix()
+        vertices_local_0 = (R0.T @ (vertices_0 - position_0).T).T
+
+        # Compute bounding box in in local coordinates for first frame
+        min_coords_0 = np.min(vertices_local_0, axis=0)
+        max_coords_0 = np.max(vertices_local_0, axis=0)
+        extents_0 = max_coords_0 - min_coords_0
+        center_local_0 = (min_coords_0 + max_coords_0) / 2
+
+        # Generate proxy vertices for first frame (reference)
+        proxy_vertices_local_0, proxy_faces = self._generate_proxy_mesh(
+            proxy_type=config_obj.proxy_type,
+            extents=extents_0,
+            center=center_local_0
+        )
+
+        # Build KD-tree for first frame's original vertices
+        tree_original_0 = cKDTree(vertices_local_0 - center_local_0)
+
+        # For each proxy vertex, find the nearest original vertex
+        # This establishes the consistent vertex mapping
+        proxy_vertex_mapping = []
+        for pv in proxy_vertices_local_0:
+            # Normalize proxy vertex to match original vertex search space
+            pv_normalized = pv - center_local_0
+            _, idx = tree_original_0.query(pv_normalized)
+            proxy_vertex_mapping.append(idx)
 
         # Process each frame
         for frame_idx in range(n_frames):
@@ -82,7 +125,6 @@ class ProxyMesh:
             rotation_euler = rotations[frame_idx]
 
             # Transform vertices to local coordinates
-            from scipy.spatial.transform import Rotation
             R = Rotation.from_euler('XYZ', rotation_euler).as_matrix()
             vertices_local = (R.T @ (vertices - position).T).T
 
@@ -90,24 +132,34 @@ class ProxyMesh:
             min_coords = np.min(vertices_local, axis=0)
             max_coords = np.max(vertices_local, axis=0)
             extents = max_coords - min_coords
-
-            # Center of bounding box
             center_local = (min_coords + max_coords) / 2
 
             # Generate proxy mesh based on proxy_type
             proxy_vertices_local, proxy_faces = self._generate_proxy_mesh(
                 proxy_type=config_obj.proxy_type,
-                extents=extents
+                extents=extents,
+                center=center_local
             )
 
+            # Now re-index proxy vertices to maintain consistency
+            # For each proxy vertex, find the corresponding original vertex
+            # using the mapping established from the first frame
+            tree_original = cKDTree(vertices_local - center_local)
+            
+            reindexed_proxy_vertices = np.zeros_like(proxy_vertices_local)
+            for i, orig_idx in enumerate(proxy_vertex_mapping):
+                # Use the original vertex position as the proxy vertex
+                # This ensures consistent indexing across frames
+                reindexed_proxy_vertices[i] = vertices_local[orig_idx]
+
             # Center the proxy at the object's local center
-            proxy_vertices_local = proxy_vertices_local + center_local
+            reindexed_proxy_vertices = reindexed_proxy_vertices
 
             # Compute normals for the proxy
-            proxy_normals = self._compute_vertex_normals(proxy_vertices_local, proxy_faces)
+            proxy_normals = self._compute_vertex_normals(reindexed_proxy_vertices, proxy_faces)
 
             # Transform proxy back to world coordinates
-            proxy_vertices_world = (R @ proxy_vertices_local.T).T + position
+            proxy_vertices_world = (R @ reindexed_proxy_vertices.T).T + position
             proxy_normals_world = (R @ proxy_normals.T).T
 
             # Save proxy mesh
@@ -121,43 +173,149 @@ class ProxyMesh:
 
         print(f"Created {n_frames} proxy frames for {config_obj.name} at {obj_proxy_path}")
 
-    def _generate_proxy_mesh(self, proxy_type: int, extents: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def _generate_proxy_mesh(self, proxy_type: int, extents: np.ndarray, 
+                             center: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
         Generate a proxy mesh based on proxy_type, scaled to fit extents.
 
         Args:
-            proxy_type: 0=octahedron, 1=dodecahedron, 2,3,4=icosahedron with subdivisions
-            extents:: (dx, dy, dz) bounding box extents
+            proxy_type: 0=6-vertex octahedron, 1=8-vertex cube, 2,3,4=icosahedron
+            extents: (dx, dy, dz) bounding box extents
+            center: Center of the bounding box in local coordinates
 
         Returns:
             Tuple of (vertices, faces) for the proxy mesh
         """
         if proxy_type == 0:
-            # Octahedron - no subdivision
-            vertices, faces = self._create_octahedron()
+            # 6-vertex octahedron - vertices at axis extents
+            vertices, faces = self._create_octahedron_6v(extents, center)
         elif proxy_type == 1:
-            # Dodecahedron - no subdivision
-            vertices, faces = self._create_dodecahedron()
+            # 8-vertex cube - vertices at bounding box corners
+            vertices, faces = self._create_cube_8v(extents, center)
         elif proxy_type in [2, 3, 4]:
             # Icosahedron with subdivision
             subdivisions = proxy_type - 2
             vertices, faces = self._create_icosahedron(subdivisions=subdivisions)
+            # Scale to match extents
+            half_extents = extents / 2.0
+            vertices = vertices * half_extents[np.newaxis, :] + center
         else:
-            # Default to octahedron for unknown types
-            print(f"Warning: Unknown proxy_type {proxy_type}, using octahedron")
-            vertices, faces = self._create_octahedron()
+            # Default to 6-vertex octahedron for unknown types
+            print(f"Warning: Unknown proxy_type {proxy_type}, using 6-vertex octaahedron")
+            vertices, faces = self._create_octahedron_6v(extents, center)
 
-        # Scale vertices to match extents (axis-aligned)
-        # Normalize to unit sphere first, then scale
-        norms = np.linalg.norm(vertices, axis=1, keepdims=True)
-        norms[norms == 0] = 1.0
-        vertices_normalized = vertices / norms
+        return vertices, faces
 
-        # Scale by half-extents to inscribe the object
+    def _create_octahedron_6v(self, extents: np.ndarray, center: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Create a 6-vertex octahedron (axis-aligned).
+        
+        Vertices are at the extents of each axis:
+        - Vertex 0: +x extent
+        - Vertex 1: -x extent
+        - Vertex 2: +y extent
+        - Vertex 3: -y extent
+        - Vertex 4: +z extent
+        - Vertex 5: -z extent
+
+        Args:
+            extents: (dx, dy, dz) bounding box extents
+            center: Center position
+
+        Returns:
+            Tuple of (6 vertices, 8 triangular faces)
+        """
         half_extents = extents / 2.0
-        vertices_scaled = vertices_normalized * half_extents[np.newaxis, :]
 
-        return vertices_scaled, faces
+        # 6 vertices at axis extents
+        vertices = np.array([
+            [half_extents[0], 0.0, 0.0],   # 0: +x
+            [-half_extents[0], 0.0, 0.0],  # 1: -x
+            [0.0, half_extents[1], 0.0],   # 2: +y
+            [0.0, -half_extents[1], 0.0],  # 3: -y
+            [0.0, 0.0, half_extents[2]],   # 4: +z
+            [0.0, 0.0, -half_extents[2]]   # 5: -z
+        ], dtype=np.float64)
+
+        # Center the vertices
+        vertices = vertices + center
+
+        # 8 triangular faces forming an octahedron
+        faces = np.array([
+            [0, 2, 4],  # +x, +y, +z
+            [0, 4, 3],  # +x, +z, -y
+            [0, 3, 5],  # +x, -y, -z
+            [0, 5, 2],  # +x, -z, +y
+            [1, 4, 2],  # -x, +z, +y
+            [1, 3, 4],  # -x, -y, +z
+            [1, 5, 3],  # -x, -z, -y
+            [1, 2, 5]   # -x, +y, -z
+        ], dtype=np.int32)
+
+        return vertices, faces
+
+    def _create_cube_8v(self, extents: np.ndarray, center: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Create an 8-vertex cube (hexahedron) axis-aligned.
+        
+        Vertices are at the 8 corners of the bounding box:
+        - Vertex 0: (-x, -y, -z)
+        - Vertex 1: (+x, -y, -z)
+        - Vertex 2: (+x, +y, -z)
+        - Vertex 3: (-x, +y, -z)
+        - Vertex 4: (-x, -y, +z)
+        - Vertex 5: (+x, -y, +z)
+        - Vertex 6: (+x, +y, +z)
+        - Vertex 7: (-x, +y, +z)
+
+        Args:
+            extents: (dx, dy, dz) bounding box extents
+            center: Center position
+
+        Returns:
+            Tuple of (8 vertices, 12 triangular faces)
+        """
+        half_extents = extents / 2.0
+        hx, hy, hz = half_extents
+
+        # 8 vertices at bounding box corners
+        vertices = np.array([
+            [-hx, -hy, -hz],  # 0: bottom-back-left
+            [ hx, -hy, -hz],  # 1: bottom-back-right
+            [ hx,  hy, -hz],  # 2: bottom-front-right
+            [-hx,  hy, -hz],  # 3: bottom-front-left
+            [-hx, -hy,  hz],  # 4: top-back-left
+            [ hx, -hy,  hz],  # 5: top-back-right
+            [ hx,  hy,  hz],  # 6: top-front-right
+            [-hx,  hy,  hz]   # 7: top-front-left
+        ], dtype=np.float64)
+
+        # Center the vertices
+        vertices = vertices + center
+
+        # 12 triangular faces (2 triangles per face of the cube)
+        faces = np.array([
+            # Bottom face (z = -hz)
+            [0, 1, 2],
+            [0, 2, 3],
+            # Top face (z = +hz)
+            [4, 6, 5],
+            [4, 7, 6],
+            # Front face (y = +hy)
+            [3, 2, 6],
+            [3, 6, 7],
+            # Back face (y = -hy)
+            [0, 5, 1],
+            [0, 4, 5],
+            # Left face (x = -hx)
+            [0, 3, 7],
+            [0, 7, 4],
+            # Right face (x = +hx)
+            [1, 6, 2],
+            [1, 5, 6]
+        ], dtype=np.int32)
+
+        return vertices, faces
 
     def _compute_vertex_normals(self, vertices: np.ndarray, faces: np.ndarray) -> np.ndarray:
         """
@@ -193,101 +351,6 @@ class ProxyMesh:
 
         return vertex_normals
 
-    def _create_octahedron(self) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Create a regular octahedron centered at origin with unit circumradius.
-
-        Returns:
-            Tuple of (vertices, faces)
-        """
-        # Vertices of a unit octahedron
-        vertices = np.array([
-            [0, 0, 1],   # top
-            [1, 0, 0],   # right
-            [0, 1, 0],   # front
-            [-1, 0, 0],  # left
-            [0, -1, 0],  # back
-            [0, 0, -1]   # bottom
-        ], dtype=np.float64)
-
-        # Faces (triangles)
-        faces = np.array([
-            [0, 1, 2],
-            [0, 2, 3],
-            [0, 3, 4],
-            [0, 4, 1],
-            [5, 2, 1],
-            [5, 3, 2],
-            [5, 4, 3],
-            [5, 1, 4]
-        ], dtype=np.int32)
-
-        return vertices, faces
-
-    def _create_dodecahedron(self) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Create a regular dodecahedron centered at origin with unit circumradius.
-
-        Returns:
-            Tuple of (vertices, faces)
-        """
-        phi = (1 + np.sqrt(5)) / 2  # golden ratio
-
-        # All All 20 vertices of a regular dodecahedron
-        vertices = np.array([
-            # (±1, ±1, ±1)
-            [1, 1, 1], [1, 1, -1], [1, -1, 1], [1, -1, -1],
-            [-1, 1, 1], [-1, 1, -1], [-1, -1, 1], [-1, -1, -1],
-            # (0, ±1/φ, ±φ)
-            [0, 1/phi, phi], [0, 1/phi, - -phi], [0, -1/phi, phi], [0, -1/phi, -phi],
-            # (±1/φ, ±φ, 0)
-            [1/phi, phi, 0], [1/phi, -phi, 0], [-1/phi, phi, 0], [-1/phi, -phi, 0],
-            # (±φ, 0, ±1/φ)
-            [phi, 0, 1/phi], [phi, 0, -1/phi], [-phi, 0, 1/phi], [-phi, 0, -1/phi]
-        ], dtype=np.float64)
-
-        # Normalize to unit sphere
-        vertices = vertices / np.linalg.norm(vertices, axis=1, keepdims=True)
-
-        # 12 pentagonal faces, each split into 3 triangles
-        # Face definitions (pentagons)
-        pentagon_faces = [
-            [0, 8, 4, 14, 12],    # top front
-            [0, 12, 2, 16, 8],    # top right
-            [0, 16, 3, 17, 1],    # top back
-            [0, 1, 13, 5, 14],    # top left
-            [2, 10, 6, 18, 16],   # right front
-            [2, 12, 0, 8, 10],    # right top
-            [3, 16, 18, 7, 19],   # back right
-            [3, 17, 1, 9, 19],    # back bottom
-            [4, 14, 5, 9, 15],    # left front
-            [4, 8, 0, 14],        # left top (incomplete in standard)
-            [5, 13, 1, 9],        # left bottom (incomplete)
-            [6, 18, 7, 15, 11],   # bottom front
-            [7, 19, 9, 15],       # bottom back
-            [10, 6, 11, 15, 4],   # bottom left
-            [11, 15, 5, 9],       # bottom middle
-            [12, 2, 10, 4],       # right front top
-            [13, 5, 14, 12],      # front left
-            [16, 3, 19, 7, 18],   # back right
-            [17, 1, 13, 5, 9],    # back left
-            [18, 7, 15, 4, 10],   # front bottom
-        ]
-
-        # Convert pentagons to triangles
-        faces = []
-        for pentagon in pentagon_faces:
-            if len(pentagon) == 5:
-                # Fan triangulation from first vertex
-                for i in range(1, len(pentagon) - 1):
-                    faces.append([pentagon[0], pentagon[i], pentagon[i + 1]])
-            elif len(pentagon) == 4:
-                # Quadrilateral to two triangles
-                faces.append([pentagon[0], pentagon[1], pentagon[2]])
-                faces.append([pentagon[0], pentagon[2], pentagon[3]])
-
-        return vertices, np.array(faces, dtype=np.int32)
-
     def _create_icosahedron(self, subdivisions: int = 0) -> Tuple[np.ndarray, np.ndarray]:
         """
         Create an icosahedron with optional subdivisions.
@@ -296,7 +359,7 @@ class ProxyMesh:
             subdivisions: Number of subdivision steps (0=base icosahedron)
 
         Returns:
-            Tuple of (vertices, faces)
+            Tuple of (vertices, faces) centered at origin with unit circumradius
         """
         phi = (1 + np.sqrt(5)) / 2  # golden ratio
 
@@ -304,7 +367,7 @@ class ProxyMesh:
         vertices = np.array([
             [-1, phi, 0], [1, phi, 0], [-1, -phi, 0], [1, -phi, 0],
             [0, -1, phi], [0, 1, phi], [0, -1, -phi], [0, 1, -phi],
-            [phi, 0, -1], [phi, 0, 1], [-phi, 0, -1], [-phi, 0, 1]
+            [phi, 0, -1], [phi, 0, 1], [-phi,  0, -1], [-phi, 0, 1]
         ], dtype=np.float64)
 
         # Normalize to unit sphere
@@ -319,7 +382,7 @@ class ProxyMesh:
         ], dtype=np.int32)
 
         # Subdivide if requested
-        for _ in range(subdivisions):
+        for _ in range(sub(subdivisions):
             vertices, faces = self._subdivide_mesh(vertices, faces)
 
         return vertices, faces
