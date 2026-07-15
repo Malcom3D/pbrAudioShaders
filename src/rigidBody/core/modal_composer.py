@@ -135,5 +135,6 @@ class ModalComposer:
         rolling = np.fromfile(f"{forces_path}/{obj_name}_rolling.raw", dtype=np.float32)
         coupling_strength = np.fromfile(f"{forces_path}/{obj_name}_coupling_strength.raw", dtype=np.float32)
         _mixed = np.zeros_like(coupling_strength)
+        static = np.zeros_like(coupling_strength)
 
         return [non_collision, impact, scraping, sliding, rolling, _mixed, static], coupling_strength
