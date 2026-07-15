@@ -31,8 +31,6 @@ from physicsSolver.lib.functions import _parse_lib
 class ModalPlayer:
     entity_manager: EntityManager
     obj_idx: int
-    begin_idx: int = 0
-    end_idx: int = 0
     player_id: int = None
     score: List = field(default_factory=list)
 
@@ -41,7 +39,6 @@ class ModalPlayer:
         config = self.entity_manager.get('config')
         print('ModalPlayer sample_counter: ', self.obj_idx)
         self.sample_counter = self.entity_manager.get('sample_counter')
-        self.begin_idx = self.sample_counter.total_samples
         self.score_path = f"{config.system.cache_path}/score"
         self.output_dir = f"{config.system.cache_path}/modal_player"
         os.makedirs(self.output_dir, exist_ok=True)
@@ -95,12 +92,7 @@ class ModalPlayer:
                 score_tracks = self.entity_manager.get('score_tracks')
                 for idx in score_tracks.keys():
                     if score_tracks[idx].obj_idx == self.obj_idx:
-                        self.score.append(score_tracks[idx])
-                        for event in score_tracks[idx].events:
-                            sample_indices.append(event.sample_idx)
-                self.begin_idx = min(sample_indices) if not len(sample_indices) == 0 else 0
-                end_idx = (self.t60_samples + max(sample_indices) if not len(sample_indices) == 0 else self.sample_counter.total_samples)
-                self.end_idx = end_idx if end_idx <= self.sample_counter.total_samples else self.sample_counter.total_samples
+                        self.score = score_tracks[idx]
 
         # Register with sample counter
         print('Register with sample counter', self.obj_idx)
@@ -125,84 +117,38 @@ class ModalPlayer:
         fracture_frame, is_shard_frame = (None for _ in range(2))
         if not isinstance(config_obj.fractured, bool):
             fracture_frame = config_obj.fractured * sample_rate / sfps
+            print('Object: ', config_obj.name, 'fracture at frame', fracture_frame)
         if not isinstance(config_obj.is_shard, bool):
             is_shard_frame = config_obj.is_shard * sample_rate / sfps
+            print('Object: ', config_obj.name, 'is shard from frame', is_shard_frame)
 
         print('ModalPlayer compute: ', self.obj_idx)
-        t60_empty, old_sample_idx = (0 for _ in range(2))
+        old_sample_idx = 0
         sample_idx = self.sample_counter.get_current()
     
         # Register a callback that will be called when all players are ready
         def on_all_ready():
             """Called when all players have called ready() for the current sample."""
-            nonlocal sample_idx, old_sample_idx, t60_empty
+            nonlocal sample_idx, old_sample_idx
 
-            if sample_idx < self.end_idx:
+            if (is_shard_frame == None or is_shard_frame <= sample_idx) and (fracture_frame == None or sample_idx <= fracture_frame):
                 # Process the current sample
                 rigidbody_output, resonance_output, sliding_output, scraping_output, rolling_output = (0 for _ in range(5))
-                events = []
-        
-                if self.begin_idx <= sample_idx and (is_shard_frame == None or is_shard_frame <= sample_idx) and (fracture_frame == None or sample_idx <= fracture_frame) and not sample_idx == old_sample_idx:
-                    for score_idx in range(len(self.score)):
-                        events += self.score[score_idx].get_events_at_sample(sample_idx)
+                for event_idx in range(len(self.score)):
+                    if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
+                        resonance_output = self.resonance_synth.process(self.score[event_idx].get_event_at_sample(sample_idx))
+                    rigidbody_output = self.resonance_synth.process(self.score[event_idx].get_event_at_sample(sample_idx))
+                    if self.score[event_idx].type[sample_idx] in [2,3]:
+                        sliding_output = self.sliding_sound[sample_idx] * self.score[event_idx].contact_area[sample_idx]
+                        scraping_output = self.scraping_sound[sample_idx] * self.score[event_idx].contact_area[sample_idx]
+                    elif self.score[event_idx].type[sample_idx] == 4:
+                        rolling_output = self.rolling_sound[sample_idx] * self.score[event_idx].contact_area[sample_idx]
 
-                    if len(events) == 1:
-                        t60_empty = 0
-                        event = events[0].to_dict()
-                        self.rigidbody_vertices[sample_idx] = event['vertex_ids']
-                        if int(event['type']) in [2,3]:
-                            if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
-                                resonance_output = self.resonance_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
-                            rigidbody_output = self.rigidbody_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
-                            sliding_output = self.sliding_sound[sample_idx] * event['contact_area']
-                            scraping_output = self.scraping_sound[sample_idx] * event['contact_area']
-                        elif int(event['type']) == 4:
-                            if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
-                                resonance_output = self.resonance_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
-                            rigidbody_output = self.rigidbody_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
-                            rolling_output = self.rolling_sound[sample_idx] * event['contact_area']
-                        else:
-                            if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
-                                resonance_output = self.resonance_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
-                            rigidbody_output = self.rigidbody_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
-                    elif len(events) > 1:
-                        t60_empty = 0
-                        for idx in range(len(events)):
-                            event = events[idx].to_dict()
-                            self.rigidbody_vertices[sample_idx] = event['vertex_ids']
-                            if int(event['type']) in [2,3]:
-                                if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
-                                    resonance_output += self.resonance_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
-                                rigidbody_output += self.rigidbody_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
-                                sliding_output += self.sliding_sound[sample_idx] * event['contact_area']
-                                scraping_output += self.scraping_sound[sample_idx] * event['contact_area']
-                            elif int(event['type']) == 4:
-                                if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
-                                    resonance_output += self.resonance_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
-                                rigidbody_output += self.rigidbody_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
-                                rolling_output += self.rolling_sound[sample_idx] * event['contact_area']
-                            else:
-                                if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
-                                    resonance_output += self.resonance_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
-                                rigidbody_output += self.rigidbody_synth.process(event['type'], event['vertex_ids'], event['force'], event['contact_area'], event['coupling_data'])
-                    elif len(events) == 0:
-                        if t60_empty < self.t60_samples:
-                            self.rigidbody_vertices[sample_idx] = []
-                            for synth_type in [1,2,3,4]:
-                                value = self.rigidbody_synth.connected_buffer.read_for_obj(self.obj_idx, synth_type)
-                                if not value == 0:
-                                    rigidbody_output = self.rigidbody_synth.process(1, [], 0.0, 0, coupling_strength)
-                                    if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
-                                        value = self.resonance_synth.connected_buffer.read_for_obj(self.obj_idx, synth_type)
-                                        if not value == 0:
-                                            resonance_output += self.resonance_synth.process(synth_type, [], 0.0, 0, coupling_strength)
-                            t60_empty += 1
-    
-                    self.rigidbody_synth_track[sample_idx] = rigidbody_output if not np.isnan(rigidbody_output) else 0
-                    self.resonance_synth_track[sample_idx] = resonance_output if not np.isnan(resonance_output) else 0
-                    self.sliding_synth_track[sample_idx] = sliding_output if not np.isnan(sliding_output) else 0
-                    self.scraping_synth_track[sample_idx] = scraping_output if not np.isnan(scraping_output) else 0
-                    self.rolling_synth_track[sample_idx] = rolling_output if not np.isnan(rolling_output) else 0
+                    self.rigidbody_synth_track[sample_idx] += rigidbody_output if not np.isnan(rigidbody_output) else 0
+                    self.resonance_synth_track[sample_idx] += resonance_output if not np.isnan(resonance_output) else 0
+                    self.sliding_synth_track[sample_idx] += sliding_output if not np.isnan(sliding_output) else 0
+                    self.scraping_synth_track[sample_idx] += scraping_output if not np.isnan(scraping_output) else 0
+                    self.rolling_synth_track[sample_idx] += rolling_output if not np.isnan(rolling_output) else 0
         
                 # Update sample indices for next iteration
                 old_sample_idx = sample_idx
@@ -213,7 +159,7 @@ class ModalPlayer:
     
         # Process samples in a loop (non-blocking)
         start_time = time.time()
-        while sample_idx < self.end_idx:
+        while sample_idx < self.sample_counter.total_samples:
             # Call ready - this will either:
             # - Return True if all players are ready (sample was advanced and callback executed)
             # - Return False if we're still waiting for other players
@@ -230,7 +176,7 @@ class ModalPlayer:
                     raise TimeoutError(f"No new sample_idx for {self.timeout} seconds, object:{config_obj.name}, sample_idx:{sample_idx}")
                 time.sleep(self.poll_interval)
             # Unregister when done
-            if sample_idx >= self.end_idx:
+            if sample_idx >= self.sample_counter.total_samples - 1:
                 self.sample_counter.unregister_player(self.player_id)
                 print(f"Player {self.player_id} finished processing")
 

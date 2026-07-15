@@ -46,7 +46,15 @@ class ModalComposer:
         obj1_idx = collision.obj1_idx
         obj2_idx = collision.obj2_idx
 
-        score_track1, score_track2 = ([] for _ in range(2))
+        for conf_obj in config.objects:
+            if conf_obj.idx == obj1_idx:
+                config_obj1 = conf_obj
+                force1, coupling_strength1 = self._load_audioforce_tracks(forces_path=forces_path, obj_name=config_obj1.name)
+            elif conf_obj.idx == obj2_idx:
+                config_obj2 = conf_obj
+                force2, coupling_strength2 = self._load_audioforce_tracks(forces_path=forces_path, obj_name=config_obj2.name)
+
+        score_track1_final, score_track2_final, score_track1, score_track2 = ([] for _ in range(4))
         score_tracks = self.entity_manager.get('score_tracks')
         for idx in score_tracks.keys():
             if score_tracks[idx].obj_idx == obj1_idx and not score_tracks[idx].is_final:
@@ -62,13 +70,12 @@ class ModalComposer:
             elif score_tracks[idx].obj_idx == obj2_idx and score_tracks[idx].is_final:
                 score_track2_final = score_tracks[idx]
 
-        for conf_obj in config.objects:
-            if conf_obj.idx == obj1_idx:
-                config_obj1 = conf_obj
-                force1, coupling_strength1 = self._load_audioforce_tracks(forces_path=forces_path, obj_name=config_obj1.name)
-            elif conf_obj.idx == obj2_idx:
-                config_obj2 = conf_obj
-                force2, coupling_strength2 = self._load_audioforce_tracks(forces_path=forces_path, obj_name=config_obj2.name)
+        if score_track1_final == []:
+            score_track1_final = ScoreTrack(obj_idx=obj1_idx, obj_name=config_obj1.name, is_final=True)
+            _ = self.entity_manager.register('score_track', score_track1_final)
+        if score_track2_final == []:
+            score_track2_final = ScoreTrack(obj_idx=obj2_idx, obj_name=config_obj2.name, is_final=True)
+            _ = self.entity_manager.register('score_track', score_track2_final)
 
         mixed_mask1 = event_track1.type == 5
         mixed_mask2 = event_track2.type == 5

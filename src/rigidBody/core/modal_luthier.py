@@ -64,7 +64,7 @@ class ModalLuthier:
 
         print('ModalLuthier: init ', obj_name, 'ResonanceSynth')
         if not connected_area == 0:
-            contact_area_scale = contact_area * len(vertex_list)
+            contact_area_scale = connected_area * len(vertex_list)
             resonance_synth = ResonanceSynth(entity_manager=self.entity_manager, obj_idx=obj_idx, modal_lib=f"{self.dsp_path}/{obj_name}.lib", sample_rate=sample_rate, contact_area_scale=contact_area_scale)
             self.entity_manager.register('resonance_synth', resonance_synth)
             print('ModalLuthier: ', obj_name, 'Connected ResonanceSynth registered')

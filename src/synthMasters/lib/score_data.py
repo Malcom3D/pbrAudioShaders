@@ -31,6 +31,10 @@ class ScoreEvent:
     force: np.ndarray = None # shape(total_samples,1) Excitation force magnitude
     coupling_data: np.ndarray = None # shape(total_samples,1) Array of [other_obj_idx, coupling_strength] pairs
 
+    def get_event_at_sample(self, sample_idx: int) -> List[ScoreEvent]:
+        """Get all events at a specific sample index."""
+        return self.type[sample_idx], self.vertex_ids[sample_idx], self.force[sample_idx], self.contact_area[sample_idx], (self.coll_obj, self.coupling_data[sample_idx])
+
 @dataclass
 class ScoreTrack:
     """Represents a score track for a single object."""
@@ -43,3 +47,30 @@ class ScoreTrack:
         """Add an event to the track."""
         self.events.append(event)
 
+    def save(self, filepath: str) -> None:
+        """
+        Save the ScoreTrack to a pickle file.
+
+        Args:
+            filepath: Path to save the JSON file
+            indent: JSON indentation level (None for compact format)
+        """
+
+        with open(filepath, 'wb') as f:
+            pickle.dump(self, f)
+   
+    @classmethod
+    def load(cls, filepath: str) -> 'ScoreTrack':
+        """
+        Load a ScoreTrack from a pickle file.
+
+        Args:
+            filepath: Path to the JSON file to load
+
+        Returns:
+            Loaded ScoreTrack instance
+        """
+        with open(filepath, 'rb') as f:
+            obj = pickle.load(f)
+
+        return obj
