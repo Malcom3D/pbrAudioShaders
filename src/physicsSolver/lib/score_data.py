@@ -31,7 +31,7 @@ class ScoreEvent:
     force: np.ndarray = None # shape(total_samples,1) Excitation force magnitude
     coupling_data: np.ndarray = None # shape(total_samples,1) Array of [other_obj_idx, coupling_strength] pairs
 
-    def get_event_at_sample(self, sample_idx: int) -> List[ScoreEvent]:
+    def get_event_at_sample(self, sample_idx: int):
         """Get all events at a specific sample index."""
         return self.type[sample_idx], self.vertex_ids[sample_idx], self.force[sample_idx], self.contact_area[sample_idx], (self.coll_obj, self.coupling_data[sample_idx])
 
