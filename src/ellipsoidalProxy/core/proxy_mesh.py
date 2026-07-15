@@ -132,13 +132,13 @@ class ProxyMesh:
         Returns:
             Tuple of (vertices, faces) for the proxy mesh
         """
-        if proxy_type == 0:
+        if proxy_type == "0":
             # Octahedron - no subdivision
             vertices, faces = self._create_octahedron()
-        elif proxy_type == 1:
+        elif proxy_type == "1":
             # Dodecahedron - no subdivision
             vertices, faces = self._create_dodecahedron()
-        elif proxy_type in [2, 3, 4]:
+        elif proxy_type in ["2", "3", "4"]:
             # Icosahedron with subdivision
             subdivisions = proxy_type - 2
             vertices, faces = self._create_icosahedron(subdivisions=subdivisions)
