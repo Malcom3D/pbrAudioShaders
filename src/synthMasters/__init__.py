@@ -23,9 +23,16 @@ __description__ = "Composer, luthier and players for physically plausible sound 
 import os, sys
 import numpy as np
 
+from core.modal_composer import ModalComposer
+from core.modal_luthier import ModalLuthier
+from core.modal_player import ModalPlayer
+
 decimals = 18
 np.set_printoptions(precision=decimals, floatmode='fixed', threshold=np.inf)
 
 __all__ = [
+    'ModalComposer',
+    'ModalLuthier',
+    'ModalPlayer'
 ]
 

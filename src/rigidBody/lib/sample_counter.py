@@ -21,7 +21,7 @@ import numpy as np
 from dataclasses import dataclass, field
 from typing import Optional, List, Callable
 
-from ..lib.functions import _update_status
+from physicsSolver.lib.functions import _update_status
 
 @dataclass
 class SampleCounter:

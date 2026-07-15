@@ -22,7 +22,8 @@ from typing import Any, List, Tuple, Dict, Optional
 from dataclasses import dataclass, field
 
 from physicsSolver import EntityManager
-from ..lib.score_data import ScoreEvent, ScoreTrack
+from physicsSolver import ScoreEvent, ScoreTrack
+#from physicsSolver.lib.score_data import ScoreEvent, ScoreTrack
 
 @dataclass
 class ModalComposer:
