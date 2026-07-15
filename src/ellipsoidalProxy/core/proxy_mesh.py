@@ -382,7 +382,7 @@ class ProxyMesh:
         ], dtype=np.int32)
 
         # Subdivide if requested
-        for _ in range(sub(subdivisions):
+        for _ in range(subdivisions):
             vertices, faces = self._subdivide_mesh(vertices, faces)
 
         return vertices, faces

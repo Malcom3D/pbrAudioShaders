@@ -126,7 +126,6 @@ class CollisionSolver:
         score_contact_area1 = np.zeros((total_samples,1), dtype=np.float32)
         score_contact_area2 = np.zeros((total_samples,1), dtype=np.float32)
 
-
         start_samples = int(collision.frame - collision.impulse_range / 2)
         start_samples = start_samples if start_samples >= 0 else 0
         stop_samples = int(collision.frame + collision.impulse_range)
