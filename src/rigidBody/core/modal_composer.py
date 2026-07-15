@@ -59,13 +59,13 @@ class ModalComposer:
         for idx in score_tracks.keys():
             if score_tracks[idx].obj_idx == obj1_idx and not score_tracks[idx].is_final:
                 for event_idx in score_tracks[idx]:
-                    if score_tracks[idx][event_idx].coll_obj == obj2_idx
+                    if score_tracks[idx][event_idx].coll_obj == obj2_idx:
                         event_track1 = score_tracks[idx][event_idx].coll_obj
             elif score_tracks[idx].obj_idx == obj1_idx and score_tracks[idx].is_final:
                 score_track1_final = score_tracks[idx]
             elif score_tracks[idx].obj_idx == obj2_idx and not score_tracks[idx].is_final:
                 for event_idx in score_tracks[idx]:
-                    if score_tracks[idx][event_idx].coll_obj == obj1_idx
+                    if score_tracks[idx][event_idx].coll_obj == obj1_idx:
                         event_track2 = score_tracks[idx][event_idx].coll_obj
             elif score_tracks[idx].obj_idx == obj2_idx and score_tracks[idx].is_final:
                 score_track2_final = score_tracks[idx]
