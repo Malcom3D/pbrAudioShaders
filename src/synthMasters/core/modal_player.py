@@ -1,0 +1,305 @@
+# Copyright (C) 2025 Malcom3D <malcom3d.gpl@gmail.com>
+#
+# This file is part of pbrAudio.
+#
+# pbrAudio is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# pbrAudio is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+import os
+import json
+import time
+import numpy as np
+import soundfile as sf
+from typing import Any, List, Tuple, Dict, Optional
+from dataclasses import dataclass, field
+
+from physicsSolver import EntityManager
+from physicsSolver.lib.functions import _parse_lib
+
+@dataclass
+class ModalPlayer:
+    entity_manager: EntityManager
+    obj_idx: int
+    player_id: int = None
+    score: List = field(default_factory=list)
+
+    def __post_init__(self):
+        print('ModalPlayer init: ', self.obj_idx)
+        config = self.entity_manager.get('config')
+        print('ModalPlayer sample_counter: ', self.obj_idx)
+        self.sample_counter = self.entity_manager.get('sample_counter')
+        self.score_path = f"{config.system.cache_path}/score"
+        self.output_dir = f"{config.system.cache_path}/modal_player"
+        os.makedirs(self.output_dir, exist_ok=True)
+
+        fps = config.system.fps
+        fps_base = config.system.fps_base
+        subframes = config.system.subframes
+        sample_rate = config.system.sample_rate
+        sfps = ( fps / fps_base ) * subframes # subframes per seconds
+        spsf = sample_rate / sfps # samples per subframe
+
+        # Generate unique player ID if not provided
+        if self.player_id is None:
+            self.player_id = id(self)
+
+        # Set polling and timeout for synchronization mechanism
+        self.timeout = 60
+        self.poll_interval = 0.001
+        
+#        self.synth_track = np.zeros(self.sample_counter.total_samples)
+        self.rigidbody_vertices = {}
+        self.rigidbody_synth_track = np.zeros(self.sample_counter.total_samples)
+        self.resonance_synth_track = np.zeros(self.sample_counter.total_samples)
+        self.sliding_synth_track = np.zeros(self.sample_counter.total_samples)
+        self.scraping_synth_track = np.zeros(self.sample_counter.total_samples)
+        self.rolling_synth_track = np.zeros(self.sample_counter.total_samples)
+        for conf_obj in config.objects:
+            if conf_obj.idx == self.obj_idx:
+                config_obj = conf_obj
+                # Get modal model T60 times for both objects
+                print('Get modal model T60 times for both objects', self.obj_idx)
+                t60_obj = self._get_modal_t60(config_obj)
+                # Calculate samples based on T60 (reverberation time)
+                # We want to capture the full decay of the modal response
+                self.t60_samples = int(t60_obj * spsf)
+
+                sample_indices = []
+#                print('ModalPlayer get rigidbody_synth: ', self.obj_idx)
+                rigidbody_synth = self.entity_manager.get('rigidbody_synth')
+#                print('ModalPlayer get resonance_synth: ', self.obj_idx)
+                resonance_synth = self.entity_manager.get('resonance_synth')
+                for rb_key in rigidbody_synth.keys():
+                    if rigidbody_synth[rb_key].obj_idx == self.obj_idx:
+                        self.rigidbody_synth = rigidbody_synth[rb_key]
+                        break
+                for re_key in resonance_synth.keys():
+                    if resonance_synth[re_key].obj_idx == self.obj_idx:
+                        self.resonance_synth = resonance_synth[re_key]
+                        break
+#                print('ModalPlayer get score_tracks: ', self.obj_idx)
+                score_tracks = self.entity_manager.get('score_tracks')
+                for idx in score_tracks.keys():
+                    if score_tracks[idx].obj_idx == self.obj_idx:
+                        self.score = score_tracks[idx]
+
+        # Register with sample counter
+        print('Register with sample counter', self.obj_idx)
+        self.sample_counter.register_player(self.player_id)
+        print('ModalPlayer init end: ', self.obj_idx)
+        print('ModalPlayer t60: ', self.t60_samples)
+
+        sound_path = f"{config.system.cache_path}/audio_force"
+        self.sliding_sound, self.scraping_sound, self.rolling_sound = self._load_sound_tracks(sound_path, config_obj.name)
+
+    def compute(self) -> None:
+        """Non-blocking version that works with Blender."""
+        config = self.entity_manager.get('config')
+        for conf_obj in config.objects:
+            if conf_obj.idx == self.obj_idx:
+                config_obj = conf_obj
+
+        coupling_strength = []
+        if isinstance(config_obj.connected, np.ndarray):
+            coupling_strength = config_obj.connected.tolist()
+
+        fracture_frame, is_shard_frame = (None for _ in range(2))
+        if not isinstance(config_obj.fractured, bool):
+            fracture_frame = config_obj.fractured * sample_rate / sfps
+            print('Object: ', config_obj.name, 'fracture at frame', fracture_frame)
+        if not isinstance(config_obj.is_shard, bool):
+            is_shard_frame = config_obj.is_shard * sample_rate / sfps
+            print('Object: ', config_obj.name, 'is shard from frame', is_shard_frame)
+
+        print('ModalPlayer compute: ', self.obj_idx)
+        old_sample_idx = 0
+        sample_idx = self.sample_counter.get_current()
+    
+        # Register a callback that will be called when all players are ready
+        def on_all_ready():
+            """Called when all players have called ready() for the current sample."""
+            nonlocal sample_idx, old_sample_idx
+
+            if (is_shard_frame == None or is_shard_frame <= sample_idx) and (fracture_frame == None or sample_idx <= fracture_frame):
+                # Process the current sample
+                rigidbody_output, resonance_output, sliding_output, scraping_output, rolling_output = (0 for _ in range(5))
+                for event_idx in range(len(self.score)):
+                    if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
+                        resonance_output = self.resonance_synth.process(self.score[event_idx].get_event_at_sample(sample_idx))
+                    rigidbody_output = self.resonance_synth.process(self.score[event_idx].get_event_at_sample(sample_idx))
+                    if self.score[event_idx].type[sample_idx] in [2,3]:
+                        sliding_output = self.sliding_sound[sample_idx] * self.score[event_idx].contact_area[sample_idx]
+                        scraping_output = self.scraping_sound[sample_idx] * self.score[event_idx].contact_area[sample_idx]
+                    elif self.score[event_idx].type[sample_idx] == 4:
+                        rolling_output = self.rolling_sound[sample_idx] * self.score[event_idx].contact_area[sample_idx]
+
+                    self.rigidbody_synth_track[sample_idx] += rigidbody_output if not np.isnan(rigidbody_output) else 0
+                    self.resonance_synth_track[sample_idx] += resonance_output if not np.isnan(resonance_output) else 0
+                    self.sliding_synth_track[sample_idx] += sliding_output if not np.isnan(sliding_output) else 0
+                    self.scraping_synth_track[sample_idx] += scraping_output if not np.isnan(scraping_output) else 0
+                    self.rolling_synth_track[sample_idx] += rolling_output if not np.isnan(rolling_output) else 0
+        
+                # Update sample indices for next iteration
+                old_sample_idx = sample_idx
+                sample_idx = self.sample_counter.get_next(self.player_id)
+    
+        # Register the callback
+        self.sample_counter.register_ready_callback(on_all_ready)
+    
+        # Process samples in a loop (non-blocking)
+        start_time = time.time()
+        while sample_idx < self.sample_counter.total_samples:
+            # Call ready - this will either:
+            # - Return True if all players are ready (sample was advanced and callback executed)
+            # - Return False if we're still waiting for other players
+#            print(self.player_id, 'call ready')
+            all_ready = self.sample_counter.ready(self.player_id)
+        
+            if all_ready:
+                # The callback has already processed this sample
+                # Get the next sample index
+                start_time = time.time()
+                sample_idx = self.sample_counter.get_next(self.player_id)
+            else:
+                if (time.time() - start_time) >= self.timeout:
+                    raise TimeoutError(f"No new sample_idx for {self.timeout} seconds, object:{config_obj.name}, sample_idx:{sample_idx}")
+                time.sleep(self.poll_interval)
+            # Unregister when done
+            if sample_idx >= self.sample_counter.total_samples - 1:
+                self.sample_counter.unregister_player(self.player_id)
+                print(f"Player {self.player_id} finished processing")
+
+    def _get_modal_t60(self, config_obj: Any) -> float:
+        """
+        Get the modal model T60 (reverberation time) for an object.
+
+        Parameters:
+        -----------
+        config_obj : ObjectConfig
+            Object configuration
+
+        Returns:
+        --------
+        float : Maximum T60 value from the modal model (in seconds)
+        """
+        # Get the path to the .lib file
+        cache_path = self.entity_manager.get('config').system.cache_path
+        obj_name = config_obj.name
+        if config_obj.proxy_type is not False:
+            obj_name = f"{config_obj.name}_proxy_{config_obj.proxy_type}"
+        lib_file = f"{cache_path}/dsp/{obj_name}.lib"
+
+        # Parse the .lib file to get modal data
+        modal_data = _parse_lib(lib_file)
+
+        # Get T60 values array
+        t60s = modal_data['t60s']
+
+        # Return the maximum T60 (longest decay time)
+        return float(np.max(t60s))
+
+    def save_synth_tracks(self):
+        self.save_synth_track(self.rigidbody_synth_track, 'rigidbody', True)
+        self.save_synth_track(self.resonance_synth_track, 'resonance')
+        self.save_synth_track(self.sliding_synth_track, 'sliding')
+        self.save_synth_track(self.scraping_synth_track, 'scraping')
+        self.save_synth_track(self.rolling_synth_track, 'rolling')
+
+    def save_synth_track(self, track: np.ndarray, suffix: str, normalize: bool = False):
+        """
+        Save individual tracks as WAV files.
+        Create a json multitrack project file (e.g., for Reaper, Ardour).
+        """
+        config = self.entity_manager.get('config')
+        for conf_obj in config.objects:
+            if conf_obj.idx == self.obj_idx:
+                config_obj = conf_obj
+
+        # skip if track is all zeros
+        if not np.any(track):
+            print(f"Track {suffix} synth track for {config_obj.name} is empty, skipping")
+            return
+
+        # Normalize track
+        track /= np.max(abs(track))
+
+#        bit_depth = int(config.system.bit_depth)
+#        file_format = config.system.file_format
+
+        sample_rate = int(config.system.sample_rate)
+        file_format = 'RAW'
+        subtype = 'FLOAT'
+        track_name = config_obj.name
+        track_file = f"{track_name}_{suffix}.raw"
+
+        project_data = {
+            'object_name': config_obj.name,
+            'sample_rate': sample_rate,
+            'file_format': file_format,
+            'bit_depth': subtype,
+            'duration': track.shape[0] / sample_rate,
+            'track_name': suffix,
+            'vertices': self.rigidbody_vertices if suffix == 'rigidbody' else [],
+            'channels': 1,
+            'position': 0.0
+        }
+
+
+#        if file_format == 'RAW':
+#            track_file = f"{track_name}_{suffix}.raw"
+#        elif file_format == 'FLAC':
+#            track_file = f"{track_name}_{suffix}.raw"
+#        else:
+#            track_file = f"{track_name}_{suffix}.wav"
+#
+#        if file_format == 'FLAC' and bit_depth in ['FLOAT', 'DOUBLE', '32']:
+#            subtype = 'PCM_24'
+#        elif file_format == 'FLAC' and bit_depth in ['24', '16']:
+#            subtype = 'PCM_'
+#            subtype += bit_depth
+#        elif bit_depth in ['FLOAT', 'DOUBLE']:
+#            subtype = bit_depth
+#        elif bit_depth in ['32', '24', '16']:
+#            subtype = 'PCM_'
+#            subtype += bit_depth
+
+#        # Normalize between -1.0 and 1.0 for PCM_
+#        if bit_depth in ['32', '24', '16']:
+#            track /= np.max(abs(track))
+#            track *= int((2**int(bit_depth))/2) - 1
+            
+        wave_file = f"{self.output_dir}/{track_file}"
+        sf.write(wave_file, track, sample_rate, subtype=subtype)
+        print(f"Saved {track_name} tracks to {self.output_dir}")
+
+        # Save project file
+        json_file = f"{self.output_dir}/{config_obj.name}_{suffix}.json"
+        with open(json_file, 'w') as f:
+            json.dump(project_data, f, indent=2)
+
+        print(f"Created {suffix} synth track project: {json_file}")
+
+    def _load_sound_tracks(self, sound_path: str, obj_name: str):
+        sliding_sound = np.zeros(self.sample_counter.total_samples, dtype=np.float32)
+        scraping_sound = np.zeros(self.sample_counter.total_samples, dtype=np.float32)
+        rolling_sound = np.zeros(self.sample_counter.total_samples, dtype=np.float32)
+
+        if os.path.exists(f"{sound_path}/{obj_name}_sliding_sound.raw"):
+            sliding_sound = np.fromfile(f"{sound_path}/{obj_name}_sliding_sound.raw", dtype=np.float32)
+        if os.path.exists(f"{sound_path}/{obj_name}_scraping_sound.raw"):
+            scraping_sound = np.fromfile(f"{sound_path}/{obj_name}_scraping_sound.raw", dtype=np.float32)
+        if os.path.exists(f"{sound_path}/{obj_name}_rolling_sound.raw"):
+            rolling_sound = np.fromfile(f"{sound_path}/{obj_name}_rolling_sound.raw", dtype=np.float32)
+
+        return sliding_sound, scraping_sound, rolling_sound
