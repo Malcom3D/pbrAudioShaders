@@ -104,7 +104,7 @@ class ModalComposer:
                 final_vertex_ids1[mixed_mask1] = event_track1.vertex_ids[mixed_mask1]
                 final_force1[mixed_mask1] = np.divide(force1[force_type][mixed_mask1], n_vertex_ids1[mixed_mask1], out=np.zeros_like(force1[force_type][mixed_mask1]), where=n_vertex_ids1[mixed_mask1] != 0)
 
-            score_track1_final.add_event(ScoreEvent(coll_obj=obj2_idx, vertex_ids=final_vertex_ids1, type=final_type1, contact_area=final_contact_area1 force=final_force1, coupling_data=final_coupling_data1))
+            score_track1_final.add_event(ScoreEvent(coll_obj=obj2_idx, vertex_ids=final_vertex_ids1, type=final_type1, contact_area=final_contact_area1, force=final_force1, coupling_data=final_coupling_data1))
 
             # score_track2_final
             type_mask2 = event_track2.type == force_type
@@ -123,7 +123,7 @@ class ModalComposer:
                 final_vertex_ids1[mixed_mask2] = event_track2.vertex_ids[mixed_mask2]
                 final_force2[mixed_mask2] = np.divide(force2[force_type][mixed_mask2], n_vertex_ids2[mixed_mask2], out=np.zeros_like(force2[force_type][mixed_mask2]), where=n_vertex_ids2[mixed_mask2] != 0)
 
-            score_track2_final.add_event(ScoreEvent(coll_obj=obj1_idx, vertex_ids=final_vertex_ids2, type=final_type2, contact_area=event_track2.contact_area, force=final_force2, coupling_data=final_coupling_data2))
+            score_track2_final.add_event(ScoreEvent(coll_obj=obj1_idx, vertex_ids=final_vertex_ids2, type=final_type2, contact_area=final_contact_area2, force=final_force2, coupling_data=final_coupling_data2))
 
     def _load_audioforce_tracks(self, forces_path: str, obj_name: str) -> Tuple[np.ndarray, np.ndarray]:
         """Load and list audio-force tracks for obj_name in forces_path"""
