@@ -123,13 +123,13 @@ class ModalPlayer:
             print('Object: ', config_obj.name, 'is shard from frame', is_shard_frame)
 
         print('ModalPlayer compute: ', self.obj_idx)
-        old_sample_idx = 0
+        t60_empty, old_sample_idx = (0 for _ in range(2))
         sample_idx = self.sample_counter.get_current()
     
         # Register a callback that will be called when all players are ready
         def on_all_ready():
             """Called when all players have called ready() for the current sample."""
-            nonlocal sample_idx, old_sample_idx
+            nonlocal sample_idx, old_sample_idx, t60_empty
 
             # Process the current sample
             if (is_shard_frame == None or is_shard_frame <= sample_idx) and (fracture_frame == None or sample_idx <= fracture_frame):
@@ -139,14 +139,26 @@ class ModalPlayer:
                 # Process events at current sample
                 for event in self.score.events:
                     synth_type, vertex_ids, input_force, contact_area, coupling_data = event.get_event_at_sample(sample_idx)
-                    if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
-                        resonance_output += self.resonance_synth.process(synth_type, vertex_ids, input_force, contact_area, coupling_data)
-                    rigidbody_output += self.rigidbody_synth.process(synth_type, vertex_ids, input_force, contact_area, coupling_data)
-                    if event.type[sample_idx] in [2,3]:
-                        sliding_output += self.sliding_sound[sample_idx] * contact_area
-                        scraping_output += self.scraping_sound[sample_idx] * contact_area
-                    elif event.type[sample_idx] == 4:
-                        rolling_output += self.rolling_sound[sample_idx] * contact_area
+                    # Modal sound
+                    if event.type[sample_idx] in [1,2,3,4]:
+                        if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
+                            resonance_output += self.resonance_synth.process(synth_type, vertex_ids, input_force, contact_area, coupling_data)
+                        rigidbody_output += self.rigidbody_synth.process(synth_type, vertex_ids, input_force, contact_area, coupling_data)
+                        # Noise
+                        if event.type[sample_idx] in [2,3]:
+                            sliding_output += self.sliding_sound[sample_idx] * contact_area
+                            scraping_output += self.scraping_sound[sample_idx] * contact_area
+                        elif event.type[sample_idx] == 4:
+                            rolling_output += self.rolling_sound[sample_idx] * contact_area
+                        t60_empty = 0
+                    # Sound decay
+                    elif event.type[sample_idx] in [0,6]: # ToDo: add non contact sound synth for type == 0
+                        if t60_empty < self.t60_samples:
+                            for event_type in [1,2,3,4]:
+                                if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
+                                    resonance_output += self.resonance_synth.process(event_type, vertex_ids, input_force, contact_area, coupling_data)
+                                rigidbody_output += self.rigidbody_synth.process(event_type, vertex_ids, input_force, contact_area, coupling_data)
+                            t60_empty += 1
 
                 self.rigidbody_synth_track[sample_idx] += rigidbody_output if not np.isnan(rigidbody_output) else 0
                 self.resonance_synth_track[sample_idx] += resonance_output if not np.isnan(resonance_output) else 0

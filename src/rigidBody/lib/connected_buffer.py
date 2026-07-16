@@ -24,7 +24,7 @@ from physicsSolver import EntityManager
 
 @dataclass
 class ConnectedBuffer:
-    objs_buffer: np.ndarray = field(default_factory=lambda: np.array([]))
+    objs_buffer: np.ndarray = field(default_factory=lambda: np.array([], dtype=np.float64))
 
     def add_obj(self, obj_idx: int):
         new_inst = 1 + obj_idx - self.objs_buffer.shape[0]
@@ -32,9 +32,9 @@ class ConnectedBuffer:
             buffer_type = [0 for _ in range(7)]
             for _ in range(new_inst):
                 if len(self.objs_buffer.tolist()) == 0:
-                    self.objs_buffer = np.array([buffer_type])
+                    self.objs_buffer = np.array([buffer_type], dtype=np.float64)
                 else:
-                    self.objs_buffer = np.array(self.objs_buffer.tolist() + [buffer_type])
+                    self.objs_buffer = np.array(self.objs_buffer.tolist() + [buffer_type], dtype=np.float64)
 
     def read_for_obj(self, obj_idx: int, synth_type: int):
         sample_value = self.objs_buffer[obj_idx][synth_type]
