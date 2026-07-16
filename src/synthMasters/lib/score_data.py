@@ -33,7 +33,7 @@ class ScoreEvent:
 
     def get_event_at_sample(self, sample_idx: int):
         """Get all events at a specific sample index."""
-        return self.type[sample_idx], np.unique(np.nonzero(self.vertex_ids[sample_idx])).tolist(), self.force[sample_idx], self.contact_area[sample_idx], (self.coll_obj, self.coupling_data[sample_idx])
+        return self.type[sample_idx], np.unique(np.nonzero(self.vertex_ids[sample_idx])).tolist(), self.force[sample_idx], self.contact_area[sample_idx], [self.coll_obj, self.coupling_data[sample_idx]]
 
 @dataclass
 class ScoreTrack:

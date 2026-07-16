@@ -32,7 +32,7 @@ class ModalPlayer:
     entity_manager: EntityManager
     obj_idx: int
     player_id: int = None
-    score: List = field(default_factory=list)
+#    score: List = field(default_factory=list)
 
     def __post_init__(self):
         print('ModalPlayer init: ', self.obj_idx)
@@ -91,7 +91,7 @@ class ModalPlayer:
 #                print('ModalPlayer get score_tracks: ', self.obj_idx)
                 score_tracks = self.entity_manager.get('score_tracks')
                 for idx in score_tracks.keys():
-                    if score_tracks[idx].obj_idx == self.obj_idx:
+                    if score_tracks[idx].obj_idx == self.obj_idx and score_tracks[idx].is_final:
                         self.score = score_tracks[idx]
 
         # Register with sample counter
@@ -123,32 +123,48 @@ class ModalPlayer:
             print('Object: ', config_obj.name, 'is shard from frame', is_shard_frame)
 
         print('ModalPlayer compute: ', self.obj_idx)
-        old_sample_idx = 0
+        t60_empty, old_sample_idx = (0 for _ in range(2))
         sample_idx = self.sample_counter.get_current()
     
         # Register a callback that will be called when all players are ready
         def on_all_ready():
             """Called when all players have called ready() for the current sample."""
-            nonlocal sample_idx, old_sample_idx
+            nonlocal sample_idx, old_sample_idx, t60_empty
 
+            # Process the current sample
             if (is_shard_frame == None or is_shard_frame <= sample_idx) and (fracture_frame == None or sample_idx <= fracture_frame):
-                # Process the current sample
+                # init var for the current sample
                 rigidbody_output, resonance_output, sliding_output, scraping_output, rolling_output = (0 for _ in range(5))
-                for event_idx in range(len(self.score)):
-                    if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
-                        resonance_output = self.resonance_synth.process(self.score[event_idx].get_event_at_sample(sample_idx))
-                    rigidbody_output = self.resonance_synth.process(self.score[event_idx].get_event_at_sample(sample_idx))
-                    if self.score[event_idx].type[sample_idx] in [2,3]:
-                        sliding_output = self.sliding_sound[sample_idx] * self.score[event_idx].contact_area[sample_idx]
-                        scraping_output = self.scraping_sound[sample_idx] * self.score[event_idx].contact_area[sample_idx]
-                    elif self.score[event_idx].type[sample_idx] == 4:
-                        rolling_output = self.rolling_sound[sample_idx] * self.score[event_idx].contact_area[sample_idx]
 
-                    self.rigidbody_synth_track[sample_idx] += rigidbody_output if not np.isnan(rigidbody_output) else 0
-                    self.resonance_synth_track[sample_idx] += resonance_output if not np.isnan(resonance_output) else 0
-                    self.sliding_synth_track[sample_idx] += sliding_output if not np.isnan(sliding_output) else 0
-                    self.scraping_synth_track[sample_idx] += scraping_output if not np.isnan(scraping_output) else 0
-                    self.rolling_synth_track[sample_idx] += rolling_output if not np.isnan(rolling_output) else 0
+                # Process events at current sample
+                for event in self.score.events:
+                    synth_type, vertex_ids, input_force, contact_area, coupling_data = event.get_event_at_sample(sample_idx)
+                    # Modal sound
+                    if event.type[sample_idx] in [1,2,3,4]:
+                        if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
+                            resonance_output += self.resonance_synth.process(synth_type, vertex_ids, input_force, contact_area, coupling_data)
+                        rigidbody_output += self.rigidbody_synth.process(synth_type, vertex_ids, input_force, contact_area, coupling_data)
+                        # Noise
+                        if event.type[sample_idx] in [2,3]:
+                            sliding_output += self.sliding_sound[sample_idx] * contact_area
+                            scraping_output += self.scraping_sound[sample_idx] * contact_area
+                        elif event.type[sample_idx] == 4:
+                            rolling_output += self.rolling_sound[sample_idx] * contact_area
+                        t60_empty = 0
+                    # Sound decay
+                    elif event.type[sample_idx] in [0,6]: # ToDo: add non contact sound synth for type == 0
+                        if t60_empty < self.t60_samples:
+                            for event_type in [1,2,3,4]:
+                                if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
+                                    resonance_output += self.resonance_synth.process(event_type, vertex_ids, input_force, contact_area, coupling_data)
+                                rigidbody_output += self.rigidbody_synth.process(event_type, vertex_ids, input_force, contact_area, coupling_data)
+                            t60_empty += 1
+
+                self.rigidbody_synth_track[sample_idx] += rigidbody_output if not np.isnan(rigidbody_output) else 0
+                self.resonance_synth_track[sample_idx] += resonance_output if not np.isnan(resonance_output) else 0
+                self.sliding_synth_track[sample_idx] += sliding_output if not np.isnan(sliding_output) else 0
+                self.scraping_synth_track[sample_idx] += scraping_output if not np.isnan(scraping_output) else 0
+                self.rolling_synth_track[sample_idx] += rolling_output if not np.isnan(rolling_output) else 0
         
                 # Update sample indices for next iteration
                 old_sample_idx = sample_idx
@@ -159,7 +175,7 @@ class ModalPlayer:
     
         # Process samples in a loop (non-blocking)
         start_time = time.time()
-        while sample_idx < self.sample_counter.total_samples:
+        while sample_idx < self.sample_counter.total_samples - 1:
             # Call ready - this will either:
             # - Return True if all players are ready (sample was advanced and callback executed)
             # - Return False if we're still waiting for other players
