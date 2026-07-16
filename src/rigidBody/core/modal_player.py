@@ -140,19 +140,19 @@ class ModalPlayer:
                 for event in self.score.events:
                     synth_type, vertex_ids, input_force, contact_area, coupling_data = event.get_event_at_sample(sample_idx)
                     # Modal sound
-                    if event.type[sample_idx] in [1,2,3,4]:
+                    if synth_type in [1,2,3,4]:
                         if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
                             resonance_output += self.resonance_synth.process(synth_type, vertex_ids, input_force, contact_area, coupling_data)
                         rigidbody_output += self.rigidbody_synth.process(synth_type, vertex_ids, input_force, contact_area, coupling_data)
                         # Noise
-                        if event.type[sample_idx] in [2,3]:
-                            sliding_output += self.sliding_sound[sample_idx] * contact_area
+                        if synth_type in [2,3]:
                             scraping_output += self.scraping_sound[sample_idx] * contact_area
-                        elif event.type[sample_idx] == 4:
+                            sliding_output += self.sliding_sound[sample_idx] * contact_area
+                        if synth_type == 4:
                             rolling_output += self.rolling_sound[sample_idx] * contact_area
                         t60_empty = 0
                     # Sound decay
-                    elif event.type[sample_idx] in [0,6]: # ToDo: add non-contact sound synth for type == 0
+                    elif synth_type in [0,6]: # ToDo: add non-contact sound synth for type == 0
                         if t60_empty < self.t60_samples:
                             for event_type in [1,2,3,4]:
                                 if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):

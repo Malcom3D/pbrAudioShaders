@@ -78,10 +78,12 @@ class rigidBodyEngine:
 #                trajectories_idx = 0
                 for filename in os.listdir(f"{self.trajectories_dir}"):
                     if filename.endswith('.pkl'):
-                        trajectories = TrajectoryData.load(f"{self.trajectories_dir}/{filename}")
-                        _ = self.entity_manager.register('trajectories', trajectories)
+                        trajectory = TrajectoryData.load(f"{self.trajectories_dir}/{filename}")
+                        _ = self.entity_manager.register('trajectories', trajectory)
 #                        self.entity_manager.register('trajectories', trajectories, trajectories_idx)
 #                        trajectories_idx += 1
+
+        trajectories = self.entity_manager.get('trajectories')
         for t_idx in trajectories.keys():
             if not trajectories[t_idx].static:
                 trajectory = trajectories[t_idx]

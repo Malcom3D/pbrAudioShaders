@@ -16,18 +16,9 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import os
 import numpy as np
 from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass, field
-from scipy.spatial import ConvexHull, cKDTree
-from scipy.interpolate import CubicSpline
-import trimesh
-
-from physicsSolver import EntityManager
-from physicsSolver.lib.functions import _parse_lib, _load_mesh
-from physicsSolver.lib.trajectory_data import TrajectoryData
-from physicsSolver.lib.force_data import ForceDataSequence, ContactType
 
 @dataclass
 class ModalRadiator:

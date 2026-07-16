@@ -50,8 +50,8 @@ class ModalComposer:
                 config_obj = conf_obj
                 force, coupling_strength = self._load_audioforce_tracks(total_samples=total_samples, forces_path=forces_path, obj_name=config_obj.name)
 
-        for event in score_track.events:
-            obj2_idx = event.coll_obj
+        for event_track in score_track.events:
+            obj2_idx = event_track.coll_obj
 
             mixed_mask = event_track.type == 5
             for force_type in range(1, 5):
@@ -62,22 +62,22 @@ class ModalComposer:
                 final_force = np.zeros_like(coupling_strength)
                 final_coupling_data = np.zeros_like(coupling_strength)
 
-            # score_track_final
-            type_mask = event_track.type == force_type
-            n_vertex_ids = np.count_nonzero(event_track.vertex_ids, axis=1)
+                # score_track_final
+                type_mask = event_track.type == force_type
+                n_vertex_ids = np.count_nonzero(event_track.vertex_ids, axis=1)
 
-            final_type[type_mask] = force_type
-            final_coupling_data[type_mask] = coupling_strength1[type_mask]
-            final_contact_area[type_mask] = event_track.contact_area[type_mask]
-            final_vertex_ids[type_mask.reshape(-1,)] = event_track.vertex_ids[type_mask.reshape(-1,)]
-            final_force1[type_mask] = np.divide(force[force_type][type_mask], n_vertex_ids[type_mask.reshape(-1,)], out=np.zeros_like(force[force_type][type_mask]), where=n_vertex_ids[type_mask.reshape(-1,)] != 0)
+                final_type[type_mask] = force_type
+                final_coupling_data[type_mask] = coupling_strength[type_mask]
+                final_contact_area[type_mask] = event_track.contact_area[type_mask]
+                final_vertex_ids[type_mask.reshape(-1,)] = event_track.vertex_ids[type_mask.reshape(-1,)]
+                final_force[type_mask] = np.divide(force[force_type][type_mask], n_vertex_ids[type_mask.reshape(-1,)], out=np.zeros_like(force[force_type][type_mask]), where=n_vertex_ids[type_mask.reshape(-1,)] != 0)
 
-            if force_type in [2,3,4]:
-                final_type[mixed_mask] = force_type
-                final_coupling_data[mixed_mask] = coupling_strength[mixed_mask]
-                final_contact_area[mixed_mask] = event_track.contact_area[mixed_mask]
-                final_vertex_ids[mixed_mask.reshape(-1,)] = event_track.vertex_ids[mixed_mask.reshape(-1,)]
-                final_force[mixed_mask] = np.divide(force[force_type][mixed_mask], n_vertex_ids[mixed_mask.reshape(-1,)], out=np.zeros_like(force[force_type][mixed_mask]), where=n_vertex_ids[mixed_mask.reshape(-1,)] != 0)
+                if force_type in [2,3,4]:
+                    final_type[mixed_mask] = force_type
+                    final_coupling_data[mixed_mask] = coupling_strength[mixed_mask]
+                    final_contact_area[mixed_mask] = event_track.contact_area[mixed_mask]
+                    final_vertex_ids[mixed_mask.reshape(-1,)] = event_track.vertex_ids[mixed_mask.reshape(-1,)]
+                    final_force[mixed_mask] = np.divide(force[force_type][mixed_mask], n_vertex_ids[mixed_mask.reshape(-1,)], out=np.zeros_like(force[force_type][mixed_mask]), where=n_vertex_ids[mixed_mask.reshape(-1,)] != 0)
 
             score_track_final.add_event(ScoreEvent(coll_obj=obj2_idx, type=final_type, vertex_ids=final_vertex_ids, contact_area=final_contact_area, force=final_force, coupling_data=final_coupling_data))
 
