@@ -152,7 +152,7 @@ class ModalPlayer:
                             rolling_output += self.rolling_sound[sample_idx] * contact_area
                         t60_empty = 0
                     # Sound decay
-                    elif event.type[sample_idx] in [0,6]: # ToDo: add non contact sound synth for type == 0
+                    elif event.type[sample_idx] in [0,6]: # ToDo: add non-contact sound synth for type == 0
                         if t60_empty < self.t60_samples:
                             for event_type in [1,2,3,4]:
                                 if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):

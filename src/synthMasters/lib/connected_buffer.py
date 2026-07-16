@@ -24,17 +24,22 @@ from physicsSolver import EntityManager
 
 @dataclass
 class ConnectedBuffer:
-    objs_buffer: np.ndarray = field(default_factory=lambda: np.array([], dtype=np.float64))
+    objs_buffer: np.ndarray = field(default_factory=lambda: np.zeros((1,7), dtype=np.float32))
 
     def add_obj(self, obj_idx: int):
-        new_inst = 1 + obj_idx - self.objs_buffer.shape[0]
-        if new_inst > 0:
-            buffer_type = [0 for _ in range(7)]
-            for _ in range(new_inst):
-                if len(self.objs_buffer.tolist()) == 0:
-                    self.objs_buffer = np.array([buffer_type], dtype=np.float64)
-                else:
-                    self.objs_buffer = np.array(self.objs_buffer.tolist() + [buffer_type], dtype=np.float64)
+        if obj_idx >= self.objs_buffer.shape[0]:
+            # Expand buffer
+            new_buffer = np.zeros((obj_idx+1,7), dtype=np.float32)
+            new_buffer[:self.objs_buffer.shape[0], :] = self.objs_buffer
+            self.objs_buffer = new_buffer
+#        new_inst = 1 + obj_idx - self.objs_buffer.shape[0]
+#        if new_inst > 0:
+#            buffer_type = [0 for _ in range(7)]
+#            for _ in range(new_inst):
+#                if len(self.objs_buffer.tolist()) == 0:
+#                    self.objs_buffer = np.array([buffer_type], dtype=np.float64)
+#                else:
+#                    self.objs_buffer = np.array(self.objs_buffer.tolist() + [buffer_type], dtype=np.float64)
 
     def read_for_obj(self, obj_idx: int, synth_type: int):
         sample_value = self.objs_buffer[obj_idx][synth_type]

@@ -25,7 +25,7 @@ from typing import List, Tuple, Dict, Any, Optional
 class ScoreEvent:
     """Represents the score for a single collision"""
     coll_obj: int
-    type: np.ndarray # shape(total_samples,1)
+    type: np.ndarray # shape(total_samples,1, dtype=np.int32)
     vertex_ids: np.ndarray  # shape(total_samples,n_vertices)
     contact_area: np.ndarray = None # shape(total_samples,1)
     force: np.ndarray = None # shape(total_samples,1) Excitation force magnitude
@@ -41,6 +41,7 @@ class ScoreTrack:
     obj_idx: int
     obj_name: str
     is_final: bool = False
+    total_samples: int = None
     events: List[ScoreEvent] = field(default_factory=list)
 
     def add_event(self, event: ScoreEvent) -> None:

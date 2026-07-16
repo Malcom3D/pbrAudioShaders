@@ -146,11 +146,11 @@ class rigidBodyEngine:
         # Init per object final score track
         config = self.entity_manager.get('config')
         for config_obj in config.objects:
-            score_track_final = ScoreTrack(obj_idx=config_obj.idx, obj_name=config_obj.name, is_final=True)
+            score_track_final = ScoreTrack(obj_idx=config_obj.idx, obj_name=config_obj.name, is_final=True, total_samples=self.total_samples)
             _ = self.entity_manager.register('score_tracks', score_track_final)
 
         collisions = self.entity_manager.get('collisions')
-        tasks_composer = [self.prebake_composer(collisions[collision_idx]) for collision_idx in collisions.keys()]
+        tasks_composer = [self.prebake_composer(config_obj.idx) for config_obj in config.objects]
         results_composer = compute(*tasks_composer)
         _update_status(f"{self.status_dir}/prebake", 90)
 
