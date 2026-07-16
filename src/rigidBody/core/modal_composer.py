@@ -72,13 +72,6 @@ class ModalComposer:
                 config_obj2 = conf_obj
                 force2, coupling_strength2 = self._load_audioforce_tracks(total_samples=total_samples, forces_path=forces_path, obj_name=config_obj2.name)
 
-        if score_track1_final == []:
-            score_track1_final = ScoreTrack(obj_idx=obj1_idx, obj_name=config_obj1.name, is_final=True)
-            _ = self.entity_manager.register('score_tracks', score_track1_final)
-        if score_track2_final == []:
-            score_track2_final = ScoreTrack(obj_idx=obj2_idx, obj_name=config_obj2.name, is_final=True)
-            _ = self.entity_manager.register('score_tracks', score_track2_final)
-
         mixed_mask1 = event_track1.type == 5
         mixed_mask2 = event_track2.type == 5
         for force_type in range(1, 5):

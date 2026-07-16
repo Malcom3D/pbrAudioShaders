@@ -82,6 +82,11 @@ class rigidBodyEngine:
                         _ = self.entity_manager.register('trajectories', trajectories)
 #                        self.entity_manager.register('trajectories', trajectories, trajectories_idx)
 #                        trajectories_idx += 1
+        for t_idx in trajectories.keys():
+            if not trajectories[t_idx].static:
+                trajectory = trajectories[t_idx]
+                self.total_samples = int(trajectory.get_x()[-1])
+                break
 
         collisions = self.entity_manager.get('collisions')
         if len(collisions) == 0:
@@ -138,6 +143,12 @@ class rigidBodyEngine:
         results_proxy = compute(*tasks_proxy)
         _update_status(f"{self.status_dir}/prebake", 45)
 
+        # Init per object final score track
+        config = self.entity_manager.get('config')
+        for config_obj in config.objects:
+            score_track_final = ScoreTrack(obj_idx=config_obj.idx, obj_name=config_obj.name, is_final=True)
+            _ = self.entity_manager.register('score_tracks', score_track_final)
+
         collisions = self.entity_manager.get('collisions')
         tasks_composer = [self.prebake_composer(collisions[collision_idx]) for collision_idx in collisions.keys()]
         results_composer = compute(*tasks_composer)
@@ -162,21 +173,7 @@ class rigidBodyEngine:
         connected_buffer = ConnectedBuffer()
         _ = self.entity_manager.register('connected_buffer', connected_buffer)
         sample_counter = SampleCounter(status_file=f"{self.status_dir}/bake")
-        trajectories = self.entity_manager.get('trajectories')
-        if len(trajectories) == 0: 
-            if os.path.exists(self.trajectories_dir):
-                filenames = os.listdir(self.trajectories_dir)
-                for filename in filenames:
-                    trajectory = TrajectoryData.load(f"{self.trajectories_dir}/{filename}")
-                    if not trajectory.static:
-                        break
-        else:
-            for t_idx in trajectories.keys():
-                if not trajectories[t_idx].static:
-                    trajectory = trajectories[t_idx]
-                    break
-
-        sample_counter.set_total_samples(int(trajectory.get_x()[-1]))
+        sample_counter.set_total_samples(self.total_samples)
         _ = self.entity_manager.register('sample_counter', sample_counter)
 
         tasks_luthier = [self.bake_luthier(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
