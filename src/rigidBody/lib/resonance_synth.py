@@ -63,11 +63,13 @@ class ResonanceSynth:
                 contact_area_scale = self.contact_area_scale if not self.contact_area_scale == None else contact_area * len(vertex_ids)
                 excitation = vibration_signal * contact_area_scale * type_scale
             output_banks += self.banks[idx].process(excitation + input_buffer)
-        if isinstance(other_objs, list):
-            for other_idx in range(len(other_objs)):
-                other_obj_idx, coupling_strength = other_objs[other_idx]
+#        if isinstance(other_objs, list):
+#            for other_idx in range(len(other_objs)):
+#                other_obj_idx, coupling_strength = other_objs[other_idx]
 #                print('ResonanceSynth: ', self.obj_idx, output_banks, coupling_strength * output_banks)
-                self.connected_buffer.write_to_obj(int(other_obj_idx), synth_type, coupling_strength * excitation)
+#                self.connected_buffer.write_to_obj(int(other_obj_idx), synth_type, coupling_strength * excitation)
+        other_obj_idx, coupling_strength = other_objs
+        self.connected_buffer.write_to_obj(int(other_obj_idx), synth_type, coupling_strength * excitation)
         return output_banks
 
     def get_banks_state(self) -> List[Union[int, Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]]]:

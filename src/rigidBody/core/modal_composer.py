@@ -74,20 +74,21 @@ class ModalComposer:
 
         if score_track1_final == []:
             score_track1_final = ScoreTrack(obj_idx=obj1_idx, obj_name=config_obj1.name, is_final=True)
-            _ = self.entity_manager.register('score_track', score_track1_final)
+            _ = self.entity_manager.register('score_tracks', score_track1_final)
         if score_track2_final == []:
             score_track2_final = ScoreTrack(obj_idx=obj2_idx, obj_name=config_obj2.name, is_final=True)
-            _ = self.entity_manager.register('score_track', score_track2_final)
+            _ = self.entity_manager.register('score_tracks', score_track2_final)
 
         mixed_mask1 = event_track1.type == 5
         mixed_mask2 = event_track2.type == 5
         for force_type in range(1, 5):
             # init zeros array
             final_type1, final_type2 = (np.zeros_like(event_track1.type) for _ in range(2))
-            final_vertex_ids1, final_vertex_ids2 = (np.zeros_like(event_track1.vertex_ids) for _ in range(2))
+            final_vertex_ids1 = np.zeros_like(event_track1.vertex_ids)
+            final_vertex_ids2 = np.zeros_like(event_track2.vertex_ids)
             final_contact_area1, final_contact_area2 = (np.zeros_like(event_track1.contact_area) for _ in range(2))
             final_force1, final_force2 = (np.zeros_like(coupling_strength1) for _ in range(2))
-            final_coupling_data1, final_final_coupling_data2 = (np.zeros_like(coupling_strength1) for _ in range(2))
+            final_coupling_data1, final_coupling_data2 = (np.zeros_like(coupling_strength1) for _ in range(2))
 
             # score_track1_final
             type_mask1 = event_track1.type == force_type
@@ -106,7 +107,7 @@ class ModalComposer:
                 final_vertex_ids1[mixed_mask1.reshape(-1,)] = event_track1.vertex_ids[mixed_mask1.reshape(-1,)]
                 final_force1[mixed_mask1] = np.divide(force1[force_type][mixed_mask1], n_vertex_ids1[mixed_mask1.reshape(-1,)], out=np.zeros_like(force1[force_type][mixed_mask1]), where=n_vertex_ids1[mixed_mask1.reshape(-1,)] != 0)
 
-            score_track1_final.add_event(ScoreEvent(coll_obj=obj2_idx, vertex_ids=final_vertex_ids1, type=final_type1, contact_area=final_contact_area1, force=final_force1, coupling_data=final_coupling_data1))
+            score_track1_final.add_event(ScoreEvent(coll_obj=obj2_idx, type=final_type1, vertex_ids=final_vertex_ids1, contact_area=final_contact_area1, force=final_force1, coupling_data=final_coupling_data1))
 
             # score_track2_final
             type_mask2 = event_track2.type == force_type
@@ -122,10 +123,10 @@ class ModalComposer:
                 final_type2[mixed_mask2] = force_type
                 final_coupling_data2[mixed_mask2] = coupling_strength2[mixed_mask2]
                 final_contact_area2[mixed_mask2] = event_track2.contact_area[mixed_mask2]
-                final_vertex_ids1[mixed_mask2.reshape(-1,)] = event_track2.vertex_ids[mixed_mask2.reshape(-1,)]
+                final_vertex_ids2[mixed_mask2.reshape(-1,)] = event_track2.vertex_ids[mixed_mask2.reshape(-1,)]
                 final_force2[mixed_mask2] = np.divide(force2[force_type][mixed_mask2], n_vertex_ids2[mixed_mask2.reshape(-1,)], out=np.zeros_like(force2[force_type][mixed_mask2]), where=n_vertex_ids2[mixed_mask2.reshape(-1,)] != 0)
 
-            score_track2_final.add_event(ScoreEvent(coll_obj=obj1_idx, vertex_ids=final_vertex_ids2, type=final_type2, contact_area=final_contact_area2, force=final_force2, coupling_data=final_coupling_data2))
+            score_track2_final.add_event(ScoreEvent(coll_obj=obj1_idx, type=final_type2, vertex_ids=final_vertex_ids2, contact_area=final_contact_area2, force=final_force2, coupling_data=final_coupling_data2))
 
     def _load_audioforce_tracks(self, total_samples: int, forces_path: str, obj_name: str) -> Tuple[np.ndarray, np.ndarray]:
         """Load and list audio-force tracks for obj_name in forces_path"""

@@ -46,11 +46,13 @@ class RigidBodySynth:
         input_buffer = self.connected_buffer.read_for_obj(self.obj_idx, synth_type)
         for idx in range(len(vertex_ids)):
             output_banks += self.banks[vertex_ids[idx]].process(input_force + input_buffer)
-        if isinstance(other_objs, list):
-            for other_idx in range(len(other_objs)):
-                other_obj_idx, coupling_strength = other_objs[other_idx]
-                self.connected_buffer.write_to_obj(int(other_obj_idx), synth_type, coupling_strength * input_force)
-        #print('RigidBodySynth: ', self.obj_idx, output_banks)
+#        if isinstance(other_objs, list):
+#            for other_idx in range(len(other_objs)):
+#                other_obj_idx, coupling_strength = other_objs[other_idx]
+#                self.connected_buffer.write_to_obj(int(other_obj_idx), synth_type, coupling_strength * input_force)
+#        #print('RigidBodySynth: ', self.obj_idx, output_banks)
+        other_obj_idx, coupling_strength = other_objs
+        self.connected_buffer.write_to_obj(int(other_obj_idx), synth_type, coupling_strength * input_force)
         return output_banks 
 
     def get_banks_state(self) -> List[Union[int, Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]]]:
