@@ -312,10 +312,10 @@ class ModalPlayer:
         rolling_sound = np.zeros(self.sample_counter.total_samples, dtype=np.float32)
 
         if os.path.exists(f"{sound_path}/{obj_name}_sliding_sound.raw"):
-            sliding_sound = np.fromfile(f"{sound_path}/{obj_name}_sliding_sound.raw", dtype=np.float32)
+            sliding_sound += np.fromfile(f"{sound_path}/{obj_name}_sliding_sound.raw", dtype=np.float32)
         if os.path.exists(f"{sound_path}/{obj_name}_scraping_sound.raw"):
-            scraping_sound = np.fromfile(f"{sound_path}/{obj_name}_scraping_sound.raw", dtype=np.float32)
+            scraping_sound += np.fromfile(f"{sound_path}/{obj_name}_scraping_sound.raw", dtype=np.float32)
         if os.path.exists(f"{sound_path}/{obj_name}_rolling_sound.raw"):
-            rolling_sound = np.fromfile(f"{sound_path}/{obj_name}_rolling_sound.raw", dtype=np.float32)
+            rolling_sound += np.fromfile(f"{sound_path}/{obj_name}_rolling_sound.raw", dtype=np.float32)
 
         return sliding_sound, scraping_sound, rolling_sound
