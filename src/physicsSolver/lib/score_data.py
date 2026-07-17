@@ -16,6 +16,7 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import gzip
 import pickle
 import numpy as np
 from dataclasses import dataclass, field
@@ -50,14 +51,14 @@ class ScoreTrack:
 
     def save(self, filepath: str) -> None:
         """
-        Save the ScoreTrack to a pickle file.
+        Save the ScoreTrack to a gzip pickle file.
 
         Args:
             filepath: Path to save the JSON file
             indent: JSON indentation level (None for compact format)
         """
 
-        with open(filepath, 'wb') as f:
+        with gzip.open(filepath, 'wb', compresslevel=9) as f:
             pickle.dump(self, f)
    
     @classmethod
@@ -71,7 +72,7 @@ class ScoreTrack:
         Returns:
             Loaded ScoreTrack instance
         """
-        with open(filepath, 'rb') as f:
+        with gzip.open(filepath, 'rb') as f:
             obj = pickle.load(f)
 
         return obj
