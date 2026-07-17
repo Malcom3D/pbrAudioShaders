@@ -61,7 +61,7 @@ class ProxyMesh:
             if config_obj.idx == obj_idx:
                 if config_obj.proxy_type is not False:
                     print(f"Creating proxy mesh for {config_obj.name} idx={config_obj.idx} proxy_type={config_obj.proxy_type}")
-                    self._create_pro_proxy_sequence(config_obj)
+                    self._create_proxy_sequence(config_obj)
                     proxy_objects.append(config_obj.idx)
 
         return proxy_objects
