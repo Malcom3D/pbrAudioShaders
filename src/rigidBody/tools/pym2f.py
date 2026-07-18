@@ -17,6 +17,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import os, sys
+import re
 import stat
 import numpy as np
 import shutil
@@ -77,10 +78,7 @@ class Pym2f:
                 filename = filenames[0]
                 if filename.endswith('.npz'):
                     obj_file = f"{self.cache_path}/obj/{filename.removesuffix('npz') + 'obj'}"
-                if config_obj.resonance:
                     mesh_obj = _mesh_to_obj(vertices, normals, faces, obj_file, config_obj.resonance)
-                else:
-                    mesh_obj = _mesh_to_obj(vertices, normals, faces, obj_file)
 
                 young_modulus = config_obj.acoustic_shader.young_modulus
                 poisson_ratio = config_obj.acoustic_shader.poisson_ratio
@@ -98,6 +96,12 @@ class Pym2f:
             if attempt == 0:
                 # First attempt: use mesh2faust
                 success, file_names = self._try_mesh2faust(config_obj, vertices, normals, faces, obj_file, young_modulus, poisson_ratio, density, damping, minmode, maxmode, expos, output_name)
+            if attempt == 1 and not config_obj.static:
+                # Second attempt: use mesh2faust with obj from random frame
+                rand_frame = np.random.randint(1,int(re.findall(r'\d+', filenames[-2])[-1]))
+                rand_vertices, rand_normals, rand_faces = _load_mesh(config_obj, rand_frame)
+                mesh_obj = _mesh_to_obj(rand_vertices, rand_normals, rand_faces, obj_file, config_obj.resonance)
+                success, file_names = self._try_mesh2faust(config_obj, rand_vertices, rand_normals, rand_faces, obj_file, young_modulus, poisson_ratio, density, damping, minmode, maxmode, expos, output_name)
             else:
                 # Fallback: use approximate model
                 if self.use_fallback:
@@ -297,7 +301,6 @@ class Pym2f:
             return False
         
         # Extract and validate frequencies
-        import re
 
         freq_pattern = r'modeFreqsUnscaled.*?=.*?ba\.take.*?$$(.*?)$$'
         t60_pattern = r'modesT60s.*?=.*?t60Scale.*?ba\.take.*?$$(.*?)$$'

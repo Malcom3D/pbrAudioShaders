@@ -56,13 +56,20 @@ class ResonanceSynth:
         if type_scale == 0:
             return output_banks
         input_buffer = self.connected_buffer.read_for_obj(self.obj_idx, synth_type)
-        for idx in range(self.banks.shape[0]):
-            if contact_area == 0 and self.contact_area_scale == None:
-                excitation = 0
-            else:
-                contact_area_scale = self.contact_area_scale if not self.contact_area_scale == None else contact_area * len(vertex_ids)
-                excitation = vibration_signal * contact_area_scale * type_scale
-            output_banks += self.banks[idx].process(excitation + input_buffer)
+        if contact_area == 0 and self.contact_area_scale == None:
+            excitation = 0
+        else:
+            contact_area_scale = self.contact_area_scale if not self.contact_area_scale == None else contact_area * len(vertex_ids)
+            excitation = vibration_signal * contact_area_scale * type_scale
+        output_banks += self.banks[idx].process(excitation + input_buffer)
+
+#        for idx in range(self.banks.shape[0]):
+#            if contact_area == 0 and self.contact_area_scale == None:
+#                excitation = 0
+#            else:
+#                contact_area_scale = self.contact_area_scale if not self.contact_area_scale == None else contact_area * len(vertex_ids)
+#                excitation = vibration_signal * contact_area_scale * type_scale
+#            output_banks += self.banks[idx].process(excitation + input_buffer)
 #        if isinstance(other_objs, list):
 #            for other_idx in range(len(other_objs)):
 #                other_obj_idx, coupling_strength = other_objs[other_idx]

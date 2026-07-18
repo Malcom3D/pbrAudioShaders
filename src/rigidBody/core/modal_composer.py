@@ -43,6 +43,10 @@ class ModalComposer:
             elif score_tracks[idx].obj_idx == obj_idx and score_tracks[idx].is_final:
                 score_track_final = score_tracks[idx]
 
+        if len(score_track) == 0:
+            # object do not collide (static?)
+            return
+
         total_samples = score_track_final.total_samples
 
         for conf_obj in config.objects:
