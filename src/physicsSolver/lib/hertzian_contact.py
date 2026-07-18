@@ -118,8 +118,8 @@ class HertzianContact:
         mesh2 = trimesh.Trimesh(vertices=vertices2, vertex_normals=normals2, faces=faces2)
         mesh1.density = density1
         mesh2.density = density2
-        mass1 = mesh1.mass
-        mass2 = mesh2.mass
+        mass1 = abs(mesh1.mass)
+        mass2 = abs(mesh2.mass)
         # verify and limit too small masses to 0.1gr
 #        if mesh1.is_volume:
 #            mass1 = mesh1.mass if mesh1.mass < 9e-5 else 0.0001
