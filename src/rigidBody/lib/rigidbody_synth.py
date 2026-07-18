@@ -40,11 +40,14 @@ class RigidBodySynth:
         #print('RigidBodySynth: ', len(self.modal_data['gains']), self.vertex_list.shape[0], self.modal_data['nModes'])
         for idx in range(self.vertex_list.shape[0]):
             self.banks[int(self.vertex_list[idx])] = ModalBank(frequencies=self.modal_data['frequencies'], gains=self.modal_data['gains'][int(self.vertex_list[idx])], t60s=self.modal_data['t60s'], sample_rate=self.sample_rate)
-        
+
     def process(self, synth_type: int, vertex_ids: List[int], input_force: float, contact_area: float, other_objs: List[Tuple[float, float]] = None):
         output_banks = 0
         input_buffer = self.connected_buffer.read_for_obj(self.obj_idx, synth_type)
-        output_banks = np.sum(self.banks[vertex_ids].process(input_force + input_buffer))
+        vectorized_process = np.vectorize(lambda bank, input: bank.process(input), otypes=[float])
+        output_banks = np.sum(vectorized_process(self.banks[vertex_ids], input_force + input_buffer))
+
+#        output_banks = np.sum(self.banks[vertex_ids].process(input_force + input_buffer))
 #        for idx in range(len(vertex_ids)):
 #            output_banks += self.banks[vertex_ids[idx]].process(input_force + input_buffer)
 #        if isinstance(other_objs, list):

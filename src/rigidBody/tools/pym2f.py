@@ -95,9 +95,11 @@ class Pym2f:
         for attempt in range(self.max_fallback_attempts + 1):
             if attempt == 0:
                 # First attempt: use mesh2faust
+                print(f"Pym2f: Attempting mesh2faust for {config_obj.name} (attempt {attempt})")
                 success, file_names = self._try_mesh2faust(config_obj, vertices, normals, faces, obj_file, young_modulus, poisson_ratio, density, damping, minmode, maxmode, expos, output_name)
-            if attempt == 1 and not config_obj.static:
+            elif attempt == 1 and not config_obj.static:
                 # Second attempt: use mesh2faust with obj from random frame
+                print(f"Pym2f: Attempting mesh2faust on random frame for {config_obj.name} (attempt {attempt})")
                 rand_frame = np.random.randint(1,int(re.findall(r'\d+', filenames[-2])[-1]))
                 rand_vertices, rand_normals, rand_faces = _load_mesh(config_obj, rand_frame)
                 mesh_obj = _mesh_to_obj(rand_vertices, rand_normals, rand_faces, obj_file, config_obj.resonance)

@@ -61,8 +61,10 @@ class ResonanceSynth:
         else:
             contact_area_scale = self.contact_area_scale if not self.contact_area_scale == None else contact_area * len(vertex_ids)
             excitation = vibration_signal * contact_area_scale * type_scale
-        output_banks += self.banks[idx].process(excitation + input_buffer)
+        vectorized_process = np.vectorize(lambda bank, input: bank.process(input), otypes=[float])
+        output_banks = np.sum(vectorized_process(self.banks[:], excitation + input_buffer))
 
+#        output_banks = np.sum(self.banks[:].process(excitation + input_buffer))
 #        for idx in range(self.banks.shape[0]):
 #            if contact_area == 0 and self.contact_area_scale == None:
 #                excitation = 0

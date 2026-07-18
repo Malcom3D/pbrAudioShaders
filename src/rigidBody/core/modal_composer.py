@@ -35,7 +35,7 @@ class ModalComposer:
         config = self.entity_manager.get('config')
         forces_path = f"{config.system.cache_path}/audio_force"
 
-        score_track_final, score_track = ([] for _ in range(2))
+        score_track_final, score_track = (None for _ in range(2))
         score_tracks = self.entity_manager.get('score_tracks')
         for idx in score_tracks.keys():
             if score_tracks[idx].obj_idx == obj_idx and not score_tracks[idx].is_final:
@@ -43,7 +43,7 @@ class ModalComposer:
             elif score_tracks[idx].obj_idx == obj_idx and score_tracks[idx].is_final:
                 score_track_final = score_tracks[idx]
 
-        if len(score_track) == 0:
+        if score_track is None:
             # object do not collide (static?)
             return
 
