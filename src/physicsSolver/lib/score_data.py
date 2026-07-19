@@ -18,16 +18,17 @@
 
 import gzip
 import pickle
+import blosc2
 import numpy as np
 from dataclasses import dataclass, field
-from typing import List, Tuple, Dict, Any, Optional
+from typing import List, Tuple, Dict, Any, Optional, Union
 
 @dataclass
 class ScoreEvent:
     """Represents the score for a single collision"""
     coll_obj: int
     type: np.ndarray # shape(total_samples,1, dtype=np.int32)
-    vertex_ids: np.ndarray  # shape(total_samples,n_vertices)
+    vertex_ids: Union[blosc2.ndarray.NDArray, np.ndarray]  # shape(total_samples,n_vertices)
     contact_area: np.ndarray = None # shape(total_samples,1)
     force: np.ndarray = None # shape(total_samples,1) Excitation force magnitude
     coupling_data: np.ndarray = None # shape(total_samples,1) Array of [other_obj_idx, coupling_strength] pairs

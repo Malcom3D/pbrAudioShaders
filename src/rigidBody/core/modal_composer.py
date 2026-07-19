@@ -17,6 +17,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import os
+import blosc2
 import numpy as np
 from typing import Any, List, Tuple, Dict, Optional
 from dataclasses import dataclass, field
@@ -62,6 +63,7 @@ class ModalComposer:
                 # init zeros array
                 final_type = np.zeros_like(event_track.type)
                 final_vertex_ids = np.zeros_like(event_track.vertex_ids)
+                final_vertex_ids = blosc2.asarray(final_vertex_ids)
                 final_contact_area = np.zeros_like(event_track.contact_area)
                 final_force = np.zeros_like(coupling_strength)
                 final_coupling_data = np.zeros_like(coupling_strength)
@@ -91,6 +93,7 @@ class ModalComposer:
                 # init zeros array
                 final_type = np.zeros_like(event_track.type)
                 final_vertex_ids = np.zeros_like(event_track.vertex_ids)
+                final_vertex_ids = blosc2.asarray(final_vertex_ids)
                 final_contact_area = np.zeros_like(event_track.contact_area)
                 final_force = np.zeros_like(coupling_strength)
                 final_coupling_data = np.zeros_like(coupling_strength)
