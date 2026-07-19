@@ -17,6 +17,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import os
+import blosc2
 import trimesh
 import numpy as np
 from numba import jit, prange
@@ -505,8 +506,16 @@ class CollisionSolver:
             
             score_contact_area1[sample_idx] = face_area1
             score_contact_area2[sample_idx] = face_area2
-            score_vertex_ids1[sample_idx, vertices1_idx] = 1
-            score_vertex_ids2[sample_idx, vertices2_idx] = 1
+
+            # score_vertex_ids1[sample_idx, vertices1_idx] = 1
+            tmp_vertex_ids1 = score_vertex_ids1[sample_idx]
+            tmp_vertex_ids1[vertices1_idx] = 1
+            score_vertex_ids1[sample_idx] = tmp_vertex_ids1
+
+            # score_vertex_ids2[sample_idx, vertices2_idx] = 1
+            tmp_vertex_ids2[vertices2_idx] = 1
+            score_vertex_ids2[sample_idx] = tmp_vertex_ids2
+
 
     def _finalize_score_tracks(self, score_track1, score_track2, config_obj1, config_obj2,
                                 score_type1, score_type2,
