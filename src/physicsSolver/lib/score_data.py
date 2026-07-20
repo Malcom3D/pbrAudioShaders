@@ -145,7 +145,7 @@ class ScoreTrack:
                                  elif 'coupling_data' in event_file:
                                      coupling_data = blosc2.load_array(event_file)
 
-                   events.append(ScoreEvent(coll_obj=coll_obj, type=ev_type, contact_area=contact_area, vertex_ids=vertex_ids, coupling_data=coupling_data))
+                    events.append(ScoreEvent(coll_obj=coll_obj, type=ev_type, contact_area=contact_area, vertex_ids=vertex_ids, coupling_data=coupling_data))
 
         score_track['events'] = events
         return cls(**score_track)
