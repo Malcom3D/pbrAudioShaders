@@ -513,6 +513,7 @@ class CollisionSolver:
             score_vertex_ids1[sample_idx] = tmp_vertex_ids1
 
             # score_vertex_ids2[sample_idx, vertices2_idx] = 1
+            tmp_vertex_ids2 = score_vertex_ids2[sample_idx]
             tmp_vertex_ids2[vertices2_idx] = 1
             score_vertex_ids2[sample_idx] = tmp_vertex_ids2
 

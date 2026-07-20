@@ -16,6 +16,7 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import os
 import gzip
 import pickle
 import blosc2
@@ -36,6 +37,35 @@ class ScoreEvent:
     def get_event_at_sample(self, sample_idx: int):
         """Get all events at a specific sample index."""
         return self.type[sample_idx], np.unique(np.nonzero(self.vertex_ids[sample_idx])).tolist(), self.force[sample_idx], self.contact_area[sample_idx], [self.coll_obj, self.coupling_data[sample_idx]]
+
+    def save(self, idx: int, dirpath: str):
+        filenames = []
+        filename = f"{dirpath}/{idx}_{self.coll_obj}_vertex_ids.b2"
+        blosc2.save(vertex_ids, filename, mode="w")
+        filenames.append(filename)
+
+        filename = f"{dirpath}/{idx}_{self.coll_obj}_type.bl2"
+        blosc2.save_array(type, filename, mode="w")
+        filenames.append(filename)
+
+        filename = f"{dirpath}/{idx}_{self.coll_obj}_contact_area.bl2"
+        blosc2.save_array(contact_area, filename, mode="w")
+        filenames.append(filename)
+
+        filename = f"{dirpath}/{idx}_{self.coll_obj}_force.bl2"
+        blosc2.save_array(force, filename, mode="w")
+        filenames.append(filename)
+
+        filename = f"{dirpath}/{idx}_{self.coll_obj}_coupling_data.bl2"
+        blosc2.save_array(coupling_data, filename, mode="w")
+        filenames.append(filename)
+
+        filepath = f"{dirpath}/{idx}_{self.coll_obj}.tar.gz"
+        with tarfile.open(filepath, mode="w:gz") as tar:
+            for filename in filenames:
+                tar.add(filename)
+
+        return filepath
 
 @dataclass
 class ScoreTrack:
@@ -59,9 +89,25 @@ class ScoreTrack:
             indent: JSON indentation level (None for compact format)
         """
 
-        with gzip.open(filepath, 'wb', compresslevel=9) as f:
-            pickle.dump(self, f)
-   
+        score_track = {
+            'obj_idx': self.obj_idx,
+            'obj_name': self.obj_name,
+            'is_final': self.is_final,
+            'total_samples': self.total_samples
+        }
+
+        # Save score_track to file
+        json_file = filepath.removesuffix('tar.gz') + 'json'
+        with open(json_file, 'w') as f:
+            json.dump(score_track, f, indent=2)
+
+        dirpath = os.path.dirname(filepath)
+        with tarfile.open(filepath, mode="w:gz") as tar:
+            tar.add(json_file)
+            for idx in range(len(self.events)):
+                filename = self.events[idx].save(idx, dirpath)
+                tar.add(filename)        
+
     @classmethod
     def load(cls, filepath: str) -> 'ScoreTrack':
         """
@@ -73,7 +119,33 @@ class ScoreTrack:
         Returns:
             Loaded ScoreTrack instance
         """
-        with gzip.open(filepath, 'rb') as f:
-            obj = pickle.load(f)
+        events = []
+        with tarfile.open(filepath, mode="r:gz") as tar:
+            filenames = tar.getnames()
+            for filename in filenames:
+               if filename.endswith('json')
+                    with open(filepath, 'r') as f:
+                        score_track = json.load(f)
+               elif filename.endswith('tar.gz')
+                    tar.extract(filename)
+                    with tarfile.open(filepath, mode="r:gz") as score_event_tar:
+                         event_files = score_event_tar.getnames()
+                         for event_file in event_files:
+                             coll_obj = int(re.findall(r'\d+', event_file)[-1])
+                             tar.extract(event_file)
+                             if event_file.endswith(b2):
+                                 vertex_ids = blosc2.load(event_file)
+                             elif event_file.endswith(bl2):
+                                 if 'type' in event_file:
+                                     ev_type = blosc2.load_array(event_file)
+                                 elif 'contact_area' in event_file:
+                                     contact_area = blosc2.load_array(event_file)
+                                 elif 'force' in event_file:
+                                     force = blosc2.load_array(event_file)
+                                 elif 'coupling_data' in event_file:
+                                     coupling_data = blosc2.load_array(event_file)
 
-        return obj
+                   events.append(ScoreEvent(coll_obj=coll_obj, type=ev_type, contact_area=contact_area, vertex_ids=vertex_ids, coupling_data=coupling_data))
+
+        score_track['events'] = events
+        return cls(**score_track)

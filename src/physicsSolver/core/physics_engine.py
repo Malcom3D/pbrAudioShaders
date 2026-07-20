@@ -187,7 +187,7 @@ class physicsEngine:
         score_tracks = self.entity_manager.get('score_tracks')
         print('Saved score_tracks: ', len(score_tracks))
         for s_idx in score_tracks.keys():
-            score_tracks[s_idx].save(f"{self.scoretracks_dir}/{s_idx:05d}.pkl.gz")
+            score_tracks[s_idx].save(f"{self.scoretracks_dir}/{s_idx:05d}.tar.gz")
 
         _update_status(f"{self.status_dir}/bake", self.progress + self.progress_ratio)
 
