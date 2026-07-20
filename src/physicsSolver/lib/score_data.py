@@ -123,10 +123,10 @@ class ScoreTrack:
         with tarfile.open(filepath, mode="r:gz") as tar:
             filenames = tar.getnames()
             for filename in filenames:
-               if filename.endswith('json')
+               if filename.endswith('json'):
                     with open(filepath, 'r') as f:
                         score_track = json.load(f)
-               elif filename.endswith('tar.gz')
+               elif filename.endswith('tar.gz'):
                     tar.extract(filename)
                     with tarfile.open(filepath, mode="r:gz") as score_event_tar:
                          event_files = score_event_tar.getnames()
