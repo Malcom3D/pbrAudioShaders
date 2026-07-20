@@ -152,7 +152,7 @@ class ScoreTrack:
                    with tarfile.open(f"{output_path}/{filename}", mode="r:gz") as score_event_tar:
                        event_files = score_event_tar.getnames()
                        for event_file in event_files:
-                           coll_obj = int(re.findall(r'\d+', event_file)[-1])
+                           coll_obj = int(re.findall(r'\d+', event_file)[1])
                            score_event_tar.extract(event_file, output_path)
                            if event_file.endswith('b2'):
                                vertex_ids = blosc2.load(f"{output_path}/{event_file}")
