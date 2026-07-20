@@ -48,7 +48,6 @@ from ..lib.score_data import ScoreTrack
 
 from ..lib.functions import _update_status
 from ellipsoidalProxy import ProxyMesh
-from postProcess import TrajectoryPostProcessEngine
 
 @dataclass
 class physicsEngine:
@@ -62,7 +61,6 @@ class physicsEngine:
         self.status_dir = f"{config.system.cache_path}/status/{__class__.__name__}"
         self.collisions_dir = f"{config.system.cache_path}/collisions"
         self.trajectories_dir = f"{config.system.cache_path}/trajectories"
-#        self.trajectory_postprocess = config.trajectory_postprocess.enable_trajectory_postprocess
         self.forces_dir = f"{config.system.cache_path}/forces_data"
         self.modalvertices_dir = f"{config.system.cache_path}/modalvertices"
         self.scoretracks_dir = f"{config.system.cache_path}/scoretracks"
@@ -149,6 +147,7 @@ class physicsEngine:
         _update_status(f"{self.status_dir}/bake", self.progress + self.progress_ratio)
 
     def _pp_traj(self):
+        from postProcess import TrajectoryPostProcessEngine
         post_processor = TrajectoryPostProcessEngine(entity_manager=self.entity_manager)
         post_processor.process_before_distance_solver()
         _update_status(f"{self.status_dir}/bake", self.progress + self.progress_ratio)
