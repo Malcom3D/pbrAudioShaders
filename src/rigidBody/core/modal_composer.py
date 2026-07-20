@@ -55,6 +55,9 @@ class ModalComposer:
                 config_obj = conf_obj
                 force, coupling_strength = self._load_audioforce_tracks(total_samples=total_samples, forces_path=forces_path, obj_name=config_obj.name)
 
+        # configure blosc2 compression
+        cparams = blosc2.CParams(codec=blosc2.Codec.LZ4, typesize=1)
+
         for event_track in score_track.events:
             obj2_idx = event_track.coll_obj
 
@@ -63,7 +66,7 @@ class ModalComposer:
                 # init zeros array
                 final_type = np.zeros_like(event_track.type)
                 final_vertex_ids = np.zeros_like(event_track.vertex_ids)
-                final_vertex_ids = blosc2.asarray(final_vertex_ids)
+                final_vertex_ids = blosc2.asarray(final_vertex_ids, cparams=cparams)
                 final_contact_area = np.zeros_like(event_track.contact_area)
                 final_force = np.zeros_like(coupling_strength)
                 final_coupling_data = np.zeros_like(coupling_strength)
@@ -93,7 +96,7 @@ class ModalComposer:
                 # init zeros array
                 final_type = np.zeros_like(event_track.type)
                 final_vertex_ids = np.zeros_like(event_track.vertex_ids)
-                final_vertex_ids = blosc2.asarray(final_vertex_ids)
+                final_vertex_ids = blosc2.asarray(final_vertex_ids, cparams=cparams)
                 final_contact_area = np.zeros_like(event_track.contact_area)
                 final_force = np.zeros_like(coupling_strength)
                 final_coupling_data = np.zeros_like(coupling_strength)

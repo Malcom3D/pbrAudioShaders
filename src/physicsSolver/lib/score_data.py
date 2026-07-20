@@ -17,9 +17,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import os
+import re
 import gzip
-import pickle
+import json
 import blosc2
+import tarfile
 import numpy as np
 from dataclasses import dataclass, field
 from typing import List, Tuple, Dict, Any, Optional, Union
@@ -38,32 +40,38 @@ class ScoreEvent:
         """Get all events at a specific sample index."""
         return self.type[sample_idx], np.unique(np.nonzero(self.vertex_ids[sample_idx])).tolist(), self.force[sample_idx], self.contact_area[sample_idx], [self.coll_obj, self.coupling_data[sample_idx]]
 
-    def save(self, idx: int, dirpath: str):
+    def save(self, idx: int):
         filenames = []
-        filename = f"{dirpath}/{idx}_{self.coll_obj}_vertex_ids.b2"
-        blosc2.save(vertex_ids, filename, mode="w")
+        filename = f"{idx}_{self.coll_obj}_vertex_ids.b2"
+        blosc2.save(self.vertex_ids, filename, mode="w")
         filenames.append(filename)
 
-        filename = f"{dirpath}/{idx}_{self.coll_obj}_type.bl2"
-        blosc2.save_array(type, filename, mode="w")
+        filename = f"{idx}_{self.coll_obj}_type.bl2"
+        blosc2.save_array(self.type, filename, mode="w")
         filenames.append(filename)
 
-        filename = f"{dirpath}/{idx}_{self.coll_obj}_contact_area.bl2"
-        blosc2.save_array(contact_area, filename, mode="w")
-        filenames.append(filename)
+        if self.contact_area is not None:
+            filename = f"{idx}_{self.coll_obj}_contact_area.bl2"
+            blosc2.save_array(self.contact_area, filename, mode="w")
+            filenames.append(filename)
 
-        filename = f"{dirpath}/{idx}_{self.coll_obj}_force.bl2"
-        blosc2.save_array(force, filename, mode="w")
-        filenames.append(filename)
+        if self.force is not None:
+            filename = f"{idx}_{self.coll_obj}_force.bl2"
+            blosc2.save_array(self.force, filename, mode="w")
+            filenames.append(filename)
 
-        filename = f"{dirpath}/{idx}_{self.coll_obj}_coupling_data.bl2"
-        blosc2.save_array(coupling_data, filename, mode="w")
-        filenames.append(filename)
+        if self.coupling_data is not None:
+            filename = f"{idx}_{self.coll_obj}_coupling_data.bl2"
+            blosc2.save_array(self.coupling_data, filename, mode="w")
+            filenames.append(filename)
 
-        filepath = f"{dirpath}/{idx}_{self.coll_obj}.tar.gz"
+        filepath = f"{idx}_{self.coll_obj}.tar.gz"
         with tarfile.open(filepath, mode="w:gz") as tar:
             for filename in filenames:
                 tar.add(filename)
+
+        for filename in filenames:
+            os.remove(filename)
 
         return filepath
 
@@ -82,10 +90,10 @@ class ScoreTrack:
 
     def save(self, filepath: str) -> None:
         """
-        Save the ScoreTrack to a gzip pickle file.
+        Save the ScoreTrack to a tar gz file.
 
         Args:
-            filepath: Path to save the JSON file
+            filepath: Path to save the file
             indent: JSON indentation level (None for compact format)
         """
 
@@ -97,55 +105,71 @@ class ScoreTrack:
         }
 
         # Save score_track to file
-        json_file = filepath.removesuffix('tar.gz') + 'json'
+        json_file = os.path.basename(filepath).removesuffix('tar.gz') + 'json'
         with open(json_file, 'w') as f:
             json.dump(score_track, f, indent=2)
 
-        dirpath = os.path.dirname(filepath)
+        to_be_removed = [json_file]
         with tarfile.open(filepath, mode="w:gz") as tar:
             tar.add(json_file)
             for idx in range(len(self.events)):
-                filename = self.events[idx].save(idx, dirpath)
+                filename = self.events[idx].save(idx)
                 tar.add(filename)        
+                to_be_removed.append(filename)
+
+        for filename in to_be_removed:
+            os.remove(filename)
 
     @classmethod
-    def load(cls, filepath: str) -> 'ScoreTrack':
+    def load(cls, filepath: str, final: bool = False) -> 'ScoreTrack':
         """
-        Load a ScoreTrack from a pickle file.
+        Load a ScoreTrack from a tar gz file.
 
         Args:
-            filepath: Path to the JSON file to load
+            filepath: Path to the file to load
 
         Returns:
             Loaded ScoreTrack instance
         """
         events = []
+        contact_area, force, coupling_data = (None for _ in range(3))
+
+        # make output path
+        output_path = 'extract'
+        os.makedirs(output_path, exist_ok=True)
+        
         with tarfile.open(filepath, mode="r:gz") as tar:
             filenames = tar.getnames()
             for filename in filenames:
                if filename.endswith('json'):
-                    with open(filepath, 'r') as f:
+                    tar.extract(filename, output_path)
+                    with open(f"{output_path}/{filename}", 'r') as f:
                         score_track = json.load(f)
+                        if final and not score_track['is_final']:
+                            break
                elif filename.endswith('tar.gz'):
-                    tar.extract(filename)
-                    with tarfile.open(filepath, mode="r:gz") as score_event_tar:
-                         event_files = score_event_tar.getnames()
-                         for event_file in event_files:
-                             coll_obj = int(re.findall(r'\d+', event_file)[-1])
-                             tar.extract(event_file)
-                             if event_file.endswith(b2):
-                                 vertex_ids = blosc2.load(event_file)
-                             elif event_file.endswith(bl2):
-                                 if 'type' in event_file:
-                                     ev_type = blosc2.load_array(event_file)
-                                 elif 'contact_area' in event_file:
-                                     contact_area = blosc2.load_array(event_file)
-                                 elif 'force' in event_file:
-                                     force = blosc2.load_array(event_file)
-                                 elif 'coupling_data' in event_file:
-                                     coupling_data = blosc2.load_array(event_file)
+                   tar.extract(filename, output_path)
+                   with tarfile.open(f"{output_path}/{filename}", mode="r:gz") as score_event_tar:
+                       event_files = score_event_tar.getnames()
+                       for event_file in event_files:
+                           coll_obj = int(re.findall(r'\d+', event_file)[-1])
+                           score_event_tar.extract(event_file, output_path)
+                           if event_file.endswith('b2'):
+                               vertex_ids = blosc2.load(f"{output_path}/{event_file}")
+                           elif event_file.endswith('bl2'):
+                               if 'type' in event_file:
+                                   ev_type = blosc2.load_array(f"{output_path}/{event_file}")
+                               elif 'contact_area' in event_file:
+                                   contact_area = blosc2.load_array(f"{output_path}/{event_file}")
+                               elif 'force' in event_file:
+                                   force = blosc2.load_array(f"{output_path}/{event_file}")
+                               elif 'coupling_data' in event_file:
+                                   coupling_data = blosc2.load_array(f"{output_path}/{event_file}")
 
-                    events.append(ScoreEvent(coll_obj=coll_obj, type=ev_type, contact_area=contact_area, vertex_ids=vertex_ids, coupling_data=coupling_data))
+                   events.append(ScoreEvent(coll_obj=coll_obj, type=ev_type, contact_area=contact_area, force=force, vertex_ids=vertex_ids, coupling_data=coupling_data))
 
+        for file in os.listdir(output_path):
+            os.remove(f"{output_path}/{file}")
+        os.rmdir(output_path)
         score_track['events'] = events
         return cls(**score_track)

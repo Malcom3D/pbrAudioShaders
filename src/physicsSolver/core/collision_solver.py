@@ -161,17 +161,20 @@ class CollisionSolver:
         mesh1_faces = trajectory1.get_faces()
         mesh2_faces = trajectory2.get_faces()
         
-               # Initialize score data arrays
+        # configure blosc2 compression
+        cparams = blosc2.CParams(codec=blosc2.Codec.LZ4, typesize=1)
+
+        # Initialize score data arrays
         mesh1_verts = trajectory1.get_vertices(0)
         score_type1 = np.zeros((total_samples, 1), dtype=np.int32)
         score_vertex_ids1 = np.zeros((total_samples, mesh1_verts.shape[0]), dtype=np.bool_)
-        score_vertex_ids1 = blosc2.asarray(score_vertex_ids1)
+        score_vertex_ids1 = blosc2.asarray(score_vertex_ids1, cparams=cparams)
         score_contact_area1 = np.zeros((total_samples, 1), dtype=np.float32)
         
         mesh2_verts = trajectory2.get_vertices(0)
         score_type2 = np.zeros((total_samples, 1), dtype=np.int32)
         score_vertex_ids2 = np.zeros((total_samples, mesh2_verts.shape[0]), dtype=np.bool_)
-        score_vertex_ids2 = blosc2.asarray(score_vertex_ids2)
+        score_vertex_ids2 = blosc2.asarray(score_vertex_ids2, cparams=cparams)
         score_contact_area2 = np.zeros((total_samples, 1), dtype=np.float32)
         
         vertex1_id_list = []

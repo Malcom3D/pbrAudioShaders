@@ -35,8 +35,24 @@ class SystemConfig:
     collision_margin: float = 0.05
     samples_per_object: int = 1000
     cache_path: str = "./pbrAudioCache/"
+    enable_trajectory_postprocess: bool = False
     enable_denoiser: bool = False
     enable_postprocess: bool = False
+
+@dataclass
+class TrajectoryPostProcessConfig:
+    # Detection parameters
+    bounce_threshold: float = 0.001  # Minimum displacement for bounce detection (meters)
+#    bounce_frequency_range: Tuple[float, float] = (50, 500)  # Hz range for bounce detection
+#    penetration_margin: float = 0.001  # Margin for penetration detection (meters)
+    # Correction parameters
+    correction_strength: float = 0.8  # 0-1, how strongly to correct artifacts
+    smoothing_sigma: float = 2.0  # Gaussian sigma for trajectory smoothing
+    min_contact_duration: int = 5  # Minimum frames for contact detection
+    # Physics constraints
+    max_velocity_change: float = 10.0  # Maximum allowed velocity change (m/s² per frame)
+    max_angular_velocity: float = 100.0  # Maximum angular velocity (rad/s)
+
 
 @dataclass
 class DenoiserConfig:
@@ -125,6 +141,7 @@ class Config:
             self.data = json.load(f)
 
         self.system = SystemConfig(**self.data.get('system', {}))
+        self.denoiser = TrajectoryPostProcessConfig(**self.data.get('trajectory_postprocess', {}))
         self.denoiser = DenoiserConfig(**self.data.get('denoiser', {}))
         self.postprocess = PostProcessConfig(**self.data.get('postprocess', {}))
 

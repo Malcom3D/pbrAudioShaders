@@ -123,6 +123,9 @@ class rigidBodyEngine:
 #                    self.entity_manager.register('modal_vertices', modal_vertices, modalvertices_idx)
 #                    modalvertices_idx += 1
 
+    def prebake(self):
+        _update_status(f"{self.status_dir}/prebake", 0)
+
         score_tracks = self.entity_manager.get('score_tracks')
         if len(score_tracks) == 0:
             if os.path.exists(self.scoretracks_dir):
@@ -131,11 +134,10 @@ class rigidBodyEngine:
                 for filename in filenames:
                     score_tracks = ScoreTrack.load(f"{self.scoretracks_dir}/{filename}")
                     _ = self.entity_manager.register('score_tracks', score_tracks)
+                for filename in filenames:
+                    os.remove(f"{self.scoretracks_dir}/{filename}")
 #                    self.entity_manager.register('score_tracks', score_tracks, scoretracks_idx)
 #                    scoretracks_idx += 1
-
-    def prebake(self):
-        _update_status(f"{self.status_dir}/prebake", 0)
 
         tasks_modal = [self.prebake_modal(obj_idx) for obj_idx in self.obj_modal]
         results_modal = compute(*tasks_modal)
@@ -171,6 +173,17 @@ class rigidBodyEngine:
 
     def bake(self):
         _update_status(f"{self.status_dir}/bake", 0)
+
+        score_tracks = self.entity_manager.get('score_tracks')
+        if len(score_tracks) == 0:
+            if os.path.exists(self.scoretracks_dir):
+                filenames = os.listdir(self.scoretracks_dir)
+#                scoretracks_idx = 0
+                for filename in filenames:
+                    score_tracks = ScoreTrack.load(f"{self.scoretracks_dir}/{filename}", final=True)
+                    _ = self.entity_manager.register('score_tracks', score_tracks)
+#                    self.entity_manager.register('score_tracks', score_tracks, scoretracks_idx)
+#                    scoretracks_idx += 1
 
         connected_buffer = ConnectedBuffer()
         _ = self.entity_manager.register('connected_buffer', connected_buffer)
