@@ -19,6 +19,7 @@
 import numpy as np
 from typing import Any, List, Tuple, Dict, Optional, Union
 from dataclasses import dataclass, field
+from dask import delayed, compute
 
 from physicsSolver import EntityManager
 
@@ -61,24 +62,32 @@ class ResonanceSynth:
         else:
             contact_area_scale = self.contact_area_scale if not self.contact_area_scale == None else contact_area * len(vertex_ids)
             excitation = vibration_signal * contact_area_scale * type_scale
-        vectorized_process = np.vectorize(lambda bank, input: bank.process(input), otypes=[float])
-        output_banks = np.sum(vectorized_process(self.banks[:], excitation + input_buffer))
+#        if not (excitation + input_buffer) == 0:
+#            vectorized_process = np.vectorize(lambda bank, input: bank.process(input), otypes=[float])
+#            output_banks = np.sum(vectorized_process(self.banks[:], excitation + input_buffer))
 
-#        output_banks = np.sum(self.banks[:].process(excitation + input_buffer))
-#        for idx in range(self.banks.shape[0]):
-#            if contact_area == 0 and self.contact_area_scale == None:
-#                excitation = 0
-#            else:
-#                contact_area_scale = self.contact_area_scale if not self.contact_area_scale == None else contact_area * len(vertex_ids)
-#                excitation = vibration_signal * contact_area_scale * type_scale
-#            output_banks += self.banks[idx].process(excitation + input_buffer)
-#        if isinstance(other_objs, list):
-#            for other_idx in range(len(other_objs)):
-#                other_obj_idx, coupling_strength = other_objs[other_idx]
-#                print('ResonanceSynth: ', self.obj_idx, output_banks, coupling_strength * output_banks)
-#                self.connected_buffer.write_to_obj(int(other_obj_idx), synth_type, coupling_strength * excitation)
-        other_obj_idx, coupling_strength = other_objs
-        self.connected_buffer.write_to_obj(int(other_obj_idx), synth_type, coupling_strength * excitation)
+#        if not (excitation + input_buffer) == 0:
+#            for idx in range(self.banks.shape[0]):
+#                output_banks += self.banks[idx].process(excitation + input_buffer)
+
+#            if other_objs is not None and not excitation == 0:
+#                for other_idx in range(len(other_objs)):
+#                    other_obj_idx, coupling_strength = other_objs[other_idx]
+#                    self.connected_buffer.write_to_obj(int(other_obj_idx), synth_type, coupling_strength * excitation)
+#        return output_banks
+
+        if not (excitation + input_buffer) == 0:
+            tasks = [self.process_sample(bank_idx, excitation, input_buffer, synth_type, other_objs) for idx in range(self.banks.shape[0])]
+            results_tasks = compute(*tasks)
+        return np.sum(results_tasks)
+
+    @delayed
+    def process_sample(self, bank_idx: int, excitation: float, input_buffer: float, synth_type: int, other_objs: List[Tuple[float, float]] = None):
+        output_banks = self.banks[bank_idx].process(excitation + input_buffer)
+        if other_objs is not None and not excitation == 0:
+            for other_idx in range(len(other_objs)):
+                other_obj_idx, coupling_strength = other_objs
+                self.connected_buffer.write_to_obj(int(other_obj_idx), synth_type, coupling_strength * excitation)
         return output_banks
 
     def get_banks_state(self) -> List[Union[int, Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]]]:

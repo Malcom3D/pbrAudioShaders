@@ -35,9 +35,9 @@ class SystemConfig:
     collision_margin: float = 0.05
     samples_per_object: int = 1000
     cache_path: str = "./pbrAudioCache/"
-    enable_trajectory_postprocess: bool = False
     enable_denoiser: bool = False
     enable_postprocess: bool = False
+    enable_trajectory_postprocess: bool = False
 
 @dataclass
 class TrajectoryPostProcessConfig:
@@ -141,7 +141,7 @@ class Config:
             self.data = json.load(f)
 
         self.system = SystemConfig(**self.data.get('system', {}))
-        self.denoiser = TrajectoryPostProcessConfig(**self.data.get('trajectory_postprocess', {}))
+        self.trajectory_postprocess = TrajectoryPostProcessConfig(**self.data.get('trajectory_postprocess', {}))
         self.denoiser = DenoiserConfig(**self.data.get('denoiser', {}))
         self.postprocess = PostProcessConfig(**self.data.get('postprocess', {}))
 
