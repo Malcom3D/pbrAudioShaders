@@ -168,13 +168,13 @@ class CollisionSolver:
         # Initialize score data arrays
         mesh1_verts = trajectory1.get_vertices(0)
         score_type1 = np.zeros((total_samples, 1), dtype=np.int32)
-        score_vertex_ids1 = np.zeros((total_samples, mesh1_verts.shape[0]), dtype=np.bool_)
+        score_vertex_ids1 = np.full((total_samples, mesh1_verts.shape[0]), np.bool_(False), dtype=np.bool_)
         score_vertex_ids1 = blosc2.asarray(score_vertex_ids1, cparams=cparams, dparams=dparams)
         score_contact_area1 = np.zeros((total_samples, 1), dtype=np.float32)
         
         mesh2_verts = trajectory2.get_vertices(0)
         score_type2 = np.zeros((total_samples, 1), dtype=np.int32)
-        score_vertex_ids2 = np.zeros((total_samples, mesh2_verts.shape[0]), dtype=np.bool_)
+        score_vertex_ids2 = np.full((total_samples, mesh2_verts.shape[0]), np.bool_(False), dtype=np.bool_)
         score_vertex_ids2 = blosc2.asarray(score_vertex_ids2, cparams=cparams, dparams=dparams)
         score_contact_area2 = np.zeros((total_samples, 1), dtype=np.float32)
         
@@ -349,6 +349,8 @@ class CollisionSolver:
         else:
             face_area1 = 0
             face_area2 = 0
+            mesh1_faces_idx = np.array([])
+            mesh2_faces_idx = np.array([])
         
         return vertices1_idx, vertices2_idx, face_area1, face_area2
 
@@ -511,14 +513,14 @@ class CollisionSolver:
             score_contact_area1[sample_idx] = face_area1
             score_contact_area2[sample_idx] = face_area2
 
-            # score_vertex_ids1[sample_idx, vertices1_idx] = 1
+            # score_vertex_ids1[sample_idx, vertices1_idx] = True
             tmp_vertex_ids1 = score_vertex_ids1[sample_idx]
-            tmp_vertex_ids1[vertices1_idx] = 1
+            tmp_vertex_ids1[vertices1_idx] = True
             score_vertex_ids1[sample_idx] = tmp_vertex_ids1
 
-            # score_vertex_ids2[sample_idx, vertices2_idx] = 1
+            # score_vertex_ids2[sample_idx, vertices2_idx] = True
             tmp_vertex_ids2 = score_vertex_ids2[sample_idx]
-            tmp_vertex_ids2[vertices2_idx] = 1
+            tmp_vertex_ids2[vertices2_idx] = True
             score_vertex_ids2[sample_idx] = tmp_vertex_ids2
 
 

@@ -29,9 +29,6 @@ from physicsSolver.lib.score_data import ScoreEvent, ScoreTrack
 class ModalComposer:
     entity_manager: EntityManager
 
-#    def __post_init__(self):
-#        config = self.entity_manager.get('config')
-
     def compute(self, obj_idx: int) -> None:
         config = self.entity_manager.get('config')
         forces_path = f"{config.system.cache_path}/audio_force"
@@ -66,7 +63,7 @@ class ModalComposer:
             for event_type in range(1, 5):
                 # init zeros array
                 final_type = np.zeros_like(event_track.type)
-                final_vertex_ids = np.zeros_like(event_track.vertex_ids)
+                final_vertex_ids = np.full(event_track.vertex_ids.shape, np.bool_(False), dtype=np.bool_)
                 final_vertex_ids = blosc2.asarray(final_vertex_ids, cparams=cparams, dparams=dparams)
                 final_contact_area = np.zeros_like(event_track.contact_area)
                 final_force = np.zeros_like(coupling_strength)
@@ -96,7 +93,7 @@ class ModalComposer:
             for event_type in [3,4]:
                 # init zeros array
                 final_type = np.zeros_like(event_track.type)
-                final_vertex_ids = np.zeros_like(event_track.vertex_ids)
+                final_vertex_ids = np.full(event_track.vertex_ids.shape, np.bool_(False), dtype=np.bool_)
                 final_vertex_ids = blosc2.asarray(final_vertex_ids, cparams=cparams, dparams=dparams)
                 final_contact_area = np.zeros_like(event_track.contact_area)
                 final_force = np.zeros_like(coupling_strength)
