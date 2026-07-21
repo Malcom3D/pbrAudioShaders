@@ -79,7 +79,7 @@ class ResonanceSynth:
         if not (excitation + input_buffer) == 0:
             tasks = [self.process_sample(bank_idx, excitation, input_buffer, synth_type, other_objs) for idx in range(self.banks.shape[0])]
             results_tasks = compute(*tasks)
-        return np.sum(results_tasks)
+            return np.sum(results_tasks)
 
     @delayed
     def process_sample(self, bank_idx: int, excitation: float, input_buffer: float, synth_type: int, other_objs: List[Tuple[float, float]] = None):

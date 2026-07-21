@@ -63,7 +63,7 @@ class RigidBodySynth:
         if not len(vertex_ids) == 0 or not (input_force + input_buffer) == 0: 
             tasks = [self.process_sample(bank_idx, input_force, input_buffer, synth_type, other_objs) for bank_idx in range(len(vertex_ids))]
             results_tasks = compute(*tasks)
-        return np.sum(results_tasks)
+            return np.sum(results_tasks)
 
     @delayed
     def process_sample(self, bank_idx: int, input_force: float, input_buffer: float, synth_type: int, other_objs: List[Tuple[float, float]] = None):
