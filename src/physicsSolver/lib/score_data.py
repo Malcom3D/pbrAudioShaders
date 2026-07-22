@@ -155,7 +155,7 @@ class ScoreTrack:
                            coll_obj = int(re.findall(r'\d+', event_file)[1])
                            score_event_tar.extract(event_file, output_path)
                            if event_file.endswith('b2'):
-                               cparams = blosc2.CParams(codec=blosc2.Codec.LZ4, typesize=8, clevel=0, nthreads=1)
+                               cparams = blosc2.CParams(codec=blosc2.Codec.LZ4, typesize=1, clevel=1, nthreads=1)
                                dparams = blosc2.DParams(nthreads=1)
                                vertex_ids = blosc2.load(f"{output_path}/{event_file}", cparams=cparams, dparams=dparams)
                            elif event_file.endswith('bl2'):

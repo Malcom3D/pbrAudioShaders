@@ -162,8 +162,8 @@ class CollisionSolver:
         mesh2_faces = trajectory2.get_faces()
         
         # configure blosc2 compression BLOSCLZ LZ4 
-        cparams = blosc2.CParams(codec=blosc2.Codec.LZ4, typesize=1, clevel=8, nthreads=8)
-        dparams = blosc2.DParams(nthreads=8)
+        cparams = blosc2.CParams(codec=blosc2.Codec.LZ4, typesize=1, clevel=1, nthreads=1)
+        dparams = blosc2.DParams(nthreads=1)
 
         # Initialize score data arrays
         mesh1_verts = trajectory1.get_vertices(0)

@@ -53,8 +53,8 @@ class ModalComposer:
                 force, coupling_strength = self._load_audioforce_tracks(total_samples=total_samples, forces_path=forces_path, obj_name=config_obj.name)
 
         # configure blosc2 compression
-        cparams = blosc2.CParams(codec=blosc2.Codec.LZ4, typesize=1, clevel=8, nthreads=8)
-        dparams = blosc2.DParams(nthreads=8)
+        cparams = blosc2.CParams(codec=blosc2.Codec.LZ4, typesize=1, clevel=1, nthreads=1)
+        dparams = blosc2.DParams(nthreads=1)
 
         for event_track in score_track.events:
             obj2_idx = event_track.coll_obj
