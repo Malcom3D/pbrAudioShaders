@@ -131,20 +131,22 @@ class ModalPlayer:
             """Called when all players have called ready() for the current sample."""
             nonlocal sample_idx, old_sample_idx, t60_empty
 
-            # Process the current sample
-            if (is_shard_frame == None or is_shard_frame <= sample_idx) and (fracture_frame == None or sample_idx <= fracture_frame):
-                # init var for the current sample
-                rigidbody_output, resonance_output, sliding_output, scraping_output, rolling_output = (0 for _ in range(5))
+            # init var for the current sample
+            rigidbody_output, resonance_output, sliding_output, scraping_output, rolling_output = (0 for _ in range(5))
 
-                # Process events at current sample
-                for event in self.score.events:
+            # Process events at current sample
+            for event in self.score.events:
+                # Process the current sample
+                if event.start_sample <= sample_idx and (is_shard_frame == None or is_shard_frame <= sample_idx) and (fracture_frame == None or sample_idx <= fracture_frame) and event.stop_sample => sample_idx:
                     synth_type, vertex_ids, input_force, contact_area, coupling_data = event.get_event_at_sample(sample_idx)
                     # Modal sound
-                    if synth_type in [1,2,3,4]:
-                        if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
-                            resonance_output += self.resonance_synth.process(synth_type, vertex_ids, input_force, contact_area, coupling_data)
-                        rigidbody_output += self.rigidbody_synth.process(synth_type, vertex_ids, input_force, contact_area, coupling_data)
-                        # Noise
+                    if not input_force == 0:
+                        if synth_type in [1,2,3,4]:
+                            if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
+                                resonance_output += self.resonance_synth.process(synth_type, vertex_ids, input_force, contact_area, coupling_data)
+                            rigidbody_output += self.rigidbody_synth.process(synth_type, vertex_ids, input_force, contact_area, coupling_data)
+                    # Noise
+                    elif not input_force == 0 and not contact_area == 0:
                         if synth_type in [2,3]:
                             scraping_output += self.scraping_sound[sample_idx] * contact_area
                             sliding_output += self.sliding_sound[sample_idx] * contact_area

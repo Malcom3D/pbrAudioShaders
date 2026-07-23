@@ -136,10 +136,7 @@ class CollisionSolver:
         total_samples = int(trajectory1.get_x()[-1] if not config_obj1.static else trajectory2.get_x()[-1])
         
         # Calculate sample range
-        start_samples, stop_samples, impact_end = self._calculate_sample_range(
-            collision, total_samples, sample_rate, sfps,
-            config_obj1, config_obj2
-        )
+        start_samples, stop_samples, impact_end = self._calculate_sample_range(collision, total_samples, sample_rate, sfps, config_obj1, config_obj2)
         
         # Load distance data
         distances_data = self._load_distance_data(collision)
@@ -162,8 +159,8 @@ class CollisionSolver:
         mesh2_faces = trajectory2.get_faces()
         
         # configure blosc2 compression BLOSCLZ LZ4 
-        cparams = blosc2.CParams(codec=blosc2.Codec.LZ4, typesize=1, clevel=1, nthreads=1)
-        dparams = blosc2.DParams(nthreads=1)
+        cparams = blosc2.CParams(codec=blosc2.Codec.LZ4, typesize=1, clevel=1, nthreads=8)
+        dparams = blosc2.DParams(nthreads=16)
 
         # Initialize score data arrays
         mesh1_verts = trajectory1.get_vertices(0)
@@ -224,17 +221,12 @@ class CollisionSolver:
                 )
         
         # Finalize score tracks
-        self._finalize_score_tracks(score_track1, score_track2, config_obj1, config_obj2,
-                                     score_type1, score_type2,
-                                     score_vertex_ids1, score_vertex_ids2,
-                                     score_contact_area1, score_contact_area2)
+        self._finalize_score_tracks(score_track1, score_track2, config_obj1, config_obj2, start_samples, stop_samples, score_type1, score_type2, score_vertex_ids1, score_vertex_ids2, score_contact_area1, score_contact_area2)
         
         # Update modal vertices
-        self._update_modal_vertices(obj1_idx, obj2_idx, vertex1_id_list, vertex2_id_list,
-                                     trajectory1, trajectory2, mesh1_faces, mesh2_faces)
+        self._update_modal_vertices(obj1_idx, obj2_idx, vertex1_id_list, vertex2_id_list, trajectory1, trajectory2, mesh1_faces, mesh2_faces)
 
-    def _optimized_proxy_collision(self, obj1_idx, obj2_idx, cp1, cp2, collision_margin, contact_type,
-                                    trajectory1, trajectory2, mesh1_faces, mesh2_faces, sample_idx):
+    def _optimized_proxy_collision(self, obj1_idx, obj2_idx, cp1, cp2, collision_margin, contact_type, trajectory1, trajectory2, mesh1_faces, mesh2_faces, sample_idx):
         """
         Optimized collision detection for proxy meshes.
         Uses pre-computed face properties and geometric relationships.
@@ -393,8 +385,7 @@ class CollisionSolver:
                 isinstance(config_obj1.connected, np.ndarray) and 
                 config_obj2.idx in config_obj1.connected[:, 0])
 
-    def _calculate_sample_range(self, collision, total_samples, sample_rate, sfps,
-                                 config_obj1, config_obj2):
+    def _calculate_sample_range(self, collision, total_samples, sample_rate, sfps, config_obj1, config_obj2):
         """Calculate the sample range for collision processing."""
         start_samples = int(collision.frame - collision.impulse_range / 2)
         start_samples = max(0, start_samples)
@@ -524,27 +515,13 @@ class CollisionSolver:
             score_vertex_ids2[sample_idx] = tmp_vertex_ids2
 
 
-    def _finalize_score_tracks(self, score_track1, score_track2, config_obj1, config_obj2,
-                                score_type1, score_type2,
-                                score_vertex_ids1, score_vertex_ids2,
-                                score_contact_area1, score_contact_area2):
+    def _finalize_score_tracks(self, score_track1, score_track2, config_obj1, config_obj2, start_sample, stop_sample,score_type1, score_type2, score_vertex_ids1, score_vertex_ids2, score_contact_area1, score_contact_area2):
         """Add events to to score tracks."""
-        score_track1.add_event(ScoreEvent(
-            coll_obj=config_obj2.idx,
-            type=score_type1,
-            contact_area=score_contact_area1,
-            vertex_ids=score_vertex_ids1
-        ))
+        score_track1.add_event(ScoreEvent(coll_obj=config_obj2.idx, start_sample=start_sample, stop_sample=stop_sample, type=score_type1, contact_area=score_contact_area1, vertex_ids=score_vertex_ids1))
         
-        score_track2.add_event(ScoreEvent(
-            coll_obj=config_obj1.idx,
-            type=score_type2,
-            contact_area=score_contact_area2,
-            vertex_ids=score_vertex_ids2
-        ))
+        score_track2.add_event(ScoreEvent(coll_obj=config_obj1.idx, start_sample=start_sample, stop_sample=stop_sample, type=score_type2, contact_area=score_contact_area2, vertex_ids=score_vertex_ids2))
 
-    def _update_modal_vertices(self, obj1_idx, obj2_idx, vertex1_id_list, vertex2_id_list,
-                                trajectory1, trajectory2, mesh1_faces, mesh2_faces):
+    def _update_modal_vertices(self, obj1_idx, obj2_idx, vertex1_id_list, vertex2_id_list, trajectory1, trajectory2, mesh1_faces, mesh2_faces):
         """Update modal vertices with collision data."""
         if len(vertex1_id_list) > 0 and len(vertex2_id_list) > 0:
             vertex1_id_list = np.unique(np.array(vertex1_id_list))

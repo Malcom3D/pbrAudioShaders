@@ -53,8 +53,8 @@ class ModalComposer:
                 force, coupling_strength = self._load_audioforce_tracks(total_samples=total_samples, forces_path=forces_path, obj_name=config_obj.name)
 
         # configure blosc2 compression
-        cparams = blosc2.CParams(codec=blosc2.Codec.LZ4, typesize=1, clevel=1, nthreads=1)
-        dparams = blosc2.DParams(nthreads=1)
+        cparams = blosc2.CParams(codec=blosc2.Codec.LZ4, typesize=1, clevel=1, nthreads=8)
+        dparams = blosc2.DParams(nthreads=16)
 
         for event_track in score_track.events:
             obj2_idx = event_track.coll_obj
@@ -87,7 +87,7 @@ class ModalComposer:
                     final_vertex_ids[mixed_mask.reshape(-1,)] = event_track.vertex_ids[mixed_mask.reshape(-1,)]
                     final_force[mixed_mask] = np.divide(force[event_type][mixed_mask], n_vertex_ids[mixed_mask.reshape(-1,)], out=np.zeros_like(force[event_type][mixed_mask]), where=n_vertex_ids[mixed_mask.reshape(-1,)] != 0)
 
-            score_track_final.add_event(ScoreEvent(coll_obj=obj2_idx, type=final_type, vertex_ids=final_vertex_ids, contact_area=final_contact_area, force=final_force, coupling_data=final_coupling_data))
+            score_track_final.add_event(ScoreEvent(coll_obj=obj2_idx, start_sample=event_track.start_sample, stop_sample=event_track.stop_sample, type=final_type, vertex_ids=final_vertex_ids, contact_area=final_contact_area, force=final_force, coupling_data=final_coupling_data))
 
             # Add event type 3 and 4 to complete mixed event
             for event_type in [3,4]:
@@ -105,7 +105,7 @@ class ModalComposer:
                 final_vertex_ids[mixed_mask.reshape(-1,)] = event_track.vertex_ids[mixed_mask.reshape(-1,)]
                 final_force[mixed_mask] = np.divide(force[event_type][mixed_mask], n_vertex_ids[mixed_mask.reshape(-1,)], out=np.zeros_like(force[event_type][mixed_mask]), where=n_vertex_ids[mixed_mask.reshape(-1,)] != 0)
 
-                score_track_final.add_event(ScoreEvent(coll_obj=obj2_idx, type=final_type, vertex_ids=final_vertex_ids, contact_area=final_contact_area, force=final_force, coupling_data=final_coupling_data))
+                score_track_final.add_event(ScoreEvent(coll_obj=obj2_idx, start_sample=event_track.start_sample, stop_sample=event_track.stop_sample, type=final_type, vertex_ids=final_vertex_ids, contact_area=final_contact_area, force=final_force, coupling_data=final_coupling_data))
 
     def _load_audioforce_tracks(self, total_samples: int, forces_path: str, obj_name: str) -> Tuple[np.ndarray, np.ndarray]:
         """Load and list audio-force tracks for obj_name in forces_path"""

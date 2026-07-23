@@ -30,6 +30,8 @@ from typing import List, Tuple, Dict, Any, Optional, Union
 class ScoreEvent:
     """Represents the score for a single collision"""
     coll_obj: int
+    start_sample: int
+    stop_sample: int
     type: np.ndarray # shape(total_samples,1, dtype=np.int32)
     vertex_ids: Union[blosc2.ndarray.NDArray, np.ndarray]  # shape(total_samples,n_vertices)
     contact_area: np.ndarray = None # shape(total_samples,1)
@@ -155,8 +157,8 @@ class ScoreTrack:
                            coll_obj = int(re.findall(r'\d+', event_file)[1])
                            score_event_tar.extract(event_file, output_path)
                            if event_file.endswith('b2'):
-                               cparams = blosc2.CParams(codec=blosc2.Codec.LZ4, typesize=1, clevel=1, nthreads=1)
-                               dparams = blosc2.DParams(nthreads=1)
+                               cparams = blosc2.CParams(codec=blosc2.Codec.LZ4, typesize=1, clevel=1, nthreads=8)
+                               dparams = blosc2.DParams(nthreads=16)
                                vertex_ids = blosc2.load(f"{output_path}/{event_file}", cparams=cparams, dparams=dparams)
                            elif event_file.endswith('bl2'):
                                if 'type' in event_file:
