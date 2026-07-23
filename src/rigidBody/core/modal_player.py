@@ -147,7 +147,7 @@ class ModalPlayer:
                                 resonance_output += self.resonance_synth.process(synth_type, vertex_ids, input_force, contact_area, coupling_data)
                             rigidbody_output += self.rigidbody_synth.process(synth_type, vertex_ids, input_force, contact_area, coupling_data)
                     # Noise
-                    elif not input_force == 0 and not contact_area == 0:
+                    elif not contact_area == 0:
                         if synth_type in [2,3]:
                             scraping_output += self.scraping_sound[sample_idx] * contact_area
                             sliding_output += self.sliding_sound[sample_idx] * contact_area
