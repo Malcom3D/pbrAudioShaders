@@ -53,7 +53,6 @@ class TrajectoryPostProcessConfig:
     max_velocity_change: float = 10.0  # Maximum allowed velocity change (m/s² per frame)
     max_angular_velocity: float = 100.0  # Maximum angular velocity (rad/s)
 
-
 @dataclass
 class DenoiserConfig:
     # DC Offset Removal parameters
