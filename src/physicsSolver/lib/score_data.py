@@ -43,7 +43,21 @@ class ScoreEvent:
         return self.type[sample_idx], np.unique(np.nonzero(self.vertex_ids[sample_idx])).tolist(), self.force[sample_idx], self.contact_area[sample_idx], [self.coll_obj, self.coupling_data[sample_idx]]
 
     def save(self, idx: int):
+
+        score_event = {
+            'coll_obj': self.coll_obj,
+            'start_sample': self.start_sample,
+            'stop_sample': self.stop_sample
+        }
+    
         filenames = []
+        # Save score_event to file
+        json_file = f"{idx}_{self.coll_obj}.json"
+        with open(json_file, 'w') as f:
+            json.dump(score_event, f, indent=2)
+
+        filenames.append(json_file)
+
         filename = f"{idx}_{self.coll_obj}_vertex_ids.b2"
         blosc2.save(self.vertex_ids, filename, mode="w")
         filenames.append(filename)
@@ -154,7 +168,14 @@ class ScoreTrack:
                    with tarfile.open(f"{output_path}/{filename}", mode="r:gz") as score_event_tar:
                        event_files = score_event_tar.getnames()
                        for event_file in event_files:
-                           coll_obj = int(re.findall(r'\d+', event_file)[1])
+                           if event_file.endswith('.json'):
+                               score_event_tar.extract(event_file, output_path)
+                               with open(f"{output_path}/{event_file}", 'r') as f:
+                                   event_track = json.load(f)
+                                   coll_obj = event_track['coll_obj']
+                                   start_sample = event_track['start_sample']
+                                   stop_sample = event_track['stop_sample']
+                       for event_file in event_files:
                            score_event_tar.extract(event_file, output_path)
                            if event_file.endswith('b2'):
                                cparams = blosc2.CParams(codec=blosc2.Codec.LZ4, typesize=1, clevel=1, nthreads=8)
@@ -170,7 +191,7 @@ class ScoreTrack:
                                elif 'coupling_data' in event_file:
                                    coupling_data = blosc2.load_array(f"{output_path}/{event_file}")
 
-                   events.append(ScoreEvent(coll_obj=coll_obj, type=ev_type, contact_area=contact_area, force=force, vertex_ids=vertex_ids, coupling_data=coupling_data))
+                   events.append(ScoreEvent(coll_obj=coll_obj, start_sample=start_sample, stop_sample=stop_sample, type=ev_type, contact_area=contact_area, force=force, vertex_ids=vertex_ids, coupling_data=coupling_data))
 
         for file in os.listdir(output_path):
             os.remove(f"{output_path}/{file}")
