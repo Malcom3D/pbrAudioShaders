@@ -136,7 +136,7 @@ class ModalPlayer:
 
             # Process events at current sample
             for event in self.score.events:
-                end_sample = min(event.stop_sample + self.t60_empty, self.sample_counter.total_samples)
+                end_sample = min(event.stop_sample + self.t60_samples, self.sample_counter.total_samples)
                 if event.start_sample <= sample_idx and (is_shard_frame == None or is_shard_frame <= sample_idx) and (fracture_frame == None or sample_idx <= fracture_frame) and sample_idx <= end_sample:
                     # Process the current sample
                     synth_type, vertex_ids, input_force, contact_area, coupling_data = event.get_event_at_sample(sample_idx)
