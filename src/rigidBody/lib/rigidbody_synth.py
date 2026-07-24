@@ -71,10 +71,9 @@ class RigidBodySynth:
     @delayed
     def process_sample(self, bank_idx: int, input_force: float, input_buffer: float, synth_type: int, other_objs: List[Tuple[float, float]] = None):
         output_banks = self.banks[bank_idx].process(input_force + input_buffer)
-        if other_objs is not None and not input_force == 0:
-            for other_idx in range(len(other_objs)):
-                other_obj_idx, coupling_strength = other_objs
-                self.connected_buffer.write_to_obj(int(other_obj_idx), synth_type, coupling_strength * input_force)
+        if other_objs is not None:
+            other_obj_idx, coupling_strength = other_objs
+            self.connected_buffer.write_to_obj(int(other_obj_idx), synth_type, coupling_strength * input_force)
         return output_banks
 
     def get_banks_state(self) -> List[Union[int, Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]]]:

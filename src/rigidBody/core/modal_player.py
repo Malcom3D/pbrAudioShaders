@@ -146,22 +146,29 @@ class ModalPlayer:
                             if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
                                 resonance_output += self.resonance_synth.process(synth_type, vertex_ids, input_force, contact_area, coupling_data)
                             rigidbody_output += self.rigidbody_synth.process(synth_type, vertex_ids, input_force, contact_area, coupling_data)
+                        t60_empty = 0
+                    # Sound decay
+                    else:
+                        if t60_empty < self.t60_samples:
+                            for event_type in [1,2,3,4]:
+                                value = self.rigidbody_synth.connected_buffer.objs_buffer[self.obj_idx][synth_type]
+                                if not value == 0:
+                                    rigidbody_output += self.rigidbody_synth.process(event_type, vertex_ids, input_force, contact_area, coupling_data)
+                                    if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
+                                        value = self.resonance_synth.connected_buffer.objs_buffer[self.obj_idx][synth_type]
+                                        if not value == 0:
+                                            resonance_output += self.resonance_synth.process(event_type, vertex_ids, input_force, contact_area, coupling_data)
+                            t60_empty += 1
                     # Noise
-                    elif not contact_area == 0:
+                    if not contact_area == 0:
                         if synth_type in [2,3]:
                             scraping_output += self.scraping_sound[sample_idx] * contact_area
                             sliding_output += self.sliding_sound[sample_idx] * contact_area
                         if synth_type == 4:
                             rolling_output += self.rolling_sound[sample_idx] * contact_area
-                        t60_empty = 0
-                    # Sound decay
-                    elif synth_type in [0,6]: # ToDo: add non-contact sound synth for type == 0
-                        if t60_empty < self.t60_samples:
-                            for event_type in [1,2,3,4]:
-                                if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
-                                    resonance_output += self.resonance_synth.process(event_type, vertex_ids, input_force, contact_area, coupling_data)
-                                rigidbody_output += self.rigidbody_synth.process(event_type, vertex_ids, input_force, contact_area, coupling_data)
-                            t60_empty += 1
+                    # Non-contact synthesis
+                    #elif synth_type in [0,6]: # ToDo: add non-contact sound synth for type == 0
+                    #    pass
 
                 self.rigidbody_synth_track[sample_idx] += rigidbody_output if not np.isnan(rigidbody_output) else 0
                 self.resonance_synth_track[sample_idx] += resonance_output if not np.isnan(resonance_output) else 0
