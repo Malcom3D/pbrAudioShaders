@@ -86,9 +86,8 @@ class ResonanceSynth:
     def process_sample(self, bank_idx: int, excitation: float, input_buffer: float, synth_type: int, other_objs: List[Tuple[float, float]] = None):
         output_banks = self.banks[bank_idx].process(excitation + input_buffer)
         if other_objs is not None and not excitation == 0:
-            for other_idx in range(len(other_objs)):
-                other_obj_idx, coupling_strength = other_objs
-                self.connected_buffer.write_to_obj(int(other_obj_idx), synth_type, coupling_strength * excitation)
+            other_obj_idx, coupling_strength = other_objs
+            self.connected_buffer.write_to_obj(int(other_obj_idx), synth_type, coupling_strength * excitation)
         return output_banks
 
     def get_banks_state(self) -> List[Union[int, Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]]]:
