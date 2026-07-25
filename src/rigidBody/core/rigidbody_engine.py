@@ -167,8 +167,12 @@ class rigidBodyEngine:
         # Save modal vertices and score tracks data
         modal_vertices = self.entity_manager.get('modal_vertices')
         print('Save modal_vertices: ', len(modal_vertices))
-        for m_idx in modal_vertices.keys():
-            modal_vertices[m_idx].save(f"{self.modalvertices_dir}/{m_idx:05d}.json")
+#        for m_idx in modal_vertices.keys():
+#            modal_vertices[m_idx].save(f"{self.modalvertices_dir}/{m_idx:05d}.json")
+        tasks_save_modal_vertices = [self.save_modal_vertices(modal_vertices[m_idx], f"{m_idx:05d}.json") for m_idx in modal_vertices.keys()]
+        results_save_modal_vertices = compute(*tasks_save_modal_vertices)
+
+        _update_status(f"{self.status_dir}/prebake", 95)
 
         score_tracks = self.entity_manager.get('score_tracks')
         print('Save score_tracks: ', len(score_tracks))
@@ -203,13 +207,13 @@ class rigidBodyEngine:
 
 #        self.players = [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
 #        tasks_player = [self.bake_player(player) for player in self.players]
+#        tasks_save = [self.bake_save(player) for player in self.players]
         players = [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
         tasks_player = [self.bake_player(player) for player in players]
         results_player = compute(*tasks_player)
         _update_status(f"{self.status_dir}/bake", 90)
 
         print('rigidBodyEngine: Save player')
-#        tasks_save = [self.bake_save(player) for player in self.players]
         tasks_save = [self.bake_save(player) for player in players]
         results_save = compute(*tasks_save)
         _update_status(f"{self.status_dir}/bake", 92)
@@ -233,6 +237,10 @@ class rigidBodyEngine:
     def prebake_composer(self, collision: CollisionData):
         mc = ModalComposer(self.entity_manager)
         mc.compute(collision)
+
+    @delayed
+    def save_modal_vertices(self, modal_vertices: Any, filename: str):
+        modal_vertice.save(f"{self.modalvertices_dir}/{filename}")
 
     @delayed
     def bake_luthier(self, obj_idx: int):
