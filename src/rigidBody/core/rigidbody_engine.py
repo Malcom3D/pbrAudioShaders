@@ -176,8 +176,10 @@ class rigidBodyEngine:
 
         score_tracks = self.entity_manager.get('score_tracks')
         print('Save score_tracks: ', len(score_tracks))
-        for s_idx in score_tracks.keys():
-            score_tracks[s_idx].save(f"{self.scoretracks_dir}/{s_idx:05d}.tar.gz")
+#        for s_idx in score_tracks.keys():
+#            score_tracks[s_idx].save(f"{self.scoretracks_dir}/{s_idx:05d}.tar.gz")
+        tasks_save_score_tracks = [self.save_score_tracks(score_tracks[s_idx], f"{s_idx:05d}.tar.gz") for s_idx in score_tracks.keys()]
+        results_save_score_tracks = compute(*tasks_save_score_tracks)
 
         _update_status(f"{self.status_dir}/prebake", 99)
 
@@ -240,7 +242,11 @@ class rigidBodyEngine:
 
     @delayed
     def save_modal_vertices(self, modal_vertices: Any, filename: str):
-        modal_vertice.save(f"{self.modalvertices_dir}/{filename}")
+        modal_vertices.save(f"{self.modalvertices_dir}/{filename}")
+
+    @delayed
+    def save_score_traks(self, score_trak: Any, filename: str):
+        score_trak.save(f"{self.scoretracks_dir}/{filename}")
 
     @delayed
     def bake_luthier(self, obj_idx: int):
