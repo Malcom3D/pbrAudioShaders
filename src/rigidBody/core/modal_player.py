@@ -146,19 +146,19 @@ class ModalPlayer:
                             if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
                                 resonance_output += self.resonance_synth.process(synth_type, vertex_ids, input_force, contact_area, coupling_data)
                             rigidbody_output += self.rigidbody_synth.process(synth_type, vertex_ids, input_force, contact_area, coupling_data)
-                        t60_empty = 0
+#                        t60_empty = 0
                     # Sound decay
                     else:
-                        if t60_empty < self.t60_samples:
-                            for event_type in [1,2,3,4]:
-                                value = self.rigidbody_synth.connected_buffer.objs_buffer[self.obj_idx][synth_type]
-                                if not value == 0:
-                                    rigidbody_output += self.rigidbody_synth.process(event_type, vertex_ids, input_force, contact_area, coupling_data)
-                                    if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
-                                        value = self.resonance_synth.connected_buffer.objs_buffer[self.obj_idx][synth_type]
-                                        if not value == 0:
-                                            resonance_output += self.resonance_synth.process(event_type, vertex_ids, input_force, contact_area, coupling_data)
-                            t60_empty += 1
+#                        if t60_empty < self.t60_samples:
+                        for event_type in [1,2,3,4]:
+                            value = self.rigidbody_synth.connected_buffer.objs_buffer[self.obj_idx][synth_type]
+                            if not value == 0:
+                                rigidbody_output += self.rigidbody_synth.process(event_type, vertex_ids, input_force, contact_area, coupling_data)
+                                if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
+                                    value = self.resonance_synth.connected_buffer.objs_buffer[self.obj_idx][synth_type]
+                                    if not value == 0:
+                                        resonance_output += self.resonance_synth.process(event_type, vertex_ids, input_force, contact_area, coupling_data)
+#                            t60_empty += 1
                     # Noise
                     if not contact_area == 0:
                         if synth_type in [2,3]:
