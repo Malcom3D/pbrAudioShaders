@@ -98,15 +98,13 @@ def compute_impulse_response_matrix(c, s, g, num_samples):
 class ModalBank:
     """Optimized ModalBank with convolution matrix approach"""
     
-    def __init__(self, frequencies: np.ndarray, gains: np.ndarray, 
-                 t60s: np.ndarray, sample_rate: int, 
-                 max_ir_length: int = 48000):  # 1 second at 48kHz
+    def __init__(self, frequencies: np.ndarray, gains: np.ndarray, t60s: np.ndarray, sample_rate: int, max_ir_length: int = 48000):  # 1 second at 48kHz
         self.sample_rate = sample_rate
         self.num_modes = len(frequencies)
         self.max_ir_length = max_ir_length
         
         # Store parameters
-               self.frequencies = np.array(frequencies, dtype=np.float32)
+        self.frequencies = np.array(frequencies, dtype=np.float32)
         self.gains = np.array(gains, dtype=np.float32)
         self.t60s = np.array(t60s, dtype=np.float32)
         
@@ -129,19 +127,14 @@ class ModalBank:
     
     def _update_all_coefficients(self):
         """Update all coefficients using Numba function"""
-        self.r, self.c, self.s, self.g = calculate_coefficients_batch(
-            self.frequencies, self.gains, self.t60s, self.sample_rate
-        )
-    
+        self.r, self.c, self.s, self.g = calculate_coefficients_batch(self.frequencies, self.gains, self.t60s, self.sample_rate)
     def compute_impulse_response(self, num_samples: Optional[int] = None) -> np.ndarray:
         """Compute the full impulse response of the modal bank"""
         if num_samples is None:
             num_samples = self.max_ir_length
         
         if self._ir_matrix is None or self._ir_length < num_samples:
-            self._ir_matrix = compute_impulse_response_matrix(
-                self.c, self.s, self.g, num_samples
-            )
+            self._ir_matrix = compute_impulse_response_matrix(self.c, self.s, self.g, num_samples)
             self._ir_length = num_samples
         
         # Sum across all modes

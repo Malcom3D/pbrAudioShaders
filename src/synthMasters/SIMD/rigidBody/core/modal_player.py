@@ -136,6 +136,7 @@ class ModalPlayer:
         
         # Group events by type for batch processing
         event_groups = {
+            0: [],  # No-contact
             1: [],  # Impact
             2: [],  # Scraping
             3: [],  # Sliding
