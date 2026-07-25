@@ -116,8 +116,8 @@ class ScoreTrack:
 
         # make output path
         dirpath = os.path.dirname(filepath)
-        output_path = 'save'
-        os.makedirs(f"{dirpath}/{output_path}", exist_ok=True)
+        output_path = f"{dirpath}/save"
+        os.makedirs(output_path, exist_ok=True)
 
         score_track = {
             'obj_idx': self.obj_idx,
