@@ -147,9 +147,11 @@ class physicsEngine:
         _update_status(f"{self.status_dir}/bake", self.progress + self.progress_ratio)
 
     def _pp_traj(self):
-        from postProcess import TrajectoryPostProcessEngine
-        post_processor = TrajectoryPostProcessEngine(entity_manager=self.entity_manager)
-        post_processor.process_before_distance_solver()
+        config = self.entity_manager.get('config')
+        if config.system.enable_trajectory_postprocess:
+            from postProcess import TrajectoryPostProcessEngine
+            post_processor = TrajectoryPostProcessEngine(entity_manager=self.entity_manager)
+            post_processor.process_before_distance_solver()
         _update_status(f"{self.status_dir}/bake", self.progress + self.progress_ratio)
 
     def _dists(self):
