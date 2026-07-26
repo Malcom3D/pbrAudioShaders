@@ -55,7 +55,7 @@ class ConnectedBuffer:
             self._batch_buffer[obj_idx][synth_type] = 0
         else:
             value = self.objs_buffer[obj_idx][synth_type]
-]
+            self.objs_buffer[obj_idx][synth_type] = 0
             self.objs_buffer[obj_idx][synth_type] = 0
         return value
     
@@ -66,9 +66,7 @@ class ConnectedBuffer:
         else:
             self.objs_buffer[obj_idx][synth_type] += sample_value
     
-    def process_batch_coupling(self, excitations: np.ndarray, 
-                                obj_indices: List[int],
-                                synth_types: List[int]) -> np.ndarray:
+    def process_batch_coupling(self, excitations: np.ndarray, obj_indices: List[int], synth_types: List[int]) -> np.ndarray:
         """
         Process coupling for a batch of excitations.
         
