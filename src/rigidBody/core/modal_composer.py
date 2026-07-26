@@ -60,11 +60,10 @@ class ModalComposer:
             obj2_idx = event_track.coll_obj
 
             mixed_mask = event_track.type == 5
-            for event_type in range(1, 5):
+            for event_type in range(1,5):
                 # init zeros array
                 final_type = np.zeros_like(event_track.type)
                 final_vertex_ids = np.full(event_track.vertex_ids.shape, np.bool_(False), dtype=np.bool_)
-                final_vertex_ids = blosc2.asarray(final_vertex_ids, cparams=cparams, dparams=dparams)
                 final_contact_area = np.zeros_like(event_track.contact_area)
                 final_force = np.zeros_like(coupling_strength)
                 final_coupling_data = np.zeros_like(coupling_strength)
@@ -87,6 +86,7 @@ class ModalComposer:
                     final_vertex_ids[mixed_mask.reshape(-1,)] = event_track.vertex_ids[mixed_mask.reshape(-1,)]
                     final_force[mixed_mask] = np.divide(force[event_type][mixed_mask], n_vertex_ids[mixed_mask.reshape(-1,)], out=np.zeros_like(force[event_type][mixed_mask]), where=n_vertex_ids[mixed_mask.reshape(-1,)] != 0)
 
+            final_vertex_ids = blosc2.asarray(final_vertex_ids, cparams=cparams, dparams=dparams)
             score_track_final.add_event(ScoreEvent(coll_obj=obj2_idx, start_sample=event_track.start_sample, stop_sample=event_track.stop_sample, type=final_type, vertex_ids=final_vertex_ids, contact_area=final_contact_area, force=final_force, coupling_data=final_coupling_data))
 
             # Add event type 3 and 4 to complete mixed event
@@ -94,7 +94,6 @@ class ModalComposer:
                 # init zeros array
                 final_type = np.zeros_like(event_track.type)
                 final_vertex_ids = np.full(event_track.vertex_ids.shape, np.bool_(False), dtype=np.bool_)
-                final_vertex_ids = blosc2.asarray(final_vertex_ids, cparams=cparams, dparams=dparams)
                 final_contact_area = np.zeros_like(event_track.contact_area)
                 final_force = np.zeros_like(coupling_strength)
                 final_coupling_data = np.zeros_like(coupling_strength)
@@ -105,6 +104,7 @@ class ModalComposer:
                 final_vertex_ids[mixed_mask.reshape(-1,)] = event_track.vertex_ids[mixed_mask.reshape(-1,)]
                 final_force[mixed_mask] = np.divide(force[event_type][mixed_mask], n_vertex_ids[mixed_mask.reshape(-1,)], out=np.zeros_like(force[event_type][mixed_mask]), where=n_vertex_ids[mixed_mask.reshape(-1,)] != 0)
 
+                final_vertex_ids = blosc2.asarray(final_vertex_ids, cparams=cparams, dparams=dparams)
                 score_track_final.add_event(ScoreEvent(coll_obj=obj2_idx, start_sample=event_track.start_sample, stop_sample=event_track.stop_sample, type=final_type, vertex_ids=final_vertex_ids, contact_area=final_contact_area, force=final_force, coupling_data=final_coupling_data))
 
     def _load_audioforce_tracks(self, total_samples: int, forces_path: str, obj_name: str) -> Tuple[np.ndarray, np.ndarray]:
