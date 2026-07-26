@@ -56,7 +56,6 @@ class ConnectedBuffer:
         else:
             value = self.objs_buffer[obj_idx][synth_type]
             self.objs_buffer[obj_idx][synth_type] = 0
-            self.objs_buffer[obj_idx][synth_type] = 0
         return value
     
     def write_to_obj(self, obj_idx: int, synth_type: int, sample_value: float):
