@@ -156,7 +156,8 @@ class ScoreTrack:
         contact_area, force, coupling_data = (None for _ in range(3))
 
         # make output path
-        output_path = 'extract'
+        dirpath = os.path.dirname(filepath)
+        output_path = f"{dirpath}/extract"
         os.makedirs(output_path, exist_ok=True)
         
         to_be_removed = []
