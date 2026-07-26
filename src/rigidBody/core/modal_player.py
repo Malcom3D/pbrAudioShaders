@@ -167,8 +167,15 @@ class ModalPlayer:
                         if synth_type == 4:
                             rolling_output += self.rolling_sound[sample_idx] * contact_area
                     # Non-contact synthesis
-                    #elif synth_type in [0,6]: # ToDo: add non-contact sound synth for type == 0
-                    #    pass
+                    elif synth_type in [0,6]: # ToDo: add non-contact sound synth for type == 0
+                        for event_type in [1,2,3,4]:
+                            value = self.rigidbody_synth.connected_buffer.objs_buffer[self.obj_idx][synth_type]
+                            if not value == 0:
+                                rigidbody_output += self.rigidbody_synth.process(event_type, vertex_ids, input_force, contact_area, coupling_data)
+                                if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
+                                    value = self.resonance_synth.connected_buffer.objs_buffer[self.obj_idx][synth_type]
+                                    if not value == 0:
+                                        resonance_output += self.resonance_synth.process(event_type, vertex_ids, input_force, contact_area, coupling_data)
 
                 self.rigidbody_synth_track[sample_idx] += rigidbody_output if not np.isnan(rigidbody_output) else 0
                 self.resonance_synth_track[sample_idx] += resonance_output if not np.isnan(resonance_output) else 0
