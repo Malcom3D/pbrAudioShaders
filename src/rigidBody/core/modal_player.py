@@ -272,7 +272,7 @@ class ModalPlayer:
         
         # Get contact area for scaling
         contact_area = event_data.get('contact_area', 0)
-        if contact_area == 0:
+        if np.any(contact_area == 0):
             return noise_output
         
         # Get force data
