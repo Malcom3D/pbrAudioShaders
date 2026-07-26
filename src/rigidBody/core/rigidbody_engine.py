@@ -81,10 +81,13 @@ class rigidBodyEngine:
         trajectories = self.entity_manager.get('trajectories')
         if len(trajectories) == 0:
             if os.path.exists(f"{self.trajectories_dir}") and not len(os.listdir(f"{self.trajectories_dir}")) == 0:
-#                trajectories_idx = 0
                 for filename in os.listdir(f"{self.trajectories_dir}"):
-                    if filename.endswith('.pkl'):
+                    trajectory = None
+                    if filename.endswith('.pkl') and os.path.isfile(f"{self.trajectories_dir}/corrected/{filename}"):
+                        trajectory = TrajectoryData.load(f"{self.trajectories_dir}/corrected/{filename}")
+                    elif filename.endswith('.pkl') and not os.path.isfile(f"{self.trajectories_dir}/corrected/{filename}"):
                         trajectory = TrajectoryData.load(f"{self.trajectories_dir}/{filename}")
+                    if trajectory is not None:
                         _ = self.entity_manager.register('trajectories', trajectory)
 #                        self.entity_manager.register('trajectories', trajectories, trajectories_idx)
 #                        trajectories_idx += 1
