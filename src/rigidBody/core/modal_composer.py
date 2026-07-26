@@ -69,8 +69,8 @@ class ModalComposer:
                 final_coupling_data = np.zeros_like(coupling_strength)
 
                 # score_track_final
-                type_mask = event_track.type == event_type
                 n_vertex_ids = np.count_nonzero(event_track.vertex_ids, axis=1)
+                type_mask = event_track.type == event_type
 
                 final_type[type_mask] = event_type
                 final_coupling_data[type_mask] = coupling_strength[type_mask]
