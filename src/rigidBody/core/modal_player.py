@@ -185,13 +185,13 @@ class ModalPlayer:
             event_length = stop - start
             
             # Create excitation signal for this event
-            excitation = np.zeros(event_length, dtype=np.float32)
+            excitation = np.zeros((event_length,1), dtype=np.float32)
             
             # Fill excitation from force data
             force_data = event_data['force']
             if isinstance(force_data, np.ndarray) and len(force_data) > 0:
                 n_force = min(len(force_data), event_length)
-                excitation[:n_force] = force_data.reshape(-1,1)[:n_force]
+                excitation[:n_force] = force_data[:n_force]
             
             # Process with convolution
             if np.any(excitation != 0):
