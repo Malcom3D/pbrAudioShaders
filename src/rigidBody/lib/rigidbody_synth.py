@@ -56,10 +56,10 @@ class RigidBodySynth:
                 output_banks += self.banks[vertex_ids[idx]].process(input_force + input_buffer)
             output_banks = output_banks if not None else 0
 
-            if other_objs is not None and not input_force == 0:
-                for other_idx in range(len(other_objs)):
-                    other_obj_idx, coupling_strength = other_objs
-                    self.connected_buffer.write_to_obj(int(other_obj_idx), synth_type, coupling_strength * input_force)
+        if other_objs is not None and not input_force == 0:
+            for other_idx in range(len(other_objs)):
+                other_obj_idx, coupling_strength = other_objs
+                self.connected_buffer.write_to_obj(int(other_obj_idx), synth_type, coupling_strength * input_force)
         return output_banks 
 
 #        if not len(vertex_ids) == 0 or not (input_force + input_buffer) == 0: 
