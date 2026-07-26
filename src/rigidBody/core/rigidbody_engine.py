@@ -83,7 +83,7 @@ class rigidBodyEngine:
             if os.path.exists(f"{self.trajectories_dir}") and not len(os.listdir(f"{self.trajectories_dir}")) == 0:
 #                trajectories_idx = 0
                 for filename in os.listdir(f"{self.trajectories_dir}"):
-                    if os.path.isfile(filename) and filename.endswith('.pkl'):
+                    if filename.endswith('.pkl'):
                         trajectory = TrajectoryData.load(f"{self.trajectories_dir}/{filename}")
                         _ = self.entity_manager.register('trajectories', trajectory)
 #                        self.entity_manager.register('trajectories', trajectories, trajectories_idx)
@@ -100,7 +100,7 @@ class rigidBodyEngine:
         if len(collisions) == 0:
             if os.path.exists(f"{self.collisions_dir}") and not len(os.listdir(f"{self.collisions_dir}")) == 0:
                 for filename in os.listdir(f"{self.collisions_dir}"):
-                    if os.path.isfile(filename) and filename.endswith('.pkl'):
+                    if filename.endswith('.pkl'):
 #                        idx = int(filename.removesuffix('.pkl'))
                         collisions = CollisionData.load(f"{self.collisions_dir}/{filename}")
 #                        self.entity_manager.register('collisions', collisions, idx)
@@ -111,7 +111,7 @@ class rigidBodyEngine:
             if os.path.exists(f"{self.forces_dir}") and not len(os.listdir(f"{self.forces_dir}")) == 0:
 #                forces_idx = 0
                 for filename in os.listdir(f"{self.forces_dir}"):
-                    if os.path.isfile(filename) and filename.endswith('.pkl'):
+                    if filename.endswith('.pkl'):
                         forces = ForceDataSequence.load(f"{self.forces_dir}/{filename}")
                         _ = self.entity_manager.register('forces', forces)
 #                        self.entity_manager.register('forces', forces, forces_idx)
@@ -124,7 +124,7 @@ class rigidBodyEngine:
                 filenames = os.listdir(self.modalvertices_dir)
 #                modalvertices_idx = 0
                 for filename in filenames:
-                    if os.path.isfile(filename):
+                    if os.path.isfile(f"{self.modalvertices_dir}/{filename}"):
                         modal_vertices = ModalVertices.load(f"{self.modalvertices_dir}/{filename}")
                         _ = self.entity_manager.register('modal_vertices', modal_vertices)
 #                    self.entity_manager.register('modal_vertices', modal_vertices, modalvertices_idx)
@@ -139,11 +139,11 @@ class rigidBodyEngine:
                 filenames = os.listdir(self.scoretracks_dir)
 #                scoretracks_idx = 0
                 for filename in filenames:
-                    if os.path.isfile(filename):
+                    if os.path.isfile(f"{self.scoretracks_dir}/{filename}"):
                         score_tracks = ScoreTrack.load(f"{self.scoretracks_dir}/{filename}")
                         _ = self.entity_manager.register('score_tracks', score_tracks)
                 for filename in filenames:
-                    if os.path.isfile(filename):
+                    if os.path.isfile(f"{self.scoretracks_dir}/{filename}"):
                         os.remove(f"{self.scoretracks_dir}/{filename}")
 #                    self.entity_manager.register('score_tracks', score_tracks, scoretracks_idx)
 #                    scoretracks_idx += 1
@@ -195,7 +195,7 @@ class rigidBodyEngine:
                 filenames = os.listdir(self.scoretracks_dir)
 #                scoretracks_idx = 0
                 for filename in filenames:
-                    if os.path.isfile(filename):
+                    if os.path.isfile(f"{self.scoretracks_dir}/{filename}"):
                         score_tracks = ScoreTrack.load(f"{self.scoretracks_dir}/{filename}", final=True)
                         _ = self.entity_manager.register('score_tracks', score_tracks)
 #                    self.entity_manager.register('score_tracks', score_tracks, scoretracks_idx)
