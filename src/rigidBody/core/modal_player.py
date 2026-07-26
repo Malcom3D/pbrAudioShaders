@@ -60,7 +60,7 @@ class ModalPlayer:
         # Initialize audio tracks
         self.rigidbody_synth_track = np.zeros(self.sample_counter.total_samples)
         self.resonance_synth_track = np.zeros(self.sample_counter.total_samples)
-        self.sliding_synth_track = np.zeros.zeros(self.sample_counter.total_samples)
+        self.sliding_synth_track = np.zeros(self.sample_counter.total_samples)
         self.scraping_synth_track = np.zeros(self.sample_counter.total_samples)
         self.rolling_synth_track = np.zeros(self.sample_counter.total_samples)
         
