@@ -22,7 +22,6 @@ import gzip
 import json
 import blosc2
 import tarfile
-import hashlib
 import numpy as np
 from dataclasses import dataclass, field
 from typing import List, Tuple, Dict, Any, Optional, Union
