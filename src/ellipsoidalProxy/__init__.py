@@ -16,9 +16,9 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-__version__ = "0.0.7"
+__version__ = "0.0.8"
 __author__ = "Malcom3D"
-__description__ = "Ellipsoidal sound proxies preprocess for small shards and debris sound synthesis"
+__description__ = "Ellipsoidal sound proxies preprocess for low importance meshes, small shards and debris sound synthesis"
 
 import os
 import sys

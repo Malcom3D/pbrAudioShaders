@@ -31,11 +31,11 @@ class Modal4Proxy:
     """
     Adapt modal models for proxy shapes.
 
-    For proxy_type 0 (octahedron) and 1 (cube):
+    For proxy_type 0 (pyramid), 1 (octahedron), 2 (cube):
     - Generates an approximate modal model based on the original object's
       acoustic material and mesh shape using (proxy_type + 2) modal modes.
 
-    For proxy_type 2,3,4 (icosahedron with subdivisions):
+    For proxy_type 3,4,5 (icosahedron with subdivisions):
     - Adapts the modal model from mesh2faust of the original mesh to the
       proxy's mesh shape using (proxy_type + 2) modal modes.
     """
@@ -82,7 +82,7 @@ class Modal4Proxy:
         proxy_vertices, _ = self._get_proxy_vertices(config_obj, proxy_type)
 
         # Generate or adapt modal model
-        if proxy_type in [0, 1]:
+        if proxy_type in [0, 1, 2]:
             # Approximate modal model for simple proxies
             self._generate_approximate_modal_model(
                 config_obj=config_obj,
@@ -97,7 +97,7 @@ class Modal4Proxy:
                 max_freq=max_freq,
                 n_modes=n_modes
             )
-        elif proxy_type in [2, 3, 4]:
+        elif proxy_type in [3, 4, 5]:
             # Adapt mesh2faust modal model for subdivided icosahedron
             self._adapt_mesh2faust_modal_model(
                 config_obj=config_obj,
@@ -120,7 +120,7 @@ class Modal4Proxy:
 
         Args:
             config_obj: Object configuration
-            proxy_type: Proxy type (0-4)
+            proxy_type: Proxy type (0-5)
 
         Returns:
             Tuple of (vertices, faces) in local coordinates
@@ -154,10 +154,10 @@ class Modal4Proxy:
         n_modes: int
     ) -> None:
         """
-        Generate an approximate modal model for simple proxy shapes (0, 1).
+        Generate an approximate modal model for simple proxy shapes (0, 1, 2).
 
-        Uses analytical mode shapes for octahedron (proxy_type=0) and 
-        cube/hexahedron (proxy_type=1), scaled by material properties 
+        Uses analytical mode shapes for pyramid (proxy_type=0), octahedron (proxy_type=1), 
+        and cube/hexahedron (proxy_type=2), scaled by material properties 
         and object dimensions.
         """
         # Compute effective radius from original mesh volume
@@ -169,6 +169,17 @@ class Modal4Proxy:
 
         # Generate modal frequencies based on proxy shape
         if proxy_type == 0:
+            # Pyramid modes (4 vertices, 4 faces)
+            frequencies = self._pyramid_mode_frequencies(
+                n_modes=n_modes,
+                c_shear=c_shear,
+                c_long=c_long,
+                radius=effective_radius,
+                min_freq=min_freq,
+                max_freq=max_freq
+            )
+        elif proxy_type == 1:
+:
             # Octahedron modes (6 vertices, 8 faces)
             frequencies = self._octahedron_mode_frequencies(
                 n_modes=n_modes,
@@ -177,8 +188,8 @@ class Modal4Proxy:
                 radius=effective_radius,
                 min_freq=min_freq,
                 max_freq=max_freq
-            )
-        else:  # proxy_type == 1
+                       )
+        else:  # proxy_type == 2
             # Cube modes (8 vertices, 6 faces)
             frequencies = self._cube_mode_frequencies(
                 n_modes=n_modes,
@@ -228,7 +239,7 @@ class Modal4Proxy:
         """
         Adapt the mesh2faust modal model from the original mesh to the proxy mesh.
 
-        For icosahedron proxies (2,3,4), we:
+        For icosahedron proxies (3,4,5), we:
         1. Try to use mesh2faust on the original mesh
         2. Adapt the modal model to the proxy's vertex count and shape
         3. Interpolate gains from original vertices to proxy vertices
@@ -281,12 +292,9 @@ class Modal4Proxy:
                 gains = adapted_gains[:n_modes]
             else:
                 # Pad with higher modes
-                frequencies = np.pad(adapted_frequencies, (0, n_modes - n_available),
-                                    mode='linear_ramp', end_values=(max_freq,))
-                t60s = np.pad(adapted_t60s, (0, n_modes - n_available),
-                             mode='constant', constant_values=(np.mean(adapted_t60s),))
-                gains = np.pad(adapted_gains, ((0, n_modes - n_available), (0, 0)),
-                              mode='constant', constant_values=(0,))
+                frequencies = np.pad(adapted_frequencies, (0, n_modes - n_available), mode='linearlinear_ramp', end_values=(max_freq,))
+                t60s = np.pad(adapted_t60s, (0, n_modes - n_available), mode='constant', constant_values=(np.mean(adapted_t60s),))
+                gains = np.pad(adapted_gains, ((0, n_modes - n_available), (0, 0)), mode='constant', constant_values=(0,))
         else:
             # No existing modal model - generate approximate one
             # Use icosahedron-specific mode frequencies
@@ -301,10 +309,10 @@ class Modal4Proxy:
                 radius=effective_radius,
                 min_freq=min_freq,
                 max_freq=max_freq,
-                subdivisions=proxy_type - 2
+                subdivisions=proxy_type - 3
             )
 
-            t60s = self._compute_t60s(frequrequencies, damping)
+            t60s = self._compute_t60s(frequencies, damping)
             gains = self._compute_proxy_gains(
                 vertices=proxy_vertices,
                 frequencies=frequencies,
@@ -363,6 +371,77 @@ class Modal4Proxy:
                 adapted_gains[mode_idx, proxy_idx] = gain
 
         return adapted_gains
+
+    def _pyramid_mode_frequencies(
+        self,
+        n_modes: int,
+        c_shear: float,
+        c_long: float,
+        radius: float,
+        min_freq: float,
+        max_freq: float
+    ) -> np.ndarray:
+        """
+        Compute approximate mode frequencies for a pyramid.
+
+        Pyramid has 4 vertices and 4 triangular faces. Mode frequencies 
+        are approximated using tetrahedral vibration patterns adapted 
+        for pyramid symmetry.
+        """
+        frequencies = []
+
+        # Mode families for tetrahedral/pyramid symmetry
+        # Using analytical solutions for tetrahedral vibrations
+        mode_families = [
+            (1, 0, 1.0),    # Breathing mode (radial)
+            (1, 1, 1.4),    # Dipole mode (translational)
+            (2, 0, 1.8),    # Quadrupole mode (squashing)
+            (2, 1, 2.2),    # Quadrupole mode (twisting)
+            (2, 2, 2.6),    # Quadrupole mode (shearing)
+            (3, 0, 3.0),    # Octupole mode
+            (3, 1, 3.4),    # Octupole mode
+            (3, 2, 3.8),    # Octupole mode
+            (4, 0, 4.2),    # Higher mode
+            (4, 1, 4.6),    # Higher mode
+            (4, 2, 5.0),    # Higher mode
+            (5, 0, 5.4),    # Higher mode
+        ]
+
+        for l, m, factor in mode_families:
+            # Base frequency for this mode family
+            # For pyramid, frequencies are proportional to (l+1)/R
+            f_base = factor * c_shear / (2 * np.pi * radius)
+
+            if f_base < min_freq:
+                continue
+            if f_base > max_freq:
+                break
+
+            frequencies.append(f_base)
+
+            # Add overtones with slight frequency shifts
+            for k in range(1, 3):
+                f_ot = f_base * (1 + k * 0.3 * (l + 1) / (m + 1))
+                if f_ot <= max_freq:
+:
+                    frequencies.append(f_ot)
+
+            if len(frequencies) >= n_modes * 2:
+                break
+
+        # Sort and take the lowest n_modes
+        if len(frequencies) > 0:
+            frequencies = np.sort(frequencies)[:n_modes]
+        else:
+            frequencies = np.array([min_freq])
+
+        # Pad if needed
+        if len(frequencies) < n_modes:
+            last_freq = frequencies[-1] if len(frequencies) > 0 else min_freq
+            for i in range(n_modes - len(frequencies)):
+                frequencies = np.append(frequencies, last_freq * (1 + (i + 1) * 0.15))
+
+        return frequencies
 
     def _octahedron_mode_frequencies(
         self,
@@ -491,7 +570,7 @@ class Modal4Proxy:
             
             f_base = (c_long / 2) * np.sqrt((i/side)**2 + (j/side)**2 + (k/side)**2)
             
-            # Apply mode-specific scaling scaling factor
+            # Apply mode-specific scaling factor
             f_base *= factor
 
             if f_base < min_freq:
@@ -611,8 +690,7 @@ class Modal4Proxy:
 
         # Longitudinal wave speed
         if poisson_ratio is not None and poisson_ratio != 1.0:
-            c_long = np.sqrt(young_modulus * (1 - poisson_ratio) /
-                            (density * (1 + poisson_ratio) * (1 - 2 * poisson_ratio)))
+            c_long = np.sqrt(young_modulus * (1 - poisson_ratio) / (density * (1 + poisson_ratio) * (1 - 2 * poisson_ratio)))
         else:
             c_long = np.sqrt(young_modulus / density)
 
@@ -677,6 +755,15 @@ class Modal4Proxy:
                         phi=phi
                     )
 
+                    # Apply shape-specific scaling for pyramid
+                    if proxy_type == 0:
+                        # Pyramid has asymmetric mode shapes
+                        # Scale by distance from apex (vertex 0 is apex)
+                        if vertex_idx == 0:
+                            gain *= 1.5  # Apex has larger displacement
+                        else:
+                            gain *= 0.8  # Base vertices have smaller displacement
+
                     gains[mode_idx, vertex_idx] = gain * 0.1  # Scale
 
         return gains
@@ -730,7 +817,7 @@ class Modal4Proxy:
     def _compute_volume(self, vertices: np.ndarray) -> float:
         """Estimate volume from vertex cloud using convex hull."""
         if len(vertices) < 4:
-            return 0.0
+            return  0.0
 
         try:
             hull = ConvexHull(vertices)
@@ -768,7 +855,7 @@ class Modal4Proxy:
         # Format frequencies
         freq_str = ", ".join([f"{f:.6f}" for f in frequencies])
 
-        # Format T60s
+               # Format T60s
         t60_str = ", ".join([f"{t:.6f}" for t in t60s])
 
         # Format gains (flattened array)
@@ -781,7 +868,14 @@ class Modal4Proxy:
         density = config_obj.acoustic_shader.density if config_obj.acoustic_shader else "N/A"
 
         # Proxy shape name
-        proxy_names = {0: "octahedron", 1: "cube", 2: "icosahedron", 3: "icosahedron_sub1", 4: "icosahedron_sub2"}
+        proxy_names = {
+            0: "pyramid", 
+            1: "octahedron", 
+            2: "cube", 
+            3: "icosahedron", 
+            4: "icosahedron_sub1", 
+            5: "icosahedron_sub2"
+        }
         proxy_name = proxy_names.get(proxy_type, "unknown")
 
         # Generate Faust code
@@ -795,7 +889,7 @@ class Modal4Proxy:
 // ------------------------------------------------------------
 
 declare name        "{output_name}";
-declare version version     "0.1";
+declare version     "0.1";
 declare author      "Modal4Proxy";
 declare license     "GPL";
 

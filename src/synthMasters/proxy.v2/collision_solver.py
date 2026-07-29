@@ -239,28 +239,19 @@ class CollisionSolver:
         mesh1_vertices = trajectory1.get_vertices(sample_idx)
         mesh2_vertices = trajectory2.get_vertices(sample_idx)
         
-        # For octahedron proxies (proxy_type=0), use analytical face matching
-        if proxy1 and proxy1['proxy_type'] == 0:
-            # The octahedron has 8 faces, each corresponding to an octant
-            # We can determine which face is facing the collision point by checking
-            # which octant the contact point falls in relative to the proxy center
-            
+        # For pyramid and octahedron proxies, use analytical face matching
+        if proxy1 and proxy1['proxy_type'] in [0, 1]:
             center1 = np.mean(mesh1_vertices, axis=0)
             direction_to_cp = cp1 - center1
-            octant = np.sign(direction_to_cp)  # Returns [-1, 0, 1] for each axis
+            octant = np.sign(direction_to_cp)
             
-            # Map octant to face indices for octahedron
-            face_indices = self._octant_to_face_indices(octant)
-            
-            # Get vertices from these faces
+            face_indices = self._octant_to_face_indices(octant, proxy1['proxy_type'])
             vertices1_idx = np.unique(mesh1_faces[face_indices].flatten())
-            
-            # Compute contact area (for octahedron, this is proportional to face area)
             face_area1 = len(face_indices) / proxy1['n_faces']
         else:
-            # For other proxy types, use KDTree but with smaller search radius
+            # For other proxy types, use KDTree with smaller search radius
             tree1 = cKDTree(mesh1_vertices)
-            radius = collision_margin * 1.5  # Smaller radius for proxies
+            radius = collision_margin * 1.5
             vertices1_idx = np.array(tree1.query_ball_point(cp1, radius, workers=-1))
             
             if len(vertices1_idx) > 0:
@@ -270,11 +261,11 @@ class CollisionSolver:
                 face_area1 = 0
         
         # Same for proxy2
-        if proxy2 and proxy2['proxy_type'] == 0:
+        if proxy2 and proxy2['proxy_type'] in [0, 1]:
             center2 = np.mean(mesh2_vertices, axis=0)
             direction_to_cp = cp2 - center2
             octant = np.sign(direction_to_cp)
-            face_indices = self._octant_to_face_indices(octant)
+            face_indices = self._octant_to_face_indices(octant, proxy2['proxy_type'])
             vertices2_idx = np.unique(mesh2_faces[face_indices].flatten())
             face_area2 = len(face_indices) / proxy2['n_faces']
         else:
@@ -287,37 +278,63 @@ class CollisionSolver:
                 face_area2 = len(mesh2_faces_idx) / len(mesh2_faces)
             else:
                 face_area2 = 0
-        
+
         return vertices1_idx, vertices2_idx, face_area1, face_area2
 
-    def _octant_to_face_indices(self, octant: np.ndarray) -> np.ndarray:
+    def _octant_to_face_indices(self, octant: np.ndarray, proxy_type: int = 0) -> np.ndarray:
         """
-        Map octant sign to face indices for an octahedron.
-        Octahedron has 8 faces, one per octant.
+        Map octant sign to face indices for proxy meshes.
         
-        Returns face indices (0-7) for the given octant.
+        For pyramid (proxy_type=0): 4 faces
+        For octahedron (proxy_type=1): 8 faces
+        For cube (proxy_type=2): 6 faces
+        
+        Returns face indices for the given octant.
         """
-        # For a standard octahedron with vertices at axis extents:
-        # Faces are: [+x,+y,+z], [+x,+y,-z], [+x,-y,+z], [+x,-y,-z],
-        #             [-x,+y,+z], [-x,+y,-z], [-x,-y,+z], [-x,-y,-z]
-        
-        # Map octant to face index
-        octant_key = (octant[0] >= 0, octant[1] >= 0, octant[2] >= 0)
-        face_map = {
-            (True, True, True): 0,
-            (True, True, False): 1,
-            (True, False, True): 2,
-            (True, False, False): 3,
-            (False, True, True): 4,
-            (False, True, False): 5,
-            (False, False, True): 6,
-            (False, False, False): 7
-        }
-        
-        return np.array([face_map.get(octant_key, 0)])
+        if proxy_type == 0:
+            # Pyramid has 4 faces
+            # Faces are: [apex, base1, base2], [apex, base2, base3], [apex, base3, base1], [base1, base3, base2]
+            # Apex is at +x, base is at -x
+            # Map based on which quadrant the contact point is in
+            if octant[1] >= 0 and octant[2] >= 0:
+                return np.array([0])  # Front face
+            elif octant[1] >= 0 and octant[2] < 0:
+                return np.array([1])  # Right face
+            elif octant[1] < 0 and octant[2] >= 00:
+                return np.array([2])  # Left face
+            else:
+                return np.array([3])  # Base face
+        elif proxy_type == 1:
+            # Octahedron has 8 faces
+            octant_key = (octant[0] >= 0, octant[1] >= 0, octant[2] >= 0)
+            face_map = {
+                (True, True, True): 0,
+                (True, True, False): 1,
+                (True, False, True): 2,
+                (True, False, False): 3,
+                (False, True, True): 4,
+                (False, True, False): 5,
+                (False, False, True): 6,
+                (False, False, False): 7
+            }
+            return np.array([face_map.get(octant_key, 0)])
+        elif proxy_type == 2:
+            # Cube has 6 faces
+            # Determine which face is closest based on the dominant axis
+            abs_octant = np.abs(octant)
+            dominant_axis = np.argmax(abs_octant)
+            if dominant_axis == 0:  # x-axis
+                return np.array([0, 1]) if octant[0] >= 0 else np.array([2, 3])
+            elif dominant_axis == 1:  # y-axis
+                return np.array([4, 5]) if octant[1] >= 0 else np.array([6, 7])
+            else:  # z-axis
+                return np.array([8, 9]) if octant[2] >= 0 else np.array([10, 11])
+        else:
+            # Default to octahedron behavior
+            return np.array([0])
 
-    def _standard_collision(self, cp1, cp2, collision_margin, contact_type,
-                             trajectory1, trajectory2, mesh1_faces, mesh2_faces, sample_idx):
+
+    def _standard_collision(self, cp1, cp2, collision_margin, contact_type, trajectory1, trajectory2, mesh1_faces, mesh2_faces, sample_idx):
         """Original collision detection for non-proxy meshes."""
         mesh1_vertices = trajectory1.get_vertices(sample_idx)
         mesh2_vertices = trajectory2.get_vertices(sample_idx)

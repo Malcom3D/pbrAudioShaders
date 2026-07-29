@@ -16,8 +16,6 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# ./ellipsoidalProxy/core/proxy_mesh.py
-
 import os
 import numpy as np
 from typing import List, Tuple, Optional, Any, Dict
@@ -35,9 +33,10 @@ class ProxyMesh:
     Generate low-resolution proxy meshes with consistent vertex indexing.
 
     proxy_type values:
-    - 0: 6-vertex octahedron (axis-aligned, 6 vertices at extents)
-    - 1: 8-vertex hexahedron/cube (axis-aligned, 8 vertices at corners)
-    - 2,3,4: icosahedron with subdivision of (proxy_type - 2)
+    - 0: 4-vertex pyramid (axis-aligned, 4 vertices at extents)
+    - 1: 6-vertex octahedron (axis-aligned, 6 vertices at extents)
+    - 2: 8-vertex hexahedron/cube (axis-aligned, 8 vertices at corners)
+    - 3,4,5: icosahedron with subdivision of (proxy_type - 3)
 
     The proxy mesh vertices maintain consistent indexing across frames
     by mapping to the original mesh's extremal vertices.
@@ -90,7 +89,7 @@ class ProxyMesh:
         R0 = rotation_0.as_matrix()
         vertices_local_0 = (R0.T @ (vertices_0 - position_0).T).T
 
-        # Compute bounding box in in local coordinates for first frame
+        # Compute bounding box in local coordinates for first frame
         min_coords_0 = np.min(vertices_local_0, axis=0)
         max_coords_0 = np.max(vertices_local_0, axis=0)
         extents_0 = max_coords_0 - min_coords_0
@@ -173,13 +172,13 @@ class ProxyMesh:
 
         print(f"Created {n_frames} proxy frames for {config_obj.name} at {obj_proxy_path}")
 
-    def _generate_proxy_mesh(self, proxy_type: int, extents: np.ndarray, 
-                             center: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def _generate_proxy_mesh(self, proxy_type: int, extents: np.ndarray, center: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
         Generate a proxy mesh based on proxy_type, scaled to fit extents.
 
         Args:
-            proxy_type: 0=6-vertex octahedron, 1=8-vertex cube, 2,3,4=icosahedron
+            proxy_type: 0=4-vertex pyramid, 1=6-vertex octahedron, 
+                        2=8-vertex cube, 3,4,5=icosahedron
             extents: (dx, dy, dz) bounding box extents
             center: Center of the bounding box in local coordinates
 
@@ -187,22 +186,68 @@ class ProxyMesh:
             Tuple of (vertices, faces) for the proxy mesh
         """
         if proxy_type == 0:
+            # 4-vertex pyramid - vertices at extents
+            vertices, faces = self._create_pyramid_4v(extents, center)
+        elif proxy_type == 1:
             # 6-vertex octahedron - vertices at axis extents
             vertices, faces = self._create_octahedron_6v(extents, center)
-        elif proxy_type == 1:
+        elif proxy_type == 2:
             # 8-vertex cube - vertices at bounding box corners
             vertices, faces = self._create_cube_8v(extents, center)
-        elif proxy_type in [2, 3, 4]:
+        elif proxy_type in [3, 4, 5]:
             # Icosahedron with subdivision
-            subdivisions = proxy_type - 2
+            subdivisions = proxy_type - 3
             vertices, faces = self._create_icosahedron(subdivisions=subdivisions)
             # Scale to match extents
             half_extents = extents / 2.0
             vertices = vertices * half_extents[np.newaxis, :] + center
         else:
-            # Default to 6-vertex octahedron for unknown types
-            print(f"Warning: Unknown proxy_type {proxy_type}, using 6-vertex octaahedron")
-            vertices, faces = self._create_octahedron_6v(extents, center)
+            # Default to 4-vertex pyramid for unknown types
+            print(f"Warning: Unknown proxy_type {proxy_type}, using 4-vertex pyramid")
+            vertices, faces = self._create_pyramid_4v(extents, center)
+
+        return vertices, faces
+
+    def _create_pyramid_4v(self, extents: np.ndarray, center: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Create a 4-vertex pyramid (axis-aligned).
+        
+        Vertices are at the extents:
+        - Vertex 0: +x extent (apex)
+        - Vertex 1: -x extent (base corner 1)
+        - Vertex 2: +y extent (base corner 2)
+        - Vertex 3: -y extent (base corner 3)
+
+        The pyramid has a triangular base in the YZ plane and apex at +x.
+
+        Args:
+            extents: (dx, dy, dz) bounding box extents
+            center: Center position
+
+        Returns:
+            Tuple of (4 vertices, 4 triangular faces)
+        """
+        half_extents = extents / 2.0
+
+        # 4 vertices at extents forming a pyramid
+        # Apex at +x, base at -x with vertices at ±y and ±z
+        vertices = np.array([
+            [half_extents[0], 0.0, 0.0],     # 0: Apex (+x)
+            [-half_extents[0], -half_extents[1], -half_extents[2]],  # 1: Base corner (-x, -y, -z)
+            [-half_extents[0], half_extents[[1], -half_extents[2]],   # 2: Base corner (-x, +y, -z)
+            [-half_extents[0], 0.0, half_extents[2]],                # 3: Base center (-x, 0, +z)
+        ], dtype=np.float64)
+
+        # Center the vertices
+        vertices = vertices + center
+
+        # 4 triangular faces forming a pyramid
+        faces = np.array([
+            [0, 1, 2],  # Front face (apex to base front)
+            [0, 2, 3],  # Right face (apex to base right)
+            [0, 3, 1],  # Left face (apex to base left)
+            [1, 3, 2],   # Base face (base triangle)
+        ], dtype=np.int32)
 
         return vertices, faces
 
@@ -306,7 +351,7 @@ class ProxyMesh:
             [3, 6, 7],
             # Back face (y = -hy)
             [0, 5, 1],
-            [0, 4, 5],
+                       [0, 4, 5],
             # Left face (x = -hx)
             [0, 3, 7],
             [0, 7, 4],
