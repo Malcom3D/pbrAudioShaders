@@ -177,11 +177,11 @@ class ModalPlayer:
                                     if not value == 0:
                                         resonance_output += self.resonance_synth.process(event_type, vertex_ids, input_force, contact_area, coupling_data)
 
-                self.rigidbody_synth_track[sample_idx] += rigidbody_output if not np.isnan(rigidbody_output) else 0
-                self.resonance_synth_track[sample_idx] += resonance_output if not np.isnan(resonance_output) else 0
-                self.sliding_synth_track[sample_idx] += sliding_output if not np.isnan(sliding_output) else 0
-                self.scraping_synth_track[sample_idx] += scraping_output if not np.isnan(scraping_output) else 0
-                self.rolling_synth_track[sample_idx] += rolling_output if not np.isnan(rolling_output) else 0
+                    self.rigidbody_synth_track[sample_idx] += rigidbody_output if not np.isnan(rigidbody_output) else 0
+                    self.resonance_synth_track[sample_idx] += resonance_output if not np.isnan(resonance_output) else 0
+                    self.sliding_synth_track[sample_idx] += sliding_output if not np.isnan(sliding_output) else 0
+                    self.scraping_synth_track[sample_idx] += scraping_output if not np.isnan(scraping_output) else 0
+                    self.rolling_synth_track[sample_idx] += rolling_output if not np.isnan(rolling_output) else 0
         
                 # Update sample indices for next iteration
                 old_sample_idx = sample_idx
