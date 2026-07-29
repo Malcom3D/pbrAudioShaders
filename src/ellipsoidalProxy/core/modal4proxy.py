@@ -422,9 +422,7 @@ class Modal4Proxy:
             for k in range(1, 3):
                 f_ot = f_base * (1 + k * 0.3 * (l + 1) / (m + 1))
                 if f_ot <= max_freq:
-:
                     frequencies.append(f_ot)
-
             if len(frequencies) >= n_modes * 2:
                 break
 
