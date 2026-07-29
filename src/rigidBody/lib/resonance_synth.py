@@ -56,7 +56,8 @@ class ResonanceSynth:
         output_banks = 0
         if type_scale == 0:
             return output_banks
-        input_buffer = self.connected_buffer.read_for_obj(self.obj_idx, synth_type)
+#        input_buffer = self.connected_buffer.read_for_obj(self.obj_idx, synth_type)
+        input_buffer = self.connected_buffer.objs_buffer[self.obj_idx][synth_type]
         if contact_area == 0 and self.contact_area_scale == None:
             excitation = 0
         else:
@@ -69,12 +70,13 @@ class ResonanceSynth:
         if not (excitation + input_buffer) == 0:
             for idx in range(self.banks.shape[0]):
                 output_banks += self.banks[idx].process(excitation + input_buffer)
-
-            if other_objs is not None and not excitation == 0:
-                for other_idx in range(len(other_objs)):
-                    other_obj_idx, coupling_strength = other_objs[other_idx]
-                    self.connected_buffer.write_to_obj(int(other_obj_idx), synth_type, coupling_strength * excitation)
         return output_banks
+
+#            if other_objs is not None and not excitation == 0:
+#                for other_idx in range(len(other_objs)):
+#                    other_obj_idx, coupling_strength = other_objs[other_idx]
+#                    self.connected_buffer.write_to_obj(int(other_obj_idx), synth_type, coupling_strength * excitation)
+#        return output_banks
 
 #        if not (excitation + input_buffer) == 0:
 #            tasks = [self.process_sample(bank_idx, excitation, input_buffer, synth_type, other_objs) for idx in range(self.banks.shape[0])]
