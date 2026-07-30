@@ -174,7 +174,7 @@ class CollisionSolver:
         Uses analytical geometry instead of KDTree queries.
         """
         # Get proxy mesh properties EntityManager cache
-        for config_obj in config.objects:
+        for config_obj in self.config.objects:
             if config_obj.idx == obj1_idx:
                 proxy1 = config_obj.proxy_type
             elif config_obj.idx == obj2_idx: 
@@ -460,6 +460,13 @@ class CollisionSolver:
             face_area2 = 0
             mesh1_faces_idx = np.array([])
             mesh2_faces_idx = np.array([])
+
+            for conf_obj in self.config.objects:
+                if conf_obj.idx == trajectory1.obj_idx:
+                    config_obj1 = conf_obj
+                elif conf_obj.idx == trajectory2.obj_idx:
+                    config_obj2 = conf_obj
+            print(f"facing faces between {config_obj1.name} and {config_obj2.name} at frame {sample_idx}: {mesh1_faces_idx.shape[0]} {mesh2_faces_idx.shape[0]} at distance {collision_margin} for {ContactType(contact_type).name.lower()}")
         
         return vertices1_idx, vertices2_idx, face_area1, face_area2
 
