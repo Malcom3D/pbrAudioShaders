@@ -157,7 +157,7 @@ class CollisionSolver:
         norms[norms == 0] = 1
         return normals / norms
 
-    def _precompute_face_adjacency(self, vertices: np.ndarray, faces: np.ndarray) -> np.ndarray:
+    def _precompute_face_adjacency(self, faces: np.ndarray) -> np.ndarray:
         """
         For octahedron (8 faces, 6 vertices), pre-compute which faces share edges.
         This allows us to quickly determine which faces are "facing" a given direction.
