@@ -317,7 +317,7 @@ class CollisionSolver:
         return vertices1_idx, vertices2_idx, face_area1, face_area2
 
     def _analytical_proxy_collision(self, proxy_cache, vertices, faces, contact_point, center, collision_margin):
-        "center, collision_margin):center, collision_margin):""
+        """
         Analytical collision detection for proxy meshes.
         Uses geometric relationships instead of KDTree.
         """
