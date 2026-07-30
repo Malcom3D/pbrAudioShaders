@@ -79,7 +79,7 @@ class CollisionSolver:
                         'face_adjacency': self._precompute_face_adjacency(faces),
                     
                         # Pre-compute vertex adjacency
-                        'vertex_adjacency': self._precompute_vertex_adjacency(vertices, faces)
+#                        'vertex_adjacency': self._precompute_vertex_adjacency(vertices, faces)
                     }
                 
                     self._proxy_cache[cache_key] = cache
