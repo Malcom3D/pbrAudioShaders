@@ -26,7 +26,7 @@ from dask import delayed, compute
 from dask import config as dask_config
 #dask_config.set(scheduler='threads', num_workers=1024)
 #dask_config.set(scheduler='processes', num_workers=1024)
-dask_config.set(num_workers=1024, optimization.fuse.active=True, optimization.fuse.max_depth=10)
+dask_config.set({num_workers=1024, optimization.fuse.active=True, optimization.fuse.max_depth=10})
 
 #from dask import config as dask_config
 #import multiprocessing as mp
