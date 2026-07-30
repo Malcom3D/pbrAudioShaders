@@ -97,7 +97,6 @@ class CollisionSolver:
         for i, normal in enumerate(face_normals):
             octant_key = tuple(np.sign(normal).astype(int))
             octant_map[octant_key] = i
-    
         return octant_map
 
     def _precompute_barycentric_coords(self, vertices, faces):
@@ -105,11 +104,29 @@ class CollisionSolver:
         barycentric_coords = []
         for face in faces:
             v0, v1, v2 = vertices[face]
-            # Pre-compute the inverse matrix for barycentric calculation
-            M = np.column_stack([v1 - v0, v2 - v0])
-            M_inv = np.linalg.inv(M) if np.linalg.det(M) != 0 else np.eye(2)
+            # Create a 2x2 matrix from the 2D projection of the face
+            # We use the first two coordinates (x,y) for the barycentric calculation
+            # since the face is a triangle in 3D space
+            M = np.column_stack([v1[:2] - v0[:2], v2[:2] - v0[:2]])
+        
+            # Check if the matrix is invertible (non-degenerate triangle in 2D projection)
+            det = np.linalg.det(M)
+            if abs(det) > 1e-10:
+                M_inv = np.linalg.inv(M)
+            else:
+                # Fallback: try different projection (x,z) or (y,z)
+                M_alt = np.column_stack([v1 - v0, v2 - v0])
+                # Remove the row with the smallest variation to make it 2x2
+                variations = np.std(M_alt, axis=1)
+                min_var_idx = np.argmin(variations)
+                M_reduced = np.delete(M_alt, min_var_idx, axis=0)
+            
+                det_alt = np.linalg.det(M_reduced)
+                if abs(det_alt) > 1e-10:
+                    M_inv = np.linalg.inv(M_reduced)
+                else:
+                    M_inv = np.eye(2)  # Default fallback
             barycentric_coords.append(M_inv)
-    
         return np.array(barycentric_coords)
 
     def _precompute_cube_face_groups(self, faces):
@@ -119,8 +136,8 @@ class CollisionSolver:
         face_groups = []
         for i in range(0, len(faces), 2):
             face_groups.append(np.array([i, i+1]))
-    
         return np.array(face_groups)
+
     def _load_proxy_mesh(self, config_obj, frame_idx: int):
         """Load proxy mesh vertices, normals, and faces."""
         from ..lib.functions import _load_mesh
@@ -268,7 +285,7 @@ class CollisionSolver:
                     vertex1_id_list, vertex2_id_list,
                     config_obj1, config_obj2
                 )
-        
+
         # Finalize score tracks
         self._finalize_score_tracks(score_track1, score_track2, config_obj1, config_obj2, start_samples, stop_samples, score_type1, score_type2, score_vertex_ids1, score_vertex_ids2, score_contact_area1, score_contact_area2)
         
@@ -545,6 +562,21 @@ class CollisionSolver:
         vertices2_idx = np.array(tree2.query_ball_point(cp2, radius, workers=-1))
         
         if len(vertices1_idx) > 0 and len(vertices2_idx) > 0:
+            # Hi-res face2face
+            if self.config.system.hi_res_face2face:
+                mesh1_faces_idx = np.where(np.any(np.isin(mesh1_faces, vertices1_idx), axis=1))[0]
+                mesh2_faces_idx = np.where(np.any(np.isin(mesh2_faces, vertices2_idx), axis=1))[0]
+                mesh1_sampled, face_index = trimesh.sample.sample_surface(mesh=mesh1, count=self.config.system.samples_per_face, face_weight=mesh1_faces_idx[sample_idx])
+                mesh2_sampled, face_index = trimesh.sample.sample_surface(mesh=mesh2, count=self.config.system.samples_per_face, face_weight=mesh2_faces_idx[sample_idx])
+                hi_res_tree1 = cKDTree(mesh1_sampled)
+                hi_res_tree2 = cKDTree(mesh2_sampled)
+                hi_res_radius = collision_margin * 0.5
+                hi_res_vertices1_idx = hi_res_tree1.query_ball_point(vertices1_idx, hi_res_radius, workers=-1)
+                hi_res_vertices2_idx = hi_res_tree2.query_ball_point(vertices2_idx, hi_res_radius, workers=-1)
+                if len(hi_res_vertices1_idx) > 0 and len(hi_res_vertices2_idx) > 0:
+                    vertices1_idx = np.array(hi_res_vertices1_idx)
+                    vertices2_idx = np.array(hi_res_vertices2_idx)
+
             mesh1_faces_idx = np.where(np.any(np.isin(mesh1_faces, vertices1_idx), axis=1))[0]
             mesh2_faces_idx = np.where(np.any(np.isin(mesh2_faces, vertices2_idx), axis=1))[0]
             
@@ -836,7 +868,6 @@ class CollisionSolver:
         if vertices1_idx and vertices2_idx:
             vertices1_idx = np.array(vertices1_idx)
             vertices2_idx = np.array(vertices2_idx)
-            
             
             mesh1_faces_idx = np.where(np.any(np.isin(mesh1_faces, vertices1_idx), axis=1))[0]
             mesh2_faces_idx = np.where(np.any(np.isin(mesh2_faces, vertices2_idx), axis=1))[0]
