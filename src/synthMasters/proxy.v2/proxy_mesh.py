@@ -234,7 +234,7 @@ class ProxyMesh:
         vertices = np.array([
             [half_extents[0], 0.0, 0.0],     # 0: Apex (+x)
             [-half_extents[0], -half_extents[1], -half_extents[2]],  # 1: Base corner (-x, -y, -z)
-            [-half_extents[0], half_extents[[1], -half_extents[2]],   # 2: Base corner (-x, +y, -z)
+            [-half_extents[0], half_extents[1], -half_extents[2]],   # 2: Base corner (-x, +y, -z)
             [-half_extents[0], 0.0, half_extents[2]],                # 3: Base center (-x, 0, +z)
         ], dtype=np.float64)
 

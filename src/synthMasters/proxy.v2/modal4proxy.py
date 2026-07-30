@@ -179,7 +179,6 @@ class Modal4Proxy:
                 max_freq=max_freq
             )
         elif proxy_type == 1:
-:
             # Octahedron modes (6 vertices, 8 faces)
             frequencies = self._octahedron_mode_frequencies(
                 n_modes=n_modes,
@@ -423,9 +422,7 @@ class Modal4Proxy:
             for k in range(1, 3):
                 f_ot = f_base * (1 + k * 0.3 * (l + 1) / (m + 1))
                 if f_ot <= max_freq:
-:
                     frequencies.append(f_ot)
-
             if len(frequencies) >= n_modes * 2:
                 break
 

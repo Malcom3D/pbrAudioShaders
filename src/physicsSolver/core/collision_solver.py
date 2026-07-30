@@ -34,7 +34,6 @@ from ..lib.modal_vertices import ModalVertices
 from ..lib.score_data import ScoreEvent, ScoreTrack
 from ..lib.force_data import ContactType
 
-
 @dataclass
 class CollisionSolver:
     entity_manager: EntityManager
@@ -47,31 +46,81 @@ class CollisionSolver:
         self._init_proxy_cache()
 
     def _init_proxy_cache(self):
-        """Pre-compute proxy mesh properties for all objects."""
+        """Enhanced proxy cache with pre-computed face normals and adjacency."""
         for conf_obj in self.config.objects:
             if conf_obj.proxy_type is not False:
                 cache_key = conf_obj.idx
                 if cache_key not in self._proxy_cache:
-                    # Load proxy mesh once
                     vertices, normals, faces = self._load_proxy_mesh(conf_obj, 0)
-                    
-                    # Pre-compute shared properties
-                    self._proxy_cache[cache_key] = {
+                
+                    # Pre-compute ALL geometric properties
+                    cache = {
                         'vertices': vertices,
                         'normals': normals,
                         'faces': faces,
                         'n_vertices': len(vertices),
                         'n_faces': len(faces),
                         'proxy_type': conf_obj.proxy_type,
-                        
-                        # Pre-compute face centroids and normals for octahedron
+                    
+                        # Pre-compute face centroids and normals
                         'face_centroids': self._compute_face_centroids(vertices, faces),
                         'face_normals': self._compute_face_normals(vertices, faces),
+                    
+                        # For pyramid (type 0): pre-compute barycentric coordinates
+                        'face_barycentric': self._precompute_barycentric_coords(vertices, faces) if conf_obj.proxy_type == 0 else None,
+                    
+                        # For octahedron (type 1): pre-compute octant mapping
+                        'octant_to_face': self._precompute_octant_mapping(vertices, faces) if conf_obj.proxy_type == 1 else None,
                         
-                        # For octahedron (proxy_type=0), pre-compute all possible face pairs
-                        'face_adjacency': self._precompute_face_adjacency(vertices, faces) if conf_obj.proxy_type == 0 else None
+                        # For cube (type 2): pre-compute face grouping
+                        'cube_face_groups': self._precompute_cube_face_groups(faces) if conf_obj.proxy_type == 2 else None,
+                    
+                        # Pre-compute face adjacency for all types
+                        'face_adjacency': self._precompute_face_adjacency(faces),
+                    
+                        # Pre-compute vertex adjacency
+                        'vertex_adjacency': self._precompute_vertex_adjacency(vertices, faces)
                     }
+                
+                    self._proxy_cache[cache_key] = cache
 
+    def _precompute_octant_mapping(self, vertices, faces):
+        """Pre-compute mapping from octant sign to face index for octahedron."""
+        # Octahedron has 8 faces, one per octant
+        face_centroids = self._compute_face_centroids(vertices, faces)
+    
+        # Normalize centroids to get face normals
+        face_normals = face_centroids / np.linalg.norm(face_centroids, axis=1, keepdims=True)
+    
+        # Create mapping from octant sign to face index
+        octant_map = {}
+        for i, normal in enumerate(face_normals):
+            octant_key = tuple(np.sign(normal).astype(int))
+            octant_map[octant_key] = i
+    
+        return octant_map
+
+    def _precompute_barycentric_coords(self, vertices, faces):
+        """Pre-compute barycentric coordinate matrices for each face."""
+        barycentric_coords = []
+        for face in faces:
+            v0, v1, v2 = vertices[face]
+            # Pre-compute the inverse matrix for barycentric calculation
+            M = np.column_stack([v1 - v0, v2 - v0])
+            M_inv = np.linalg.inv(M) if np.linalg.det(M) != 0 else np.eye(2)
+            barycentric_coords.append(M_inv)
+    
+        return np.array(barycentric_coords)
+
+    def _precompute_cube_face_groups(self, faces):
+        """Pre-compute face groups for cube (2 triangles per face)."""
+        # Cube has 6 faces, each composed of 2 triangles
+        # The faces are ordered: +x, -x, +y, -y, +z, -z
+        face_groups = []
+        for i in range(0, len(faces), 2):
+            face_groups.append(np.array([i, i+1]))
+    
+        return np.array(face_groups)
     def _load_proxy_mesh(self, config_obj, frame_idx: int):
         """Load proxy mesh vertices, normals, and faces."""
         from ..lib.functions import _load_mesh
@@ -228,58 +277,205 @@ class CollisionSolver:
 
     def _optimized_proxy_collision(self, obj1_idx, obj2_idx, cp1, cp2, collision_margin, contact_type, trajectory1, trajectory2, mesh1_faces, mesh2_faces, sample_idx):
         """
-        Optimized collision detection for proxy meshes.
-        Uses pre-computed face properties and geometric relationships.
+        Ultra-optimized collision detection for proxy meshes types 0, 1, 2.
+        Uses analytical geometry instead of KDTree queries.
         """
-        # Get proxy mesh properties from cache
+        # Get proxy mesh mesh properties from cache
         proxy1 = self._proxy_cache.get(obj1_idx)
         proxy2 = self._proxy_cache.get(obj2_idx)
-        
+    
         # Get current mesh vertices
         mesh1_vertices = trajectory1.get_vertices(sample_idx)
         mesh2_vertices = trajectory2.get_vertices(sample_idx)
-        
-        # For pyramid and octahedron proxies, use analytical face matching
-        if proxy1 and proxy1['proxy_type'] in [0, 1]:
-            center1 = np.mean(mesh1_vertices, axis=0)
-            direction_to_cp = cp1 - center1
-            octant = np.sign(direction_to_cp)
-            
-            face_indices = self._octant_to_face_indices(octant, proxy1['proxy_type'])
-            vertices1_idx = np.unique(mesh1_faces[face_indices].flatten())
-            face_area1 = len(face_indices) / proxy1['n_faces']
+    
+        # Pre-compute centers once
+        center1 = np.mean(mesh1_vertices, axis=0)
+        center2 = np.mean(mesh2_vertices, axis=0)
+    
+        # Use analytical collision for proxy types 0, 1, 2
+        if proxy1 and proxy1['proxy_type'] in [0, 1, 2]:
+            vertices1_idx, face_area1 = self._analytical_proxy_collision(
+                proxy1, mesh1_vertices, mesh1_faces, cp1, center1, collision_margin
+            )
         else:
-            # For other proxy types, use KDTree with smaller search radius
+            # Fallback to KDTree for other types
             tree1 = cKDTree(mesh1_vertices)
-            radius = collision_margin * 1.5
+            radius = collision_margin * (4.0 if contact_type in [4, 5] else 2.0)
             vertices1_idx = np.array(tree1.query_ball_point(cp1, radius, workers=-1))
-            
-            if len(vertices1_idx) > 0:
-                mesh1_faces_idx = np.where(np.any(np.isin(mesh1_faces, vertices1_idx), axis=1))[0]
-                face_area1 = len(mesh1_faces_idx) / len(mesh1_faces)
-            else:
-                face_area1 = 0
-        
-        # Same for proxy2
-        if proxy2 and proxy2['proxy_type'] in [0, 1]:
-            center2 = np.mean(mesh2_vertices, axis=0)
-            direction_to_cp = cp2 - center2
-            octant = np.sign(direction_to_cp)
-            face_indices = self._octant_to_face_indices(octant, proxy2['proxy_type'])
-            vertices2_idx = np.unique(mesh2_faces[face_indices].flatten())
-            face_area2 = len(face_indices) / proxy2['n_faces']
+            face_area1 = self._compute_face_area(vertices1_idx, mesh1_faces)
+    
+        if proxy2 and proxy2['proxy_type'] in [0, 1, 2]:
+            vertices2_idx, face_area2 = self._analytical_proxy_collision(
+                proxy2, mesh2_vertices, mesh2_faces, cp2, center2, collision_margin
+            )
         else:
             tree2 = cKDTree(mesh2_vertices)
-            radius = collision_margin * 1.5
+            radius = collision_margin * (4.0 if contact_type in [4, 5] else 2.0)
             vertices2_idx = np.array(tree2.query_ball_point(cp2, radius, workers=-1))
-            
-            if len(vertices2_idx) > 0:
-                mesh2_faces_idx = np.where(np.any(np.isin(mesh2_faces, vertices2_idx), axis=1))[0]
-                face_area2 = len(mesh2_faces_idx) / len(mesh2_faces)
-            else:
-                face_area2 = 0
-
+            face_area2 = self._compute_face_area(vertices2_idx, mesh2_faces)
+    
         return vertices1_idx, vertices2_idx, face_area1, face_area2
+
+    def _analytical_proxy_collision(self, proxy_cache, vertices, faces, contact_point, center, collision_margin):
+        "center, collision_margin):center, collision_margin):""
+        Analytical collision detection for proxy meshes.
+        Uses geometric relationships instead of KDTree.
+        """
+        proxy_type = proxy_cache['proxy_type']
+    
+        if proxy_type == 0:  # Pyramid (4 vertices)
+            return self._pyramid_collision(vertices, faces, contact_point, center, collision_margin)
+        elif proxy_type == 1:  # Octahedron (6 vertices)
+            return self._octahedron_collision(vertices, faces, contact_point, center, collision_margin)
+        elif proxy_type == 2:  # Cube (8 vertices)
+            return self._cube_collision(vertices, faces, contact_point, center, collision_margin)
+    
+        return np.array([], dtype=np.int32), 0.0
+
+    def _pyramid_collision(self, vertices, faces, contact_point, center, collision_margin):
+        """
+        Fast pyramid collision detection using barycentric coordinates.
+        Pyramid has 4 vertices and 4 faces.
+        """
+        # Pyramid structure: apex at index 0, base at indices 1,2,3
+        # The contact point direction from center tells us which face is hit
+    
+        direction = contact_point - center
+        direction_norm = np.linalg.norm(direction)
+    
+        if direction_norm < 1e-10:
+            return np.array([0, 1, 2, 3], dtype=np.int32), 1.0
+    
+        direction = direction / direction_norm
+    
+        # Pre-computed face normals for pyramid (from cache or compute on the fly)
+        # Face 0: apex to base front (vertices 0,1,2)
+        # Face 1: apex to base right (vertices 0,2,3)
+        # Face 2: apex to base left (vertices 0,3,1)
+        # Face 3: base (vertices 1,3,2)
+    
+        # Find which face the contact point is closest to using dot product
+        face_normals = self._compute_face_normals(vertices, faces)
+        dot_products = np.dot(face_normals, direction)
+    
+        # The closest face has the highest dot product
+        closest_face = np.argmax(dot_products)
+    
+        # Get vertices for this face
+        face_vertices = faces[closest_face]
+        unique_vertices = np.unique(face_vertices)
+    
+        # Add neighboring vertices for smooth transition
+        # This prevents artifacts at face boundaries
+        if collision_margin > 0.01:
+            # Add vertices from adjacent faces
+            for i, face in enumerate(faces):
+                if i != closest_face:
+                    if len(np.intersect1d(face, face_vertices)) > 0:
+                        unique_vertices = np.unique(np.concatenate([unique_vertices, face]))
+    
+        face_area = len(unique_vertices) / len(vertices)
+    
+        return unique_vertices, face_area
+
+    def _octahedron_collision(self, vertices, faces, contact_point, center, collision_margin):
+        """
+        Fast octahedron collision detection using sign-based face selection.
+        Octahedron has 6 vertices and 8 faces.
+        """
+        # Octahedron: vertices at (±1,0,0), (0,±1,0), (0,0,±1)
+        # The contact point's octant tells us which face is hit
+    
+        direction = contact_point - center
+        octant_signs = np.sign(direction)
+    
+        # Map octant to face index (pre-computed mapping for octahedron)
+        # Faces are indexed by their normal direction
+        octant_to_face = {
+            (1, 1, 1): 0,   # Face normal: (1,1,1)/sqrt(3)
+            (1, 1, -1): 1,  # Face normal: (1,1,-1)/sqrt(3)
+            (1, -1, 1): 2,  # etc.
+            (1, -1, -1): 3,
+            (-1, 1, 1): 4,
+            (-1, 1, -1): 5,
+            (-1, -1, 1): 6,
+            (-1, -1, -1): 7
+        }
+    
+        octant_key = (octant_signs[0], octant_signs[1], octant_signs[2])
+        face_idx = octant_to_face.get(octant_key, 0)
+    
+        # Get vertices for this face
+        face_vertices = faces[face_idx]
+        unique_vertices = np.unique(face_vertices)
+    
+        # Add adjacent face vertices for smooth transition
+        if collision_margin > 0.01:
+            for i, face in enumerate(faces):
+                if i != face_idx:
+                    if len(np.intersect1d(face, face_vertices)) > 0:
+                        unique_vertices = np.unique(np.concatenate([unique_vertices, face]))
+    
+        face_area = len(unique_vertices) / len(vertices)
+    
+        return unique_vertices, face_area
+
+    def _cube_collision(self, vertices, faces, contact_point, center, collision_margin):
+        """
+        Fast cube collision detection using axis-aligned bounding box.
+        Cube has 8 vertices and 6 faces (12 triangles).
+        """
+        # Cube is axis-aligned, so we can use simple coordinate checks
+        direction = contact_point - center
+    
+        # Find the dominant axis (which face is closest)
+        abs_direction = np.abs(direction)
+        dominant_axis = np.argmax(abs_direction)
+        face_sign = np.sign(direction[dominant_axis])
+    
+        # For a cube, each face has 2 triangles
+        # Face indices are grouped: [0,1] for +x, [2,3] for -x, etc.
+        if dominant_axis == 0:  # x-axis
+            face_indices = np.array([0, 1]) if face_sign > 0 else np.array([2, 3])
+        elif dominant_axis == 1:  # y-axis
+            face_indices = np.array([4, 5]) if face_sign > 0 else np.array([6, 7])
+        else:  # z-axis
+            face_indices = np.array([8, 9]) if face_sign > 0 else np.array([10, 11])
+    
+        # Get all vertices from these faces
+        face_vertices = faces[face_indices].flatten()
+        unique_vertices = np.unique(face_vertices)
+    
+        # Add edge vertices for smooth transition
+        if collision_margin > 0.01:
+            # Add vertices from adjacent faces (sharing an edge)
+            edge_faces = self._get_adjacent_faces(faces, face_indices)
+            for edge_face in edge_faces:
+                unique_vertices = np.unique(np.concatenate([unique_vertices, faces[edge_face]]))
+    
+        face_area = len(unique_vertices) / len(vertices)
+    
+        return unique_vertices, face_area
+
+    def _compute_face_area(self, vertices_idx, faces):
+        """Compute face area ratio from vertex indices."""
+        if len(vertices_idx) == 0:
+            return 0.0
+    
+        mesh_faces_idx = np.where(np.any(np.isin(faces, vertices_idx), axis=1))[0]
+        return len(mesh_faces_idx) / len(faces)
+
+    def _get_adjacent_faces(self, faces, face_indices):
+        """Get faces adjacent to the given face indices."""
+        adjacent = set()
+        face_vertices_set = set(faces[face_indices].flatten())
+    
+        for i, face in enumerate(faces):
+            if i not in face_indices:
+                if len(set(face.flatten()) & face_vertices_set) >= 2:  # Share an edge
+                    adjacent.add(i)
+    
+        return list(adjacent)
 
     def _octant_to_face_indices(self, octant: np.ndarray, proxy_type: int = 0) -> np.ndarray:
         """
@@ -332,7 +528,6 @@ class CollisionSolver:
         else:
             # Default to octahedron behavior
             return np.array([0])
-
 
     def _standard_collision(self, cp1, cp2, collision_margin, contact_type, trajectory1, trajectory2, mesh1_faces, mesh2_faces, sample_idx):
         """Original collision detection for non-proxy meshes."""
@@ -574,30 +769,58 @@ class CollisionSolver:
                 self.entity_manager.register('modal_vertices', modal_vertices2)
 
     def _connected_facing_face(self, obj1_idx, obj2_idx, trajectory1, trajectory2):
-        """Handle connected objects (static coupling)."""
+        """Ultra-optimized connected objects handling using pre-computed data."""
         distances_dir = f"{self.config.system.cache_path}/distances"
         distance_file = f"{distances_dir}/connected_{obj1_idx}_{obj2_idx}.npz"
-        
+    
         if not os.path.exists(distance_file):
             return
-        
+    
         distance_data = np.load(distance_file)
         collision_margin = distance_data[distance_data.files[0]]
         cp1 = distance_data[distance_data.files[1]]
         cp2 = distance_data[distance_data.files[2]]
-        
+    
         mesh1_faces = trajectory1.get_faces()
         mesh2_faces = trajectory2.get_faces()
-        
-        # Use proxy-optimized detection if available
+    
+        # Use pre-computed cache for proxy meshes
         is_proxy1 = obj1_idx in self._proxy_cache
         is_proxy2 = obj2_idx in self._proxy_cache
+    
+        if is_proxy1 and is_proxy2:
+            # Both are proxies - use analytical collision
+            proxy1 = self._proxy_cache[obj1_idx]
+            proxy2 = self._proxy_cache[obj2_idx]
         
-        if is_proxy1 or is_proxy2:
-            vertices1_idx, vertices2_idx, _, _ = self._optimized_proxy_collision(
-                obj1_idx, obj2_idx, cp1, cp2, collision_margin, 0,
-                trajectory1, trajectory2, mesh1_faces, mesh2_faces, 0
+            # Get mesh vertices (only need first frame for connected objects)
+            mesh1_vertices = trajectory1.get_vertices(0)
+            mesh2_vertices = trajectory2.get_vertices(0)
+        
+            # Use analytical collision for both
+            vertices1_idx, _ = self._analytical_proxy_collision(
+                proxy1, mesh1_vertices, mesh1_faces, cp1, 
+                np.mean(mesh1_vertices, axis=0), collision_margin
             )
+            vertices2_idx, _ = self._analytical_proxy_collision(
+                proxy2, mesh2_vertices, mesh2_faces, cp2,
+                np.mean(mesh2_vertices, axis=0), collision_margin
+            )
+        elif is_proxy1:
+            # Only object 1 is proxy
+            proxy1 = self._proxy_cache[obj1_idx]
+            mesh1_vertices = trajectory1.get_vertices(0)
+        
+            vertices1_idx, _ = self._analytical_proxy_collision(
+                proxy1, mesh1_vertices, mesh1_faces, cp1,
+                np.mean(mesh1_vertices, axis=0), collision_margin
+            )
+        
+            # Standard KDTree for object 2
+            mesh2_vertices = trajectory2.get_vertices(0)
+            tree2 = cKDTree(mesh2_vertices)
+            radius = collision_margin * 2.0
+            vertices2_idx = np.array(tree2.query_ball_point(cp2, radius, workers=-1))
         else:
             # Standard detection
             mesh1_vertices = trajectory1.get_vertices(0)
