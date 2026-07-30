@@ -75,10 +75,11 @@ class Pym2f:
                 vertices, normals, faces = _load_mesh(config_obj, 0)
                 items = os.listdir(config_obj.obj_path)
                 filenames = sorted(items)
-                filename = filenames[0]
-                if filename.endswith('.npz'):
-                    obj_file = f"{self.cache_path}/obj/{filename.removesuffix('npz') + 'obj'}"
-                    mesh_obj = _mesh_to_obj(vertices, normals, faces, obj_file, config_obj.resonance)
+                for filename in filenames:
+                    if filename.endswith('.npz'):
+                        obj_file = f"{self.cache_path}/obj/{filename.removesuffix('npz') + 'obj'}"
+                        mesh_obj = _mesh_to_obj(vertices, normals, faces, obj_file, config_obj.resonance)
+                        break
 
                 young_modulus = config_obj.acoustic_shader.young_modulus
                 poisson_ratio = config_obj.acoustic_shader.poisson_ratio
