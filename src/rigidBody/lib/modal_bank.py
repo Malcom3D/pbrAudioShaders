@@ -17,7 +17,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import numpy as np
-from numba import jit, float32, int32
+from numba import prange, jit, float32, int32
 
 @jit(nopython=True, parallel=True)
 def calculate_coefficients(frequencies, gains, t60s, sample_rate):
