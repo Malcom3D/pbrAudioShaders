@@ -447,8 +447,8 @@ class CollisionSolver:
                 mesh2 = trimesh.Trimesh(vertices=mesh2_vertices, vertex_normals=mesh2_normals, faces=mesh2_faces_raw)
                 mesh1_faces_idx = np.where(np.any(np.isin(mesh1_faces, vertices1_idx), axis=1))[0]
                 mesh2_faces_idx = np.where(np.any(np.isin(mesh2_faces, vertices2_idx), axis=1))[0]
-                mesh1_sampled, face_index = trimesh.sample.sample_surface(mesh=mesh1, count=self.config.system.samples_per_face, face_weight=mesh1_faces_idx[sample_idx])
-                mesh2_sampled, face_index = trimesh.sample.sample_surface(mesh=mesh2, count=self.config.system.samples_per_face, face_weight=mesh2_faces_idx[sample_idx])
+                mesh1_sampled, face_index = trimesh.sample.sample_surface(mesh=mesh1, count=self.config.system.samples_per_face, face_weight=mesh1_faces_idx)
+                mesh2_sampled, face_index = trimesh.sample.sample_surface(mesh=mesh2, count=self.config.system.samples_per_face, face_weight=mesh2_faces_idx)
                 hi_res_tree1 = cKDTree(mesh1_sampled)
                 hi_res_tree2 = cKDTree(mesh2_sampled)
                 hi_res_radius = collision_margin
