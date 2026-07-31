@@ -55,7 +55,13 @@ def process_mode(c, s, g, u1, u2, excitation):
 
 @jit(nopython=True, parallel=True)
 def process_all_mode(output: float32, num_modes: int32, c: float32[:], s: float32[:], g: float32[:], u1: float32[:], u2: float32[:], excitation: float32):
-    print('output', nb.typeof(output), 'num_modes', nb.typeof(num_modes), 'c', nb.typeof(c), 's', nb.typeof(s), 'u1', nb.typeof(u1), 'u2', nb.typeof(u2), 'excitation', nb.typeof(excitation))
+    nb.typeof(output)
+    nb.typeof(num_modes)
+    nb.typeof(c)
+    nb.typeof(s)
+    nb.typeof(u1)
+    nb.typeof(u2)
+    nb.typeof(excitation))
     for i in prange(num_modes):
         # Ensure we're using float32 arithmetic
         u1_new = c[i] * u1[i] - s[i] * u2[i] + g[i] * excitation
