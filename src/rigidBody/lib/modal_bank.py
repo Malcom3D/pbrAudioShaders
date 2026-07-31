@@ -60,7 +60,7 @@ def process_all_mode(output, num_modes, c, s, g, u1, u2, excitation):
         u2_new = s[i] * u1[i] + c[i] * u2[i]
         u1[i] = np.float32(u1_new)
         u2[i] = np.float32(u2_new)
-        output += u2_new
+        output += np.float32(u2_new)
     return output, u1, u2
 
 class ModalBank:
