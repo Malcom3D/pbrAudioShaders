@@ -58,9 +58,9 @@ def process_all_mode(output, num_modes, c, s, g, u1, u2, excitation):
         # Ensure we're using float32 arithmetic
         u1_new = c[i] * u1[i] - s[i] * u2[i] + g[i] * excitation
         u2_new = s[i] * u1[i] + c[i] * u2[i]
-        u1[i] = u1_new.astype(np.float32)
-        u2[i] = u2_new.astype(np.float32)
-        output += u2_new.astype(np.float32)
+        u1[i] = u1_new
+        u2[i] = u2_new
+        output += u2_new
     return output, u1, u2
 
 class ModalBank:
@@ -93,6 +93,7 @@ class ModalBank:
     def process(self, excitation: float) -> float:
         """Process one sample through all modes"""
         output = 0.0
+        excitation = np.float32(excitation)
         output, self.u1, self.u2 = process_all_mode(output, self.num_modes, self.c, self.s, self.g, self.u1, self.u2, excitation)
         return output
 
