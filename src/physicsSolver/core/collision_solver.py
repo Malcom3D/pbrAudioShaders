@@ -162,7 +162,7 @@ class CollisionSolver:
                     config_obj1, config_obj2
                 )
 
-            print(f"facing faces between {config_obj1.name} and {config_obj2.name} at frame {sample_idx}: {np.count_nonzero(vertices1_idx[sample_idx], axis=1)} {np.count_nonzero(vertices2_idx[sample_idx], axis=1)} at distance {collision_margin} for {ContactType(contact_type).name.lower()}")
+                print(f"facing faces between {config_obj1.name} and {config_obj2.name} at frame {sample_idx}: {np.count_nonzero(vertices1_idx} {np.count_nonzero(vertices2_idx)} at distance {collision_margin} for {ContactType(contact_type).name.lower()}")
 
         # Finalize score tracks
         self._finalize_score_tracks(score_track1, score_track2, config_obj1, config_obj2, start_samples, stop_samples, score_type1, score_type2, score_vertex_ids1, score_vertex_ids2, score_contact_area1, score_contact_area2)
@@ -437,27 +437,6 @@ class CollisionSolver:
         vertices2_idx = np.array(tree2.query_ball_point(cp2, radius, workers=-1))
         
         if len(vertices1_idx) > 0 and len(vertices2_idx) > 0:
-            # Hi-res face2face
-            if self.config.system.hi_res_face2face:
-                mesh1_faces_raw = trajectory1.get_faces(sample_idx)
-                mesh2_faces_raw = trajectory2.get_faces(sample_idx)
-                mesh1_normals = trajectory1.get_normals(sample_idx)
-                mesh2_normals = trajectory2.get_normals(sample_idx)
-                mesh1 = trimesh.Trimesh(vertices=mesh1_vertices, vertex_normals=mesh1_normals, faces=mesh1_faces_raw)
-                mesh2 = trimesh.Trimesh(vertices=mesh2_vertices, vertex_normals=mesh2_normals, faces=mesh2_faces_raw)
-                mesh1_faces_idx = np.where(np.any(np.isin(mesh1_faces, vertices1_idx), axis=1))[0]
-                mesh2_faces_idx = np.where(np.any(np.isin(mesh2_faces, vertices2_idx), axis=1))[0]
-                mesh1_sampled, face_index = trimesh.sample.sample_surface(mesh=mesh1, count=self.config.system.samples_per_face, face_weight=mesh1_faces_idx)
-                mesh2_sampled, face_index = trimesh.sample.sample_surface(mesh=mesh2, count=self.config.system.samples_per_face, face_weight=mesh2_faces_idx)
-                hi_res_tree1 = cKDTree(mesh1_sampled)
-                hi_res_tree2 = cKDTree(mesh2_sampled)
-                hi_res_radius = collision_margin
-                hi_res_vertices1_idx = hi_res_tree1.query_ball_point(vertices1_idx, hi_res_radius, workers=-1)
-                hi_res_vertices2_idx = hi_res_tree2.query_ball_point(vertices2_idx, hi_res_radius, workers=-1)
-                if len(hi_res_vertices1_idx) > 0 and len(hi_res_vertices2_idx) > 0:
-                    vertices1_idx = np.array(hi_res_vertices1_idx)
-                    vertices2_idx = np.array(hi_res_vertices2_idx)
-
             mesh1_faces_idx = np.where(np.any(np.isin(mesh1_faces, vertices1_idx), axis=1))[0]
             mesh2_faces_idx = np.where(np.any(np.isin(mesh2_faces, vertices2_idx), axis=1))[0]
             
