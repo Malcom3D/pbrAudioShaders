@@ -500,21 +500,26 @@ class DistanceSolver:
         # Hi-res face2face
         config = self.entity_manager.get('config')
         if config.system.hi_res_face2face:
-            method = 'HiRes'
-            mesh1_faces_idx = np.where(np.any(np.isin(mesh1.faces, closest_point1), axis=1))[0]
-            mesh2_faces_idx = np.where(np.any(np.isin(mesh2.faces, closest_point1), axis=1))[0]
-            mesh1_sampled, face_index = trimesh.sample.sample_surface(mesh=mesh1, count=config.system.samples_per_face, face_weight=mesh1_faces_idx)
-            mesh2_sampled, face_index = trimesh.sample.sample_surface(mesh=mesh2, count=config.system.samples_per_face, face_weight=mesh2_faces_idx)
-            tree1 = cKDTree(mesh1_sampled)
-            tree2 = cKDTree(mesh2_sampled)
-            vertices1_idx = tree1.query_ball_point(closest_point2, min_distance, workers=-1)
-            vertices2_idx = tree2.query_ball_point(closest_point1, min_distance, workers=-1)
-            distances = np.linalg.norm(vertices1_idx - vertices2_idx, axis=1)
-            min_dist_idx = np.argmin(distances)
-            min_distance = distances[min_dist_idx]
-            closest_point1 = vertices1_idx[min_dist_idx]
-            closest_point2 = vertices2_idx[min_dist_idx]
-            
+            # Find vertices near the finded closest points
+            mask1 = np.linalg.norm(mesh1.vertices - closest_point1, axis=1) < min_distance
+            mask2 = np.linalg.norm(mesh2.vertices - closest_point2, axis=1) < min_distance
+            if np.any(mask1) and np.any(mask2):
+                method = 'HiRes'
+                nearby1 = mesh1.vertices[mask1]
+                nearby2 = mesh2.vertices[mask2]
+                mesh1_faces_idx = np.where(np.any(np.isin(mesh1.faces, nearby1), axis=1))[0]
+                mesh2_faces_idx = np.where(np.any(np.isin(mesh2.faces, nearby2), axis=1))[0]
+                mesh1_sampled, face_index = trimesh.sample.sample_surface(mesh=mesh1, count=config.system.samples_per_face, face_weight=mesh1_faces_idx)
+                mesh2_sampled, face_index = trimesh.sample.sample_surface(mesh=mesh2, count=config.system.samples_per_face, face_weight=mesh2_faces_idx)
+                tree1 = cKDTree(mesh1_sampled)
+                tree2 = cKDTree(mesh2_sampled)
+                vertices1_idx = tree1.query_ball_point(closest_point2, min_distance, workers=-1)
+                vertices2_idx = tree2.query_ball_point(closest_point1, min_distance, workers=-1)
+                distances = np.linalg.norm(vertices1_idx - vertices2_idx, axis=1)
+                min_dist_idx = np.argmin(distances)
+                min_distance = distances[min_dist_idx]
+                closest_point1 = vertices1_idx[min_dist_idx]
+                closest_point2 = vertices2_idx[min_dist_idx]
 
         closest_points = {
             'method': method,

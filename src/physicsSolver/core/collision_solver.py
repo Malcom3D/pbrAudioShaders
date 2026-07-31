@@ -162,6 +162,8 @@ class CollisionSolver:
                     config_obj1, config_obj2
                 )
 
+            print(f"facing faces between {config_obj1.name} and {config_obj2.name} at frame {sample_idx}: {np.count_nonzero(vertices1_idx[sample_idx], axis=1)} {np.count_nonzero(vertices2_idx[sample_idx], axis=1)} at distance {collision_margin} for {ContactType(contact_type).name.lower()}")
+
         # Finalize score tracks
         self._finalize_score_tracks(score_track1, score_track2, config_obj1, config_obj2, start_samples, stop_samples, score_type1, score_type2, score_vertex_ids1, score_vertex_ids2, score_contact_area1, score_contact_area2)
         
@@ -173,7 +175,7 @@ class CollisionSolver:
         Ultra-optimized collision detection for proxy meshes types 0, 1, 2.
         Uses analytical geometry instead of KDTree queries.
         """
-        # Get proxy mesh properties EntityManager cache
+        # Get proxy mesh properties
         for config_obj in self.config.objects:
             if config_obj.idx == obj1_idx:
                 proxy1 = config_obj.proxy_type
@@ -437,6 +439,12 @@ class CollisionSolver:
         if len(vertices1_idx) > 0 and len(vertices2_idx) > 0:
             # Hi-res face2face
             if self.config.system.hi_res_face2face:
+                mesh1_faces_raw = trajectory1.get_faces(sample_idx)
+                mesh2_faces_raw = trajectory2.get_faces(sample_idx)
+                mesh1_normals = trajectory1.get_normals(sample_idx)
+                mesh2_normals = trajectory2.get_normals(sample_idx)
+                mesh1 = trimesh.Trimesh(vertices=mesh1_vertices, vertex_normals=mesh1_normals, faces=mesh1_faces_raw)
+                mesh2 = trimesh.Trimesh(vertices=mesh2_vertices, vertex_normals=mesh2_normals, faces=mesh2_faces_raw)
                 mesh1_faces_idx = np.where(np.any(np.isin(mesh1_faces, vertices1_idx), axis=1))[0]
                 mesh2_faces_idx = np.where(np.any(np.isin(mesh2_faces, vertices2_idx), axis=1))[0]
                 mesh1_sampled, face_index = trimesh.sample.sample_surface(mesh=mesh1, count=self.config.system.samples_per_face, face_weight=mesh1_faces_idx[sample_idx])
@@ -461,13 +469,6 @@ class CollisionSolver:
             mesh1_faces_idx = np.array([])
             mesh2_faces_idx = np.array([])
 
-            for conf_obj in self.config.objects:
-                if conf_obj.idx == trajectory1.obj_idx:
-                    config_obj1 = conf_obj
-                elif conf_obj.idx == trajectory2.obj_idx:
-                    config_obj2 = conf_obj
-            print(f"facing faces between {config_obj1.name} and {config_obj2.name} at frame {sample_idx}: {mesh1_faces_idx.shape[0]} {mesh2_faces_idx.shape[0]} at distance {collision_margin} for {ContactType(contact_type).name.lower()}")
-        
         return vertices1_idx, vertices2_idx, face_area1, face_area2
 
     def _get_object_indices(self, collision, forces):
