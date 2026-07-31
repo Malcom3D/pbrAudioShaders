@@ -52,16 +52,17 @@ def process_mode(c, s, g, u1, u2, excitation):
     u2_new = s * u1 + c * u2
     return u1_new, u2_new
 
-#@jit(nopython=True, parallel=True)
+@jit(nopython=True, parallel=True)
+def process_all_mode(output: float32, num_modes: int32, c: float32[:], s: float32[:], g: float32[:], u1: float32[:], u2: float32[:], excitation: float32):
 #def process_all_mode(output, num_modes, c, s, g, u1, u2, excitation):
-#    for i in prange(num_modes):
-#        # Ensure we're using float32 arithmetic
-#        u1_new = c[i] * u1[i] - s[i] * u2[i] + g[i] * excitation
-#        u2_new = s[i] * u1[i] + c[i] * u2[i]
-#        u1[i] = u1_new
-#        u2[i] = u2_new
-#        output += u2_new
-#    return output, u1, u2
+    for i in prange(num_modes):
+        # Ensure we're using float32 arithmetic
+        u1_new = c[i] * u1[i] - s[i] * u2[i] + g[i] * excitation
+        u2_new = s[i] * u1[i] + c[i] * u2[i]
+        u1[i] = u1_new
+        u2[i] = u2_new
+        output += u2_new
+    return output, u1, u2
 
 class ModalBank:
     """Wrapper class for Numba-accelerated modal bank"""
@@ -93,16 +94,15 @@ class ModalBank:
     def process(self, excitation: float) -> float:
         """Process one sample through all modes"""
         output = 0.0
-#        excitation = np.float32(excitation)
-#        output, self.u1, self.u2 = process_all_mode(output, self.num_modes, self.c, self.s, self.g, self.u1, self.u2, excitation)
-#        return output
-
-        for i in prange(self.num_modes):
-            u1_new, u2_new = process_mode(self.c[i], self.s[i], self.g[i], self.u1[i], self.u2[i], excitation)
-            self.u1[i] = u1_new
-            self.u2[i] = u2_new
-            output += u2_new
+        output, self.u1, self.u2 = process_all_mode(output, self.num_modes, self.c, self.s, self.g, self.u1, self.u2, excitation)
         return output
+
+#        for i in range(self.num_modes):
+#            u1_new, u2_new = process_mode(self.c[i], self.s[i], self.g[i], self.u1[i], self.u2[i], excitation)
+#            self.u1[i] = u1_new
+#            self.u2[i] = u2_new
+#            output += u2_new
+#        return output
     
     def reset(self):
         """Reset all state variables to zero"""
