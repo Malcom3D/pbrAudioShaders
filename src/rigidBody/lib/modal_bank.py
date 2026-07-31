@@ -61,12 +61,13 @@ def process_all_mode(output: float32, num_modes: int32, c: float32[:], s: float3
     nb.typeof(s)
     nb.typeof(u1)
     nb.typeof(u2)
-    nb.typeof(excitation))
+    nb.typeof(excitation)
     for i in prange(num_modes):
         # Ensure we're using float32 arithmetic
         u1_new = c[i] * u1[i] - s[i] * u2[i] + g[i] * excitation
         u2_new = s[i] * u1[i] + c[i] * u2[i]
-        print('u1_new', nb.typeof(u1_new), 'u2_new', nb.typeof(u2_new))
+        nb.typeof(u1_new)
+        nb.typeof(u2_new)
         u1[i] = u1_new
         u2[i] = u2_new
         output += u2_new
