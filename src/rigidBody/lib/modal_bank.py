@@ -17,7 +17,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import numpy as np
-from numba import prange, jit, float32, int32, typeof
+import numba as nb
+from numba import prange, jit, float32, int32
 
 @jit(nopython=True, parallel=True)
 def calculate_coefficients(frequencies, gains, t60s, sample_rate):
@@ -54,12 +55,12 @@ def process_mode(c, s, g, u1, u2, excitation):
 
 @jit(nopython=True, parallel=True)
 def process_all_mode(output: float32, num_modes: int32, c: float32[:], s: float32[:], g: float32[:], u1: float32[:], u2: float32[:], excitation: float32):
-    print('output', typeof(output), 'num_modes', typeof(num_modes), 'c', typeof(c), 's', typeof(s), 'u1', typeof(u1), 'u2', typeof(u2), 'excitation', typeof(excitation))
+    print('output', nb.typeof(output), 'num_modes', nb.typeof(num_modes), 'c', nb.typeof(c), 's', nb.typeof(s), 'u1', nb.typeof(u1), 'u2', nb.typeof(u2), 'excitation', nb.typeof(excitation))
     for i in prange(num_modes):
         # Ensure we're using float32 arithmetic
         u1_new = c[i] * u1[i] - s[i] * u2[i] + g[i] * excitation
         u2_new = s[i] * u1[i] + c[i] * u2[i]
-        print('u1_new', typeof(u1_new), 'u2_new', typeof(u2_new))
+        print('u1_new', nb.typeof(u1_new), 'u2_new', nb.typeof(u2_new))
         u1[i] = u1_new
         u2[i] = u2_new
         output += u2_new
