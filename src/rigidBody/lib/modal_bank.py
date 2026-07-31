@@ -55,15 +55,13 @@ def process_mode(c, s, g, u1, u2, excitation):
 @jit(nopython=True, parallel=True)
 def process_all_mode(output, num_modes, c, s, g, u1, u2, excitation):
     for i in prange(num_modes):
-        u1_new, u2_new = process_mode(
-            c[i], s[i], g[i],
-            u1[i], u2[i], excitation
-        )
-        u1[i] = u1_new
-        u2[i] = u2_new
+        # Ensure we're using float32 arithmetic
+        u1_new = np.float32(c[i]) * u1[i] - np.float32(s[i]) * u2[i] + np.float32(g[i]) * np.float32(excitation)
+        u2_new = np.float32(s[i]) * u1[i] + np.float32(c[i]) * u2[i]
+        u1[i] = np.float32(u1_new)
+        u2[i] = np.float32(u2_new)
         output += u2_new
     return output, u1, u2
-
 
 class ModalBank:
     """Wrapper class for Numba-accelerated modal bank"""
