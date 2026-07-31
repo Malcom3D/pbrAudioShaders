@@ -56,8 +56,8 @@ def process_mode(c, s, g, u1, u2, excitation):
 def process_all_mode(output, num_modes, c, s, g, u1, u2, excitation):
     for i in prange(num_modes):
         # Ensure we're using float32 arithmetic
-        u1_new = np.float32(c[i]) * u1[i] - np.float32(s[i]) * u2[i] + np.float32(g[i]) * np.float32(excitation)
-        u2_new = np.float32(s[i]) * u1[i] + np.float32(c[i]) * u2[i]
+        u1_new = c[i] * u1[i] - s[i] * u2[i] + g[i] * excitation
+        u2_new = s[i] * u1[i] + c[i] * u2[i]
         u1[i] = np.float32(u1_new)
         u2[i] = np.float32(u2_new)
         output += u2_new
