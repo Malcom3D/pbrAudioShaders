@@ -132,7 +132,10 @@ class ModalPlayer:
             nonlocal sample_idx, old_sample_idx, t60_empty
 
             # init var for the current sample
-            rigidbody_output, resonance_output, sliding_output, scraping_output, rolling_output = (0 for _ in range(5))
+            rigidbody_output, resonance_output, sliding_output, scraping_output, rolling_output, coupling_force = (0 for _ in range(5))
+            rigidbody_buffers = []
+            for synth_type in range(7):
+                rigidbody_buffers.append(self.rigidbody_synth.connected_buffer.read_for_obj(self.obj_idx, synth_type))
 
             # Process events at current sample
             for event in self.score.events:
@@ -145,15 +148,19 @@ class ModalPlayer:
                         if synth_type in [1,2,3,4]:
                             if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
                                 resonance_output += self.resonance_synth.process(synth_type, vertex_ids, input_force, contact_area, coupling_data)
-                            rigidbody_output += self.rigidbody_synth.process(synth_type, vertex_ids, input_force, contact_area, coupling_data)
+                            input_signal = input_force + rigidbody_buffers[synth_type]
+                            rigidbody_output += self.rigidbody_synth.process(synth_type, vertex_ids, input_signal, contact_area, coupling_data)
+                            coupling_force += coupling_strength * input_force
 #                        t60_empty = 0
                     # Sound decay
                     else:
 #                        if t60_empty < self.t60_samples:
                         for event_type in [1,2,3,4]:
-                            value = self.rigidbody_synth.connected_buffer.objs_buffer[self.obj_idx][synth_type]
-                            if not value == 0:
-                                rigidbody_output += self.rigidbody_synth.process(event_type, vertex_ids, input_force, contact_area, coupling_data)
+#                            value = self.rigidbody_synth.connected_buffer.objs_buffer[self.obj_idx][synth_type]
+#                            if not value == 0:
+                            if not rigidbody_buffers[synth_type] == 0:
+                                input_signal = input_force + rigidbody_buffers[synth_type]
+                                rigidbody_output += self.rigidbody_synth.process(event_type, vertex_ids, input_signal, contact_area, coupling_data)
                                 if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
                                     value = self.resonance_synth.connected_buffer.objs_buffer[self.obj_idx][synth_type]
                                     if not value == 0:
@@ -169,13 +176,17 @@ class ModalPlayer:
                     # Non-contact synthesis
                     elif synth_type in [0,6]: # ToDo: add non-contact sound synth for type == 0
                         for event_type in [1,2,3,4]:
-                            value = self.rigidbody_synth.connected_buffer.objs_buffer[self.obj_idx][synth_type]
-                            if not value == 0:
-                                rigidbody_output += self.rigidbody_synth.process(event_type, vertex_ids, input_force, contact_area, coupling_data)
+#                            value = self.rigidbody_synth.connected_buffer.objs_buffer[self.obj_idx][synth_type]
+#                            if not value == 0:
+                            if not rigidbody_buffers[synth_type] == 0:
+                                input_signal = input_force + rigidbody_buffers[synth_type]
+                                rigidbody_output += self.rigidbody_synth.process(event_type, vertex_ids, input_signal, contact_area, coupling_data)
                                 if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
                                     value = self.resonance_synth.connected_buffer.objs_buffer[self.obj_idx][synth_type]
                                     if not value == 0:
                                         resonance_output += self.resonance_synth.process(event_type, vertex_ids, input_force, contact_area, coupling_data)
+
+                    self.rigidbody_synth.connected_buffer.write_to_obj(int(other_obj_idx), synth_type, coupling_force)
 
                     self.rigidbody_synth_track[sample_idx] += rigidbody_output if not np.isnan(rigidbody_output) else 0
                     self.resonance_synth_track[sample_idx] += resonance_output if not np.isnan(resonance_output) else 0

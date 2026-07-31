@@ -18,9 +18,8 @@
 
 import numpy as np
 import numba as nb
-from numba import prange, jit, float32, int32
 
-@jit(nopython=True, parallel=True)
+@nb.jit(nopython=True, parallel=True)
 def calculate_coefficients(frequencies, gains, t60s, sample_rate):
     """Calculate coefficients for all modes"""
     num_modes = len(frequencies)
@@ -46,30 +45,19 @@ def calculate_coefficients(frequencies, gains, t60s, sample_rate):
     
     return r, c, s, g
 
-@jit(nopython=True, parallel=True)
+@nb.jit(nopython=True, parallel=True, cache=True)
 def process_mode(c, s, g, u1, u2, excitation):
     """Process a single mode"""
     u1_new = c * u1 - s * u2 + g * excitation
     u2_new = s * u1 + c * u2
     return u1_new, u2_new
 
-#@jit(nopython=True, parallel=True)
-@jit(nopython=False)
-def process_all_mode(output: float32, num_modes: int32, c: float32[:], s: float32[:], g: float32[:], u1: float32[:], u2: float32[:], excitation: float32):
-    nb.typeof(output)
-    nb.typeof(num_modes)
-    nb.typeof(c)
-    nb.typeof(s)
-    nb.typeof(u1)
-    nb.typeof(u2)
-    nb.typeof(excitation)
-    for i in prange(num_modes):
-        # Ensure we're using float32 arithmetic
+@nb.jit(nopython=True, parallel=True, cache=True)
+def process_all_mode(output, num_modes, c, s, g, u1, u2, excitation):
+    for i in nb.prange(num_modes):
         u1_new = c[i] * u1[i] - s[i] * u2[i] + g[i] * excitation
         u2_new = s[i] * u1[i] + c[i] * u2[i]
-        nb.typeof(u1_new)
-        nb.typeof(u2_new)
-        u1[i] = u1_new
+        u1[i] = nb.float32(u1_new[0])
         u2[i] = u2_new
         output += u2_new
     return output, u1, u2

@@ -44,22 +44,23 @@ class RigidBodySynth:
 
     def process(self, synth_type: int, vertex_ids: List[int], input_force: float, contact_area: float, other_objs: List[Tuple[float, float]] = None):
         output_banks = 0
-        input_buffer = self.connected_buffer.read_for_obj(self.obj_idx, synth_type)
+#        input_buffer = self.connected_buffer.read_for_obj(self.obj_idx, synth_type)
 
 #        if not len(vertex_ids) == 0 or not (input_force + input_buffer) == 0: 
 #            vectorized_process = np.vectorize(lambda bank, input: bank.process(input), otypes=[float])
 #            output_banks = np.sum(vectorized_process(self.banks[vertex_ids], input_force + input_buffer))
 #            output_banks = output_banks if not None else 0
 
-        if not len(vertex_ids) == 0 or not (input_force + input_buffer) == 0: 
+#        if not len(vertex_ids) == 0 or not (input_force + input_buffer) == 0: 
+        if not len(vertex_ids) == 0 or not input_force == 0: 
             for idx in range(len(vertex_ids)):
-                output_banks += self.banks[vertex_ids[idx]].process(input_force + input_buffer)
+                output_banks += self.banks[vertex_ids[idx]].process(input_force)
             output_banks = output_banks if not None else 0
 
-        if other_objs is not None and not input_force == 0:
-            for other_idx in range(len(other_objs)):
-                other_obj_idx, coupling_strength = other_objs
-                self.connected_buffer.write_to_obj(int(other_obj_idx), synth_type, coupling_strength * input_force)
+#        if other_objs is not None and not input_force == 0:
+#            for other_idx in range(len(other_objs)):
+#                other_obj_idx, coupling_strength = other_objs
+#                self.connected_buffer.write_to_obj(int(other_obj_idx), synth_type, coupling_strength * input_force)
         return output_banks 
 
 #        if not len(vertex_ids) == 0 or not (input_force + input_buffer) == 0: 
