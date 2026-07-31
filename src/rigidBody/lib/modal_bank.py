@@ -53,7 +53,7 @@ def process_mode(c, s, g, u1, u2, excitation):
     return u1_new, u2_new
 
 @jit(nopython=True, parallel=True)
-def process_all_mode(num_modes, c, s, g, u1, u2, excitation):
+def process_all_mode(output, num_modes, c, s, g, u1, u2, excitation):
     for i in prange(num_modes):
         u1_new, u2_new = process_mode(
             c[i], s[i], g[i],
@@ -95,7 +95,7 @@ class ModalBank:
     def process(self, excitation: float) -> float:
         """Process one sample through all modes"""
         output = 0.0
-        output, self.u1, self.u2 = process_all_mode(self.num_modes, self.c, self.s, self.g, self.u1, self.u2, excitation)
+        output, self.u1, self.u2 = process_all_mode(output, self.num_modes, self.c, self.s, self.g, self.u1, self.u2, excitation)
         return output
 
 #        for i in range(self.num_modes):
