@@ -53,7 +53,8 @@ def process_mode(c, s, g, u1, u2, excitation):
     u2_new = s * u1 + c * u2
     return u1_new, u2_new
 
-@jit(nopython=True, parallel=True)
+#@jit(nopython=True, parallel=True)
+@jit(nopython=False)
 def process_all_mode(output: float32, num_modes: int32, c: float32[:], s: float32[:], g: float32[:], u1: float32[:], u2: float32[:], excitation: float32):
     nb.typeof(output)
     nb.typeof(num_modes)
