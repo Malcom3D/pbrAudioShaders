@@ -19,7 +19,7 @@
 import numpy as np
 from numba import jit, float32, int32
 
-@jit(nopython=True)
+@jit(nopython=True, parallel=True)
 def calculate_coefficients(frequencies, gains, t60s, sample_rate):
     """Calculate coefficients for all modes"""
     num_modes = len(frequencies)
@@ -45,7 +45,7 @@ def calculate_coefficients(frequencies, gains, t60s, sample_rate):
     
     return r, c, s, g
 
-@jit(nopython=True)
+@jit(nopython=True, parallel=True)
 def process_mode(c, s, g, u1, u2, excitation):
     """Process a single mode"""
     u1_new = c * u1 - s * u2 + g * excitation
