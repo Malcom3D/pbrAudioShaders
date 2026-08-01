@@ -148,7 +148,7 @@ class ModalPlayer:
                         if synth_type in [1,2,3,4]:
                             if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
                                 resonance_output += self.resonance_synth.process(synth_type, vertex_ids, input_force, contact_area, coupling_data)
-                            input_signal = input_force + rigidbody_buffers[synth_type]
+                            input_signal = input_force + rigidbody_buffers[synth_type[0]]
                             rigidbody_output += self.rigidbody_synth.process(synth_type, vertex_ids, input_signal, contact_area, coupling_data)
                             coupling_force += coupling_strength * input_force
 #                        t60_empty = 0
@@ -156,7 +156,7 @@ class ModalPlayer:
                     else:
 #                        if t60_empty < self.t60_samples:
                         for event_type in [1,2,3,4]:
-#                            value = self.rigidbody_synth.connected_buffer.objs_buffer[self.obj_idx][synth_type]
+#                            value = self.rigidbody_synth.connected_buffer.objs_buffer[self.obj_idx][event_type]
 #                            if not value == 0:
                             if not rigidbody_buffers[event_type] == 0:
                                 input_signal = input_force + rigidbody_buffers[event_type]
@@ -176,7 +176,7 @@ class ModalPlayer:
                     # Non-contact synthesis
                     elif synth_type in [0,6]: # ToDo: add non-contact sound synth for type == 0
                         for event_type in [1,2,3,4]:
-#                            value = self.rigidbody_synth.connected_buffer.objs_buffer[self.obj_idx][synth_type]
+#                            value = self.rigidbody_synth.connected_buffer.objs_buffer[self.obj_idx][event_type]
 #                            if not value == 0:
                             if not rigidbody_buffers[event_type] == 0:
                                 input_signal = input_force + rigidbody_buffers[event_type]
