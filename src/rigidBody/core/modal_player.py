@@ -133,10 +133,10 @@ class ModalPlayer:
 
             # init var for the current sample
             rigidbody_output, resonance_output, sliding_output, scraping_output, rolling_output, other_obj_idx = (0 for _ in range(6))
-            rigidbody_buffers = []
+            rigidbody_buffers = [0 for _ in range(7)]
             coupling_force = [0 for _ in range(7)]
             for synth_type in range(7):
-                rigidbody_buffers.append(self.rigidbody_synth.connected_buffer.read_for_obj(self.obj_idx, synth_type))
+                rigidbody_buffers[synth_type] = self.rigidbody_synth.connected_buffer.read_for_obj(self.obj_idx, synth_type)
 
             # Process events at current sample
             for event in self.score.events:
@@ -150,8 +150,8 @@ class ModalPlayer:
                             if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
                                 resonance_output += self.resonance_synth.process(synth_type, vertex_ids, input_force, contact_area, coupling_data)
                             input_signal = input_force + rigidbody_buffers[synth_type]
+                            coupling_force[synth_type] += coupling_data * input_force
                             rigidbody_output += self.rigidbody_synth.process(synth_type, vertex_ids, input_signal, contact_area, coupling_data)
-                            coupling_force[synth_type] += coupling_strength * input_force
 #                        t60_empty = 0
                     # Sound decay
                     else:
@@ -186,8 +186,8 @@ class ModalPlayer:
                                     value = self.resonance_synth.connected_buffer.objs_buffer[self.obj_idx][event_type]
                                     if not value == 0:
                                         resonance_output += self.resonance_synth.process(event_type, vertex_ids, input_force, contact_area, coupling_data)
-                    for event_type in [1,2,3,4]:
-                        self.rigidbody_synth.connected_buffer.write_to_obj(int(other_obj_idx), event_type, coupling_force[event_type])
+
+                    self.rigidbody_synth.connected_buffer.write_to_obj(int(other_obj_idx), event_type, coupling_force[synth_type])
 
                     self.rigidbody_synth_track[sample_idx] += rigidbody_output if not np.isnan(rigidbody_output) else 0
                     self.resonance_synth_track[sample_idx] += resonance_output if not np.isnan(resonance_output) else 0
