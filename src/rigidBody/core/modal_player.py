@@ -187,7 +187,7 @@ class ModalPlayer:
                                     if not value == 0:
                                         resonance_output += self.resonance_synth.process(event_type, vertex_ids, input_force, contact_area, coupling_data)
 
-                    self.rigidbody_synth.connected_buffer.write_to_obj(int(other_obj_idx), event_type, coupling_force[synth_type])
+                    self.rigidbody_synth.connected_buffer.write_to_obj(int(other_obj_idx), synth_type, coupling_force[synth_type])
 
                     self.rigidbody_synth_track[sample_idx] += rigidbody_output if not np.isnan(rigidbody_output) else 0
                     self.resonance_synth_track[sample_idx] += resonance_output if not np.isnan(resonance_output) else 0
