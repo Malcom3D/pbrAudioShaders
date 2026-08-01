@@ -132,7 +132,7 @@ class ModalPlayer:
             nonlocal sample_idx, old_sample_idx, t60_empty
 
             # init var for the current sample
-            rigidbody_output, resonance_output, sliding_output, scraping_output, rolling_output, coupling_force = (0 for _ in range(5))
+            rigidbody_output, resonance_output, sliding_output, scraping_output, rolling_output, other_obj_idx, coupling_force = (0 for _ in range(7))
             rigidbody_buffers = []
             for synth_type in range(7):
                 rigidbody_buffers.append(self.rigidbody_synth.connected_buffer.read_for_obj(self.obj_idx, synth_type))
@@ -142,7 +142,7 @@ class ModalPlayer:
                 end_sample = min(event.stop_sample + self.t60_samples, self.sample_counter.total_samples - 1)
                 if event.start_sample <= sample_idx and (is_shard_frame == None or is_shard_frame <= sample_idx) and (fracture_frame == None or sample_idx <= fracture_frame) and sample_idx <= end_sample:
                     # Process the current sample
-                    synth_type, vertex_ids, input_force, contact_area, coupling_data = event.get_event_at_sample(sample_idx)
+                    synth_type, vertex_ids, input_force, contact_area, other_obj_idx, coupling_data = event.get_event_at_sample(sample_idx)
                     # Modal sound
                     if not input_force == 0:
                         if synth_type in [1,2,3,4]:
@@ -158,11 +158,11 @@ class ModalPlayer:
                         for event_type in [1,2,3,4]:
 #                            value = self.rigidbody_synth.connected_buffer.objs_buffer[self.obj_idx][synth_type]
 #                            if not value == 0:
-                            if not rigidbody_buffers[synth_type] == 0:
-                                input_signal = input_force + rigidbody_buffers[synth_type]
+                            if not rigidbody_buffers[event_type] == 0:
+                                input_signal = input_force + rigidbody_buffers[event_type]
                                 rigidbody_output += self.rigidbody_synth.process(event_type, vertex_ids, input_signal, contact_area, coupling_data)
                                 if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
-                                    value = self.resonance_synth.connected_buffer.objs_buffer[self.obj_idx][synth_type]
+                                    value = self.resonance_synth.connected_buffer.objs_buffer[self.obj_idx][event_type]
                                     if not value == 0:
                                         resonance_output += self.resonance_synth.process(event_type, vertex_ids, input_force, contact_area, coupling_data)
 #                            t60_empty += 1
@@ -178,11 +178,11 @@ class ModalPlayer:
                         for event_type in [1,2,3,4]:
 #                            value = self.rigidbody_synth.connected_buffer.objs_buffer[self.obj_idx][synth_type]
 #                            if not value == 0:
-                            if not rigidbody_buffers[synth_type] == 0:
-                                input_signal = input_force + rigidbody_buffers[synth_type]
+                            if not rigidbody_buffers[event_type] == 0:
+                                input_signal = input_force + rigidbody_buffers[event_type]
                                 rigidbody_output += self.rigidbody_synth.process(event_type, vertex_ids, input_signal, contact_area, coupling_data)
                                 if config_obj.resonance or isinstance(config_obj.connected, np.ndarray):
-                                    value = self.resonance_synth.connected_buffer.objs_buffer[self.obj_idx][synth_type]
+                                    value = self.resonance_synth.connected_buffer.objs_buffer[self.obj_idx][event_type]
                                     if not value == 0:
                                         resonance_output += self.resonance_synth.process(event_type, vertex_ids, input_force, contact_area, coupling_data)
 
