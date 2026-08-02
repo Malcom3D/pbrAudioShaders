@@ -161,7 +161,7 @@ class physicsEngine:
     def _force(self):
         collisions = self.entity_manager.get('collisions')
         obj_ids = []
-        for collision_idx in collisions.keys()
+        for collision_idx in collisions.keys():
             obj_ids.append(collisions[collision_idx].obj1_idx)
             obj_ids.append(collisions[collision_idx].obj2_idx)
         obj_ids = np.unique(obj_ids)
