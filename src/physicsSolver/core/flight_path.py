@@ -25,9 +25,10 @@ from dataclasses import dataclass, field
 from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation, RotationSpline
 
-from ..core.entity_manager import EntityManager
+from pbrAudioCommon import EntityManager
+from pbrAudioCommon import _load_mesh, _load_pose
+
 from ..lib.trajectory_data import TrajectoryData, tmpTrajectoryData
-from ..lib.functions import _load_mesh, _load_pose
 
 @dataclass
 class FlightPath:

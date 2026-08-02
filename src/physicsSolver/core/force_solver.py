@@ -25,7 +25,8 @@ from dataclasses import dataclass
 from typing import List, Dict, Tuple, Optional, Any
 import math
 
-from ..core.entity_manager import EntityManager
+from pbrAudioCommon import EntityManager
+
 from ..lib.force_data import ContactType, ForceData, ForceDataSequence
 from ..lib.contact_geometry import ContactGeometry
 from ..lib.hertzian_contact import HertzianContact

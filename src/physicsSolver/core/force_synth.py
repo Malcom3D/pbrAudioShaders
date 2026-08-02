@@ -25,7 +25,8 @@ import scipy.signal as signal
 from dataclasses import dataclass 
 from typing import List, Dict, Tuple, Optional, Any
 
-from ..core.entity_manager import EntityManager
+from pbrAudioCommon import EntityManager
+
 from ..lib.force_data import ContactType
 from ..lib.hertzian_contact import HertzianContact
 

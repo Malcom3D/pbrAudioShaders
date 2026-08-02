@@ -24,7 +24,8 @@ from typing import Dict, Tuple, Optional, Any
 from dataclasses import dataclass
 from scipy.spatial import ConvexHull
 
-from ..core.entity_manager import EntityManager
+from pbrAudioCommon import EntityManager
+
 from ..lib.force_data import ContactType
 
 @dataclass

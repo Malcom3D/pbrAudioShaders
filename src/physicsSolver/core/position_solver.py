@@ -22,8 +22,9 @@ import math
 from typing import List, Tuple, Dict
 from dataclasses import dataclass, field
 
-from ..core.entity_manager import EntityManager
-from ..lib.functions import _load_pose
+from pbrAudioCommon import EntityManager
+from pbrAudioCommon import _load_pose
+
 from ..lib.trajectory_data import tmpTrajectoryData
 
 @dataclass

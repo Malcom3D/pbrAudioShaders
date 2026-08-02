@@ -27,9 +27,10 @@ from typing import Any, List, Tuple, Dict, Optional
 from dataclasses import dataclass, field
 from itertools import groupby
 
-from ..core.entity_manager import EntityManager
+from pbrAudioCommon import EntityManager
+from pbrAudioCommon import _parse_lib
+
 from ..lib.collision_data import CollisionData
-from ..lib.functions import _parse_lib
 from ..lib.modal_vertices import ModalVertices
 from ..lib.score_data import ScoreEvent, ScoreTrack
 from ..lib.force_data import ContactType

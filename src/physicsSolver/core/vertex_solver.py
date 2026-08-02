@@ -22,8 +22,8 @@ from scipy.spatial.transform import Rotation
 from typing import Tuple, Optional, List
 from dataclasses import dataclass, field
 
-from ..core.entity_manager import EntityManager
-from ..lib.functions import _load_pose, _load_mesh
+from pbrAudioCommon import EntityManager
+from pbrAudioCommon import _load_pose, _load_mesh
 
 @dataclass
 class VertexSolver:

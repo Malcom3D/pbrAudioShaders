@@ -25,10 +25,9 @@ from scipy.optimize import minimize
 from typing import Tuple, Optional, List
 from dataclasses import dataclass, field
 
-from ..core.entity_manager import EntityManager
-from ..utils.config import Config, ObjectConfig
-
-from ..lib.functions import _load_pose, _load_mesh
+from pbrAudioCommon import EntityManager
+from pbrAudioCommon import Config, ObjectConfig
+from pbrAudioCommon import _load_pose, _load_mesh
 
 @dataclass
 class RotationSolver:

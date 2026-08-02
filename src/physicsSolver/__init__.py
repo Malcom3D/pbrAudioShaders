@@ -26,7 +26,6 @@ import numpy as np
 decimals = 18
 np.set_printoptions(precision=decimals, floatmode='fixed', threshold=np.inf)
 
-from .core.entity_manager import EntityManager
 from .core.position_solver import PositionSolver
 from .core.rotation_solver import RotationSolver
 from .core.vertex_solver import VertexSolver
@@ -46,15 +45,8 @@ from .lib.modal_vertices import ModalVertices
 from .lib.interpolator import FrequencyInterpolator, Frequency3DInterpolator
 from .lib.trajectory_data import tmpTrajectoryData, TrajectoryData
 from .lib.collision_data import CollisionType, CollisionData
-from .utils.config import SystemConfig, ObjectConfig, Config
-
-from .lib.acoustic_shader import AcousticCoefficients, AcousticProperties, AcousticShader
 
 __all__ = [
-    'EntityManager',
-    'AcousticCoefficients',
-    'AcousticProperties',
-    'AcousticShader',
     'PositionSolver',
     'RotationSolver',
     'VertexSolver',
@@ -74,13 +66,8 @@ __all__ = [
     'ForceData',
     'ForceDataSequence',
     'ModalVertices',
-    'FrequencyInterpolator',
-    'Frequency3DInterpolator',
     'tmpTrajectoryData',
     'TrajectoryData',
     'CollisionType',
-    'CollisionData',
-    'SystemConfig',
-    'ObjectConfig',
-    'Config'
+    'CollisionData'
 ]

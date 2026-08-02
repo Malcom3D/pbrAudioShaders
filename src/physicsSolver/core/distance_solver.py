@@ -29,11 +29,11 @@ from scipy.signal import find_peaks
 from numba import njit, prange, float64, int64, boolean
 #from numba.core.types import Tuple
 
-from ..core.entity_manager import EntityManager
-from ..utils.config import Config, ObjectConfig
-from ..lib.collision_data import CollisionData, CollisionType
+from pbrAudioCommon import EntityManager
+from pbrAudioCommon import Config, ObjectConfig
+from pbrAudioCommon import _load_pose, _load_mesh
 
-from ..lib.functions import _load_pose, _load_mesh
+from ..lib.collision_data import CollisionData, CollisionType
 
 @dataclass
 class DistanceSolver:

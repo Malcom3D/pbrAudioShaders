@@ -24,24 +24,14 @@ from dask import delayed, compute
 
 # Configure Dask to use more threads
 from dask import config as dask_config
-#dask_config.set(scheduler='threads', num_workers=1024)
 #dask_config.set(scheduler='processes', num_workers=1024)
-#dask_config.set(num_workers=1024)
 dask_config.set({'num_workers': 1024, 'optimization.fuse.active': True, 'optimization.fuse.max_depth': 10,})
 
-#from dask import config as dask_config
-#import multiprocessing as mp
-## Get actual CPU count (considering hyperthreading)
-#n_physical_cores = mp.cpu_count() // 2  # Physical cores
-#n_workers = max(1, n_physical_cores - 1)  # Leave one core for system
-#dask_config.set({
-#    'num_workers': n_workers,
-#    'scheduler': 'processes',  # Force process-based scheduler
-#    'optimization.fuse.active': True,  # Enable task fusion
-#    'optimization.fuse.max_depth': 10,  # Fuse more tasks
-#})
+from pbrAudioCommon import EntityManager
+from pbrAudioCommon _update_status
+from ellipsoidalProxy import ProxyMesh
 
-from ..core.entity_manager import EntityManager
+
 from ..core.position_solver import PositionSolver
 from ..core.rotation_solver import RotationSolver
 from ..core.vertex_solver import VertexSolver
@@ -57,10 +47,6 @@ from ..lib.trajectory_data import TrajectoryData, tmpTrajectoryData
 from ..lib.force_data import ForceDataSequence
 from ..lib.modal_vertices import ModalVertices
 from ..lib.score_data import ScoreTrack
-#from synthMasters import ScoreTrack
-
-from ..lib.functions import _update_status
-from ellipsoidalProxy import ProxyMesh
 
 @dataclass
 class physicsEngine:
