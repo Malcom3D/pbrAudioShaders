@@ -28,7 +28,7 @@ from dask import config as dask_config
 dask_config.set({'num_workers': 1024, 'optimization.fuse.active': True, 'optimization.fuse.max_depth': 10,})
 
 from pbrAudioCommon import EntityManager
-from pbrAudioCommon _update_status
+from pbrAudioCommon import _update_status
 from ellipsoidalProxy import ProxyMesh
 
 
