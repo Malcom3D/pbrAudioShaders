@@ -21,7 +21,7 @@ import numpy as np
 from typing import Optional, Tuple, List
 from dataclasses import dataclass
 
-from physicsSolver import EntityManager
+from pbrAudioCommon import EntityManager
 from ..tools.pym2f import Pym2f
 
 @dataclass

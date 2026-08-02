@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from scipy.spatial import cKDTree
 from scipy.spatial.transform import Rotation
 
-from physicsSolver import EntityManager
+from pbrAudioCommon import EntityManager
 from physicsSolver.lib.functions import _load_mesh, _load_pose
 
 

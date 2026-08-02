@@ -23,15 +23,19 @@ from dataclasses import dataclass, field
 from dask import delayed, compute
 import trimesh
 
-from physicsSolver import EntityManager, TrajectoryData, CollisionData, ForceDataSequence
+# Configure Dask to use more threads
+from dask import config as dask_config
+#dask_config.set(scheduler='processes', num_workers=1024)
+dask_config.set({'num_workers': 1024, 'optimization.fuse.active': True, 'optimization.fuse.max_depth': 10,})
+
+from pbrAudioCommon import EntityManager
+from pbrAudioCommon import _update_status
+from physicsSolver import TrajectoryData, CollisionData, ForceDataSequence
 from rigidBody import ModalPlayer, SampleCounter, ConnectedBuffer
-#from synthMasters import ModalPlayer, SampleCounter, ConnectedBuffer
 
 from ..lib.fracture_data import FractureEvent, FractureType, FragmentData
 from ..lib.fracture_modal import FractureModalModel
 from ..lib.fracture_synth import FractureSynth
-
-from ..lib.functions import _update_status
 
 @dataclass
 class fractureEngine:

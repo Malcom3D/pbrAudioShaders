@@ -24,7 +24,7 @@ import soundfile as sf
 from typing import Any, List, Tuple, Dict, Optional
 from dataclasses import dataclass, field
 
-from physicsSolver import EntityManager
+from pbrAudioCommon import EntityManager
 from physicsSolver.lib.functions import _parse_lib
 
 @dataclass

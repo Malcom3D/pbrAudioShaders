@@ -22,7 +22,7 @@ from typing import List, Tuple, Optional, Any, Dict
 from dataclasses import dataclass, field
 from scipy.spatial import ConvexHull
 
-from physicsSolver import EntityManager
+from pbrAudioCommon import EntityManager
 from physicsSolver.lib.functions import _load_mesh, _parse_lib, _compute_rayleigh_damping
 
 

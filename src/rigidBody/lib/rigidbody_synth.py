@@ -21,7 +21,7 @@ from typing import Any, List, Tuple, Dict, Optional, Union
 from dataclasses import dataclass, field
 from dask import delayed, compute
 
-from physicsSolver import EntityManager
+from pbrAudioCommon import EntityManager
 
 from physicsSolver.lib.functions import _parse_lib
 from ..lib.modal_bank import ModalBank

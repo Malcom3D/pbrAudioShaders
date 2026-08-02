@@ -22,7 +22,7 @@ from typing import Any, List, Tuple, Dict, Optional
 from dataclasses import dataclass, field
 import soundfile as sf
 
-from physicsSolver import EntityManager
+from pbrAudioCommon import EntityManager
 from physicsSolver.lib.functions import _parse_lib
 from rigidBody import ModalBank
 from rigidBody import ConnectedBuffer

@@ -42,7 +42,6 @@ from .lib.hertzian_contact import HertzianContact
 from .lib.cubicspline_with_nan import CubicSplineWithNaN
 from .lib.force_data import ContactType, ForceData, ForceDataSequence
 from .lib.modal_vertices import ModalVertices
-from .lib.interpolator import FrequencyInterpolator, Frequency3DInterpolator
 from .lib.trajectory_data import tmpTrajectoryData, TrajectoryData
 from .lib.collision_data import CollisionType, CollisionData
 

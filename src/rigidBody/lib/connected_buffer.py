@@ -20,7 +20,7 @@ import numpy as np
 from typing import Any, List, Tuple, Dict, Optional
 from dataclasses import dataclass, field
 
-from physicsSolver import EntityManager
+from pbrAudioCommon import EntityManager
 
 @dataclass
 class ConnectedBuffer:

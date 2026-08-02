@@ -24,38 +24,22 @@ from dask import delayed, compute
 
 # Configure Dask to use more threads
 from dask import config as dask_config
-#dask_config.set(scheduler='threads', num_workers=1024)
-#dask_config.set(scheduler='processes', num_workers=1024)
 #dask_config.set(num_workers=1024)
 dask_config.set({'num_workers': 1024, 'optimization.fuse.active': True, 'optimization.fuse.max_depth': 10,})
 
-#from dask import config as dask_config
-#import multiprocessing as mp
-## Get actual CPU count (considering hyperthreading)
-#n_physical_cores = mp.cpu_count() // 2  # Physical cores
-#n_workers = max(1, n_physical_cores - 1)  # Leave one core for system
-#dask_config.set({
-#    'num_workers': n_workers,
-#    'scheduler': 'processes',  # Force process-based scheduler
-#    'optimization.fuse.active': True,  # Enable task fusion
-#    'optimization.fuse.max_depth': 10,  # Fuse more tasks
-#})
+from pbrAudioCommon import EntityManager
+from pbrAudioCommon import _update_status
+from physicsSolver import ForceDataSequence, ModalVertices, CollisionData, TrajectoryData
+from physicsSolver import ScoreTrack
+from ellipsoidalProxy import Modal4Proxy
+from postProcess import PostProcessEngine
 
-from physicsSolver import EntityManager, ForceDataSequence, ModalVertices, CollisionData, TrajectoryData
 from ..core.mesh2modal import Mesh2Modal
-
 from ..core.modal_composer import ModalComposer
 from ..core.modal_luthier import ModalLuthier
 from ..core.modal_player import ModalPlayer
 from ..lib.sample_counter import SampleCounter
 from ..lib.connected_buffer import ConnectedBuffer
-from physicsSolver.lib.score_data import ScoreTrack
-#from synthMasters import ModalComposer, ModalLuthier, ModalPlayer, SampleCounter, ConnectedBuffer, ScoreTrack
-
-from ..lib.functions import _update_status
-
-from postProcess import PostProcessEngine
-from ellipsoidalProxy import Modal4Proxy
 
 @dataclass
 class rigidBodyEngine:

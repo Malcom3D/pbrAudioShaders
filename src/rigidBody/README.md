@@ -138,7 +138,7 @@ The module generates the following outputs in the cache directory:
 
 ```python
 import pbrAudioShaders.rigidBody as rb
-from physicsSolver import EntityManager
+from pbrAudioCommon import EntityManager
 
 # 1. Create an EntityManager with the path to your config file
 entity_manager = EntityManager("path/to/your/config.json")
