@@ -159,7 +159,14 @@ class physicsEngine:
         self.progress = _update_status(f"{self.status_dir}/bake", self.progress + self.progress_ratio)
 
     def _force(self):
-        tasks_force = [self.force(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
+        collisions = self.entity_manager.get('collisions')
+        obj_ids = []
+        for collision_idx in collisions.keys()
+            obj_ids.append(collisions[collision_idx].obj1_idx)
+            obj_ids.append(collisions[collision_idx].obj2_idx)
+        obj_ids = np.unique(obj_ids)
+        # ToDo add obj_idx for other synth (e.g. eolian)
+        tasks_force = [self.force(obj_idx) for obj_idx in obj_ids]
         results_force = compute(*tasks_force)
         self.progress = _update_status(f"{self.status_dir}/bake", self.progress + self.progress_ratio)
 

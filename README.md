@@ -90,6 +90,7 @@ References [not confirmed]:
 - https://www.cs.cornell.edu/projects/HarmonicFluids/harmonicfluids.pdf
  - https://github.com/ashab015/Harmonic-Fluids
 - https://gamma.cs.unc.edu/SoundingLiquids/soundingliquids.pdf
+- https://dl.acm.org/doi/epdf/10.1145/1101530.1101554
 
 
 ### Physically plausible sounds for electical discarge simulation.

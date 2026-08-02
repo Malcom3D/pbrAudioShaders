@@ -413,7 +413,7 @@ class DistanceSolver:
 
         if collision_margin * 4.0 > min_distance > collision_margin * 2.0:
             """
-            Sampled surface 2 sampled surface vectorized version for maximum speed.
+            Find near faces with far verteces using  sampled surface to sampled surface vectorized version for maximum speed.
             """
             method = 'samples'
             n_samples = samples_per_object
@@ -484,6 +484,9 @@ class DistanceSolver:
 
             if np.any(mask1) and np.any(mask2):
                 method = 'refine'
+                """
+                Refine the approximate method
+                """
                 # Build KD-tree for nearby vertices
                 nearby_vertices2 = mesh2.vertices[mask2]
                 tree2 = cKDTree(nearby_vertices2)
@@ -500,7 +503,9 @@ class DistanceSolver:
         # Hi-res face2face
         config = self.entity_manager.get('config')
         if config.system.hi_res_face2face:
-            # Find vertices near the finded closest points
+            """
+            Find hi-res closest points after other method with sampling of facing faces
+            """
             mask1 = np.linalg.norm(mesh1.vertices - closest_point1, axis=1) < min_distance
             mask2 = np.linalg.norm(mesh2.vertices - closest_point2, axis=1) < min_distance
             if np.any(mask1) and np.any(mask2):
