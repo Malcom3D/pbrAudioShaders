@@ -30,8 +30,10 @@ np.set_printoptions(precision=decimals, floatmode='fixed', threshold=np.inf)
 
 from .core.proxy_mesh import ProxyMesh
 from .core.modal4proxy import Modal4Proxy
+from .lib.proxy_physics import ProxyPhysics
 
 __all__ = [
     'ProxyMesh',
-    'Modal4Proxy'
+    'Modal4Proxy',
+    'ProxyPhysics'
 ]
