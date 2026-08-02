@@ -42,15 +42,19 @@ from .lib.contact_geometry import ContactGeometry
 from .lib.hertzian_contact import HertzianContact
 from .lib.cubicspline_with_nan import CubicSplineWithNaN
 from .lib.force_data import ContactType, ForceData, ForceDataSequence
-from .lib.acoustic_shader import AcousticCoefficients, AcousticProperties, AcousticShader
 from .lib.modal_vertices import ModalVertices
 from .lib.interpolator import FrequencyInterpolator, Frequency3DInterpolator
 from .lib.trajectory_data import tmpTrajectoryData, TrajectoryData
 from .lib.collision_data import CollisionType, CollisionData
 from .utils.config import SystemConfig, ObjectConfig, Config
 
+from .lib.acoustic_shader import AcousticCoefficients, AcousticProperties, AcousticShader
+
 __all__ = [
     'EntityManager',
+    'AcousticCoefficients',
+    'AcousticProperties',
+    'AcousticShader',
     'PositionSolver',
     'RotationSolver',
     'VertexSolver',
@@ -69,9 +73,6 @@ __all__ = [
     'ContactType',
     'ForceData',
     'ForceDataSequence',
-    'AcousticCoefficients',
-    'AcousticProperties',
-    'AcousticShader',
     'ModalVertices',
     'FrequencyInterpolator',
     'Frequency3DInterpolator',
