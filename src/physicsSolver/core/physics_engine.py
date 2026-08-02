@@ -170,6 +170,15 @@ class physicsEngine:
         results_force = compute(*tasks_force)
         self.progress = _update_status(f"{self.status_dir}/bake", self.progress + self.progress_ratio)
 
+        os.makedirs(self.forces_dir, exist_ok=True)
+        forces = self.entity_manager.get('forces')
+        for force_idx in forces.keys():
+            if isinstance(forces[force_idx], ForceDataSequence):
+                force_obj_idx = forces[force_idx].obj_idx
+                force_other_obj_idx = forces[force_idx].other_obj_idx
+                forces[force_idx].save(f"{self.forces_dir}/{force_obj_idx:05d}_{force_other_obj_idx:05d}.pkl")
+                print('ForceDataSequence saved to : ', f"{self.forces_dir}/{force_obj_idx:05d}_{force_other_obj_idx:05d}.pkl")
+
     def _collision(self):
         collisions = self.entity_manager.get('collisions')
         tasks_collision = [self.collision(collisions[collision_idx]) for collision_idx in collisions.keys()]
