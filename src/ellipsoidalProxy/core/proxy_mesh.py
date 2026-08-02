@@ -24,7 +24,7 @@ from scipy.spatial import cKDTree
 from scipy.spatial.transform import Rotation
 
 from pbrAudioCommon import EntityManager
-from physicsSolver.lib.functions import _load_mesh, _load_pose
+from pbrAudioCommon _load_mesh, _load_pose
 
 
 @dataclass

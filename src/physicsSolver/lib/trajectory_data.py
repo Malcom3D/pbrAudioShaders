@@ -25,7 +25,7 @@ from scipy.interpolate import interp1d
 from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation, RotationSpline
 
-from ..lib.functions import _euler_to_rotation_matrix
+from pbrAudioCommon import _euler_to_rotation_matrix
 
 @dataclass
 class tmpTrajectoryData:

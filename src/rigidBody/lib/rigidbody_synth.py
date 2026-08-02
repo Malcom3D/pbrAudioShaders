@@ -22,8 +22,8 @@ from dataclasses import dataclass, field
 from dask import delayed, compute
 
 from pbrAudioCommon import EntityManager
+from pbrAudioCommon import _parse_lib
 
-from physicsSolver.lib.functions import _parse_lib
 from ..lib.modal_bank import ModalBank
 
 @dataclass

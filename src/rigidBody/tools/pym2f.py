@@ -25,7 +25,7 @@ from typing import List, Tuple, Optional
 from dataclasses import dataclass
 
 from pbrAudioCommon import EntityManager
-from physicsSolver.lib.functions import _load_mesh, _mesh_to_obj, _compute_rayleigh_damping
+from pbrAudioCommon import _load_mesh, _mesh_to_obj, _compute_rayleigh_damping
 
 from ..lib.primitive_geometry import PrimitiveGeometry
 from ..lib.shape_properties import ShapeType, ShapeProperties

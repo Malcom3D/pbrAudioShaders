@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from scipy.spatial import ConvexHull
 
 from pbrAudioCommon import EntityManager
-from physicsSolver.lib.functions import _load_mesh, _parse_lib, _compute_rayleigh_damping
+from pbrAudioCommon import _load_mesh, _parse_lib, _compute_rayleigh_damping
 
 
 @dataclass

@@ -23,10 +23,9 @@ from dataclasses import dataclass, field
 import soundfile as sf
 
 from pbrAudioCommon import EntityManager
-from physicsSolver.lib.functions import _parse_lib
+from pbrAudioCommon import _parse_lib
 from rigidBody import ModalBank
 from rigidBody import ConnectedBuffer
-#from synthMasters import ConnectedBuffer
 
 from .fracture_data import FractureEvent, FractureType
 

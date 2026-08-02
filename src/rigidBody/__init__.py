@@ -31,7 +31,6 @@ from .tools.faust_render import FaustRender
 from .core.rigidbody_engine import rigidBodyEngine
 from .core.mesh2modal import Mesh2Modal
 from .lib.rigidbody_synth import RigidBodySynth
-from .lib.filter import LinkwitzRileyFilter
 from .lib.modal_bank import ModalBank
 from .lib.resonance_synth import ResonanceSynth
 #from .lib.post_process import PostProcess
@@ -54,7 +53,6 @@ __all__ = [
      'SampleCounter',
      'Mesh2Modal',
      'RigidBodySynth',
-     'LinkwitzRileyFilter',
      'ModalBank',
      'ResonanceSynth'
 ]

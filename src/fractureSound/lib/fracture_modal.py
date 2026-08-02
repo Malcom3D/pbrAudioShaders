@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 import trimesh
 
 from pbrAudioCommon import EntityManager
-from physicsSolver.lib.functions import _parse_lib
+from pbrAudioCommon import _parse_lib, _load_mesh
 from rigidBody import ModalBank
 
 from .fracture_data import FractureEvent, FragmentData
@@ -140,7 +140,6 @@ class FractureModalModel:
             raise ValueError(f"Fragment {fragment_idx} not found")
         
         # Load fragment mesh at fracture frame
-        from physicsSolver.lib.functions import _load_mesh
         vertices, normals, faces = _load_mesh(fragment_obj, int(event.frame))
         
         # Create trimesh for volume calculation
@@ -185,7 +184,6 @@ class FractureModalModel:
             return original_freqs
         
         # Load original mesh to get size
-        from physicsSolver.lib.functions import _load_mesh
         orig_vertices, _, _ = _load_mesh(original_obj, int(event.frame))
         
         # Compute bounding sphere radii
@@ -233,7 +231,6 @@ class FractureModalModel:
         if not original_obj:
             return original_t60s
         
-        from physicsSolver.lib.functions import _load_mesh
         orig_vertices, _, _ = _load_mesh(original_obj, int(event.frame))
         
         orig_surface_area = self._estimate_surface_area(orig_vertices)

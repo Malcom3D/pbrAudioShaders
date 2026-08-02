@@ -25,7 +25,7 @@ from typing import Any, List, Tuple, Dict, Optional
 from dataclasses import dataclass, field
 
 from pbrAudioCommon import EntityManager
-from physicsSolver.lib.functions import _parse_lib
+from pbrAudioCommon import _parse_lib
 
 @dataclass
 class ModalPlayer:
