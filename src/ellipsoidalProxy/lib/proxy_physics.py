@@ -18,7 +18,7 @@
 
 import os
 import numpy as np
-from numba import jit, prange
+import numba as nb
 from scipy.spatial import cKDTree
 from scipy.interpolate import CubicSpline
 from typing import Any, List, Tuple, Dict, Optional
@@ -47,7 +47,7 @@ def _pyramid_collision_numba(vertices: np.ndarray, faces: np.ndarray, contact_po
    
     # Find which face the contact point is closest to using dot product
     dot_products = np.zeros(face_normals.shape[0], dtype=np.float64)
-    for i in range(face_normals.shape[0]):
+    for i in nb.prange(face_normals.shape[0]):
         dot_products[i] = face_normals[i, 0] * direction[0] + face_normals[i, 1] * direction[1] + face_normals[i, 2] * direction[2]
 
     closest_face = np.argmax(dot_products)
@@ -60,12 +60,12 @@ def _pyramid_collision_numba(vertices: np.ndarray, faces: np.ndarray, contact_po
 
     # Add neighboring vertices for smooth transition
     if collision_margin > 0.01:
-        for i in range(faces.shape[0]):
+        for i in nb.prange(faces.shape[0]):
             if i != closest_face:
                 # Check if faces share vertices
                 shared = False
-                for j in range(face_vertices.shape[0]):
-                    for k in range(faces[i].shape[0]):
+                for j in nb.prange(face_vertices.shape[0]):
+                    for k in nb.prange(faces[i].shape[0]):
                         if face_vertices[j] == faces[i, k]:
                             shared = True
                             break
@@ -90,7 +90,7 @@ def _octahedron_collision_numba(vertices: np.ndarray, faces: np.ndarray,
     """
     direction = contact_point - center
     octant_signs = np.zeros(3, dtype=np.int32)
-    for i in range(3):
+    for i in nb.prange(3):
         if direction[i] >= 0:
             octant_signs[i] = 1
         else:
@@ -131,12 +131,12 @@ def _octahedron_collision_numba(vertices: np.ndarray, faces: np.ndarray,
 
     # Add adjacent face vertices for smooth transition
     if collision_margin > 0.01:
-        for i in range(faces.shape[0]):
+        for i in nb.prange(faces.shape[0]):
             if i != face_idx:
                 # Check if faces share vertices
                 shared = False
-                for j in range(face_vertices.shape[0]):
-                    for k in range(faces[i].shape[0]):
+                for j in nb.prange(face_vertices.shape[0]):
+                    for k in nb.prange(faces[i].shape[0]):
                         if face_vertices[j] == faces[i, k]:
                             shared = True
                             break
@@ -198,12 +198,12 @@ def _cube_collision_numba(vertices: np.ndarray, faces: np.ndarray,
     # Add edge vertices for smooth transition
     if collision_margin > 0.01:
         # Find adjacent faces (sharing an edge)
-        for i in range(faces.shape[0]):
+        for i in nb.prange(faces.shape[0]):
             if i != face_indices[0] and i != face_indices[1]:
                 # Check if face shares vertices with our faces
                 shared = False
-                for j in range(face_vertices.shape[0]):
-                    for k in range(faces[i].shape[0]):
+                for j in nb.prange(face_vertices.shape[0]):
+                    for k in nb.prange(faces[i].shape[0]):
                         if face_vertices[j] == faces[i, k]:
                             shared = True
                             break
@@ -237,7 +237,7 @@ def _icosahedron_collision_numba(vertices: np.ndarray, faces: np.ndarray,
 
     # Find the face whose normal is most aligned with the contact direction
     dot_products = np.zeros(face_normals.shape[0], dtype=np.float64)
-    for i in range(face_normals.shape[0]):
+    for i in nb.prange(face_normals.shape[0]):
         dot_products[i] = face_normals[i, 0] * direction[0] + face_normals[i, 1] * direction[1] + face_normals[i, 2] * direction[2]
 
     closest_face = np.argmax(dot_products)
@@ -248,12 +248,12 @@ def _icosahedron_collision_numba(vertices: np.ndarray, faces: np.ndarray,
 
     # Add vertices from adjacent faces
     if collision_marginargin > 0.01:
-        for i in range(faces.shape[0]):
+        for i in nb.prange(faces.shape[0]):
             if i != closest_face:
                 # Check if faces share vertices
                 shared = False
-                for j in range(face_vertices.shape[0]):
-                    for k in range(faces[i].shape[0]):
+                for j in nb.prange(face_vertices.shape[0]):
+                    for k in nb.prange(faces[i].shape[0]):
                         if face_vertices[j] == faces[i, k]:
                             shared = True
                             break
@@ -287,7 +287,7 @@ def _icosahedron_collision_subdivided_numba(vertices: np.ndarray, faces: np.ndar
 
     # Find the face whose normal is most aligned with the contact direction
     dot_products = np.zeros(face_normals.shape[0], dtype=np.float64)
-    for i in range(face_normals.shape[0]):
+    for i in nb.prange(face_normals.shape[0]):
         dot_products[i] = face_normals[i, 0] * direction[0] + face_normals[i, 1] * direction[1] + face_normals[i, 2] * direction[2]
 
     closest_face = np.argmax(dot_products)
@@ -304,7 +304,7 @@ def _icosahedron_collision_subdivided_numba(vertices: np.ndarray, faces: np.ndar
 
     # Find nearby vertices
     nearby_vertices = []
-    for i in range(vertices.shape[0]):
+    for i in nb.prange(vertices.shape[0]):
         dist = np.sqrt((vertices[i, 0] - contact_point[0])**2 +
                        (vertices[i, 1] - contact_point[1])**2 +
                        (vertices[i, 2] - contact_point[2])**2)
@@ -316,12 +316,12 @@ def _icosahedron_collision_subdivided_numba(vertices: np.ndarray, faces: np.ndar
         unique_vertices = np.unique(new_vertices)
 
     # Add vertices from adjacent faces (sharing an edge)
-    for i in range(faces.shape[0]):
+    for i in nb.prange(faces.shape[0]):
         if i != closest_face:
             # Check if faces share at least 2 vertices (edge)
             shared_count = 0
-            for j in range(face_vertices.shape[0]):
-                for k in range(faces[i].shape[0]):
+            for j in nb.prange(face_vertices.shape[0]):
+                for k in nb.prange(faces[i].shape[0]):
                     if face_vertices[j] == faces[i, k]:
                         shared_count += 1
                         break
@@ -347,7 +347,7 @@ def _get_adjacent_faces_numba(faces: np.ndarray, face_indices: np.ndarray) -> np
 
     # Find adjacent faces
     adjacent = []
-    for i in range(faces.shape[0]):
+    for i in nb.prange(faces.shape[0]):
         # Skip if this face is already in face_indices
         is_in_indices = False
         for idx in face_indices:
@@ -359,8 +359,8 @@ def _get_adjacent_faces_numba(faces: np.ndarray, face_indices: np.ndarray) -> np
 
         # Count shared vertices
         shared_count = 0
-        for j in range(faces[i].shape[0]):
-            for k in range(face_vertices_set.shape[0]):
+        for j in nb.prange(faces[i].shape[0]):
+            for k in nb.prange(face_vertices_set.shape[0]):
                 if faces[i, j] == face_vertices_set[k]:
                     shared_count += 1
                     break
