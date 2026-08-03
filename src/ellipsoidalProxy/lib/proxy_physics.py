@@ -261,7 +261,7 @@ def _icosahedron_collision_numba(vertices: np.ndarray, faces: np.ndarray,
                         break
                 if shared:
                     new_vertices = np.concatenate([unique_vertices, faces[i]])
-                    unique unique_vertices = np.unique(new_vertices)
+                    unique_vertices = np.unique(new_vertices)
 
     face_area = unique_vertices.shape[0] / vertices.shape[0]
 
