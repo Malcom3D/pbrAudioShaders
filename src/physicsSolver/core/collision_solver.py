@@ -125,7 +125,7 @@ class CollisionSolver:
             
             # Use optimized proxy mesh collision detection
             if is_proxy1 or is_proxy2:
-                vertices1_idx, vertices2_idx, face_area1, face_area2 = self.proxy_physics._optimized_proxy_collision(obj1_idx, obj2_idx, cp1, cp2, collision_margin, contact_type, trajectory1, trajectory2, mesh1_faces, mesh2_faces, sample_idx)
+                vertices1_idx, vertices2_idx, face_area1, face_area2 = self.proxy_physics.optimized_proxy_collision(obj1_idx, obj2_idx, cp1, cp2, collision_margin, contact_type, trajectory1, trajectory2, mesh1_faces, mesh2_faces, sample_idx)
             else:
                 # Original method for non-proxy meshes
                 vertices1_idx, vertices2_idx, face_area1, face_area2 = self._standard_collision(cp1, cp2, collision_margin, contact_type, trajectory1, trajectory2, mesh1_faces, mesh2_faces, sample_idx)
@@ -412,8 +412,8 @@ class CollisionSolver:
             mesh2_vertices = trajectory2.get_vertices(0)
         
             # Use analytical collision for both
-            vertices1_idx, _ = self.proxy_physics._analytical_proxy_collision(proxy1, mesh1_vertices, mesh1_faces, cp1, np.mean(mesh1_vertices, axis=0), collision_margin)
-            vertices2_idx, _ = self.proxy_physics._analytical_proxy_collision(proxy2, mesh2_vertices, mesh2_faces, cp2, np.mean(mesh2_vertices, axis=0), collision_margin)
+            vertices1_idx, _ = self.proxy_physics.analytical_proxy_collision(proxy1, mesh1_vertices, mesh1_faces, cp1, np.mean(mesh1_vertices, axis=0), collision_margin)
+            vertices2_idx, _ = self.proxy_physics.analytical_proxy_collision(proxy2, mesh2_vertices, mesh2_faces, cp2, np.mean(mesh2_vertices, axis=0), collision_margin)
         elif (is_proxy1 and not is_proxy2) or (is_proxy2 and not is_proxy1):
             # Only one object is proxy
             proxed_mesh_vertices = trajectory1.get_vertices(0) if is_proxy1 else trajectory2.get_vertices(0)
@@ -421,7 +421,7 @@ class CollisionSolver:
             proxy = proxy1 if is_proxy1 else proxy2
             proxy_mesh_faces = mesh1_faces if is_proxy1 else mesh2_faces
             proxy_cp = cp1 if is_proxy1 else cp2
-            proxed_vertices_idx, _ = self.proxy_physics._analytical_proxy_collision(proxy, proxed_mesh_vertices, proxy_mesh_faces, proxy_cp, np.mean(proxy_mesh_faces, axis=0), collision_margin)
+            proxed_vertices_idx, _ = self.proxy_physics.analytical_proxy_collision(proxy, proxed_mesh_vertices, proxy_mesh_faces, proxy_cp, np.mean(proxy_mesh_faces, axis=0), collision_margin)
         
             # Standard KDTree for object 2
             noproxy_mesh_vertices = trajectory2.get_vertices(0) if is_proxy1 else trajectory1.get_vertices(0)

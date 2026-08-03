@@ -54,7 +54,7 @@ class ProxyPhysics:
         mesh_faces_idx = np.where(np.any(np.isin(faces, vertices_idx), axis=1))[0]
         return len(mesh_faces_idx) / len(faces)
 
-    def _optimized_proxy_collision(self, obj1_idx, obj2_idx, cp1, cp2, collision_margin, contact_type, trajectory1, trajectory2, mesh1_faces, mesh2_faces, sample_idx):
+    def optimized_proxy_collision(self, obj1_idx, obj2_idx, cp1, cp2, collision_margin, contact_type, trajectory1, trajectory2, mesh1_faces, mesh2_faces, sample_idx):
         """
         Ultra-optimized collision detection for proxy meshes types 0, 1, 2.
         Uses analytical geometry instead of KDTree queries.
@@ -94,7 +94,7 @@ class ProxyPhysics:
    
         return vertices1_idx, vertices2_idx, face_area1, face_area2
 
-    def _analytical_proxy_collision(self, proxy_type, vertices, faces, contact_point, center, collision_margin):
+    def analytical_proxy_collision(self, proxy_type, vertices, faces, contact_point, center, collision_margin):
         """ 
         Analytical collision detection for proxy meshes.
         Uses geometric relationships instead of KDTree.
