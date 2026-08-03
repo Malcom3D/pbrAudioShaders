@@ -124,6 +124,9 @@ class ProxyMesh:
             # Get pose for this frame
             position = positions[frame_idx]
             rotation_euler = rotations[frame_idx]
+            if config_obj.static:
+                position = positions
+                rotation_euler = rotations
 
             # Transform vertices to local coordinates
             R = Rotation.from_euler('XYZ', rotation_euler).as_matrix()
