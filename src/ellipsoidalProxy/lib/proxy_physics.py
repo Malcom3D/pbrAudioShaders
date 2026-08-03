@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 from itertools import groupby
 
 from pbrAudioCommon import EntityManager
+from pbrAudioCommon import _compute_face_normals
 
 @dataclass 
 class ProxyPhysics:
@@ -35,16 +36,6 @@ class ProxyPhysics:
 
     def __post_init__(self):
         self.config = self.entity_manager.get('config')
-
-    def _compute_face_normals(self, vertices: np.ndarray, faces: np.ndarray) -> np.ndarray:
-        """Compute normals of all faces."""
-        v0 = vertices[faces[:, 0]]
-        v1 = vertices[faces[:, 1]]
-        v2 = vertices[faces[:, 2]]
-        normals = np.cross(v1 - v0, v2 - v0)
-        norms = np.linalg.norm(normals, axis=1, keepdims=True)
-        norms[norms == 0] = 1
-        return normals / norms
 
     def _compute_face_area(self, vertices_idx, faces):
         """Compute face area ratio from vertex indices."""
@@ -56,7 +47,7 @@ class ProxyPhysics:
 
     def optimized_proxy_collision(self, obj1_idx, obj2_idx, cp1, cp2, collision_margin, contact_type, trajectory1, trajectory2, mesh1_faces, mesh2_faces, sample_idx):
         """
-        Ultra-optimized collision detection for proxy meshes types 0, 1, 2.
+        Ultra-optimized collision detection for proxy meshes.
         Uses analytical geometry instead of KDTree queries.
         """
         # Get proxy mesh properties
@@ -74,9 +65,9 @@ class ProxyPhysics:
         center1 = np.mean(mesh1_vertices, axis=0)
         center2 = np.mean(mesh2_vertices, axis=0)
 
-        # Use analytical collision for proxy types 0, 1, 2
-        if proxy1 is not False and proxy1 in [0,1,2]:
-            vertices1_idx, face_area1 = self._analytical_proxy_collision(proxy1, mesh1_vertices, mesh1_faces, cp1, center1, collision_margin)
+        # Use analytical collision for all proxy types
+        if proxy1 is not False:
+            vertices1_idx, face_area1 = self.analytical_proxy_collision(proxy1, mesh1_vertices, mesh1_faces, cp1, center1, collision_margin)
         else:
             # Fallback to KDTree for other types
             tree1 = cKDTree(mesh1_vertices)
@@ -84,8 +75,8 @@ class ProxyPhysics:
             vertices1_idx = np.array(tree1.query_ball_point(cp1, radius, workers=-1))
             face_area1 = _compute_face_area(vertices1_idx, mesh1_faces)
 
-        if proxy2 is not False and proxy2 in [0,1,2]:
-            vertices2_idx, face_area2 = self._analytical_proxy_collision(proxy2, mesh2_vertices, mesh2_faces, cp2, center2, collision_margin)
+        if proxy2 is not False
+            vertices2_idx, face_area2 = self.analytical_proxy_collision(proxy2, mesh2_vertices, mesh2_faces, cp2, center2, collision_margin)
         else:
             tree2 = cKDTree(mesh2_vertices)
             radius = collision_margin * (4.0 if contact_type in [4, 5] else 2.0)
@@ -105,6 +96,12 @@ class ProxyPhysics:
             return self._octahedron_collision(vertices, faces, contact_point, center, collision_margin)
         elif proxy_type == 2:  # Cube (8 vertices)
             return self._cube_collision(vertices, faces, contact_point, center, collision_margin)
+        elif proxy_type == 3:  # Icosahedron (12 vertices, 20 faces)
+            return self._icosahedron_collision(vertices, faces, contact_point, center, collision_margin, subdivisions=0)
+        elif proxy_type == 4:  # Icosahedron subdiv 1 (42 vertices, 80 faces)
+            return self._icosahedron_collision_subdivided(vertices, faces, contact_point, center, collision_margin, subdivisions=1)
+        elif proxy_type == 5:  # Icosahedron subdiv 2 (162 vertices, 320 faces)
+            return self._icosahedron_collision_subdivided(vertices, faces, contact_point, center, collision_margin, subdivisions=2)
 
         return np.array([], dtype=np.int32), 0.0
 
@@ -231,6 +228,94 @@ class ProxyPhysics:
 
         face_area = len(unique_vertices) / len(vertices)
 
+        return unique_vertices, face_area
+
+    def _icosahedron_collision(self, vertices, faces, contact_point, center, collision_margin, subdivisions=0):
+        """
+        Fast icosahedron collision detection using face-based approach.
+        
+        Icosahedron has 12 vertices and 20 faces (base), with subdivisions
+        increasing vertex/face count. Uses the fact that all faces are
+        equilateral triangles on a sphere-like surface.
+        """
+        direction = contact_point - center
+        direction_norm = np.linalg.norm(direction)
+        
+        if direction_norm < 1e-10:
+            return np.arange(len(vertices), dtype=np.int32), 1.0
+        
+        direction = direction / direction_norm
+        
+        # Compute face normals
+        face_normals = self._compute_face_normals(vertices, faces)
+        
+        # Find the face whose normal is most aligned with the contact direction
+        dot_products = np.dot(face_normals, direction)
+        closest_face = np.argmax(dot_products)
+        
+        # Get vertices for this face
+        face_vertices = faces[closest_face]
+        unique_vertices = np.unique(face_vertices)
+        
+        # Add vertices from adjacent faces
+        if collision_margin > 0.01:
+            for i, face in enumerate(faces):
+                if i != closest_face:
+                    if len(np.intersect1d(face, face_vertices)) > 0:
+                        unique_vertices = np.unique(np.concatenate([unique_vertices, face]))
+        
+        face_area = len(unique_vertices) / len(vertices)
+        
+        return unique_vertices, face_area
+
+    def _icosahedron_collision_subdivided(self, vertices, faces, contact_point, center, collision_margin, subdivisions):
+        """
+        Collision detection for subdivided icosahedron (proxy types 3, 4, 5).
+        
+        Uses a hierarchical approach:
+        1. Find the base icosahedron face (using 12 base vertices)
+        2. For subdivided meshes, find the specific sub-face containing the contact point
+        3. Include vertices from surrounding faces based on collision margin
+        """
+        direction = contact_point - center
+        direction_norm = np.linalg.norm(direction)
+        
+        if direction_norm < 1e-10:
+            return np.arange(len(vertices), dtype=np.int32), 1.0
+        
+        direction = direction / direction_norm
+        
+        # Compute face normals
+        face_normals = self._compute_face_normals(vertices, faces)
+        
+        # Find the face whose normal is most aligned with the contact direction
+        dot_products = np.dot(face_normals, direction)
+        closest_face = np.argmax(dot_products)
+        
+        # Get vertices for this face
+        face_vertices = faces[closest_face]
+        unique_vertices = np.unique(face_vertices)
+        
+        # For subdivided icosahedron, include more vertices based on subdivision level
+        sub_scale = 1.0 + subdivisions * 0.5
+        
+        # Find all vertices within the collision margin (scaled)
+        search_radius = collision_margin * 2.0 * sub_scale
+        distances = np.linalg.norm(vertices - contact_point, axis=1)
+        nearby_vertices = np.where(distances < search_radius)[0]
+        
+        if len(nearby_vertices) > 0:
+                       unique_vertices = np.unique(np.concatenate([unique_vertices, nearby_vertices]))
+        
+        # Add vertices from adjacent faces (sharing an edge)
+        face_vertices_set = set(face_vertices)
+        for i, face in enumerate(faces):
+            if i != closest_face:
+                if len(set(face) & face_vertices_set) >= 2:  # Share an edge
+                    unique_vertices = np.unique(np.concatenate([unique_vertices, face]))
+        
+        face_area = len(unique_vertices) / len(vertices)
+        
         return unique_vertices, face_area
 
     def _get_adjacent_faces(self, faces, face_indices):

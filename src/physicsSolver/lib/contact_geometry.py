@@ -16,9 +16,10 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import itertools
 import numpy as np
 from scipy.spatial import cKDTree
-import itertools
+from pbrAudioCommon import _compute_face_normals
 
 class ContactGeometry:
     def __init__(self, mesh1_vertices, mesh1_faces, mesh1_center, mesh2_vertices, mesh2_faces, mesh2_center):
@@ -38,14 +39,14 @@ class ContactGeometry:
             'vertices': mesh1_vertices,
             'faces': mesh1_faces,
             'center': mesh1_center,
-            'normals': self._compute_face_normals(mesh1_vertices, mesh1_faces)
+            'normals': _compute_face_normals(mesh1_vertices, mesh1_faces)
         }
         
         self.mesh2 = {
             'vertices': mesh2_vertices,
             'faces': mesh2_faces,
             'center': mesh2_center,
-            'normals': self._compute_face_normals(mesh2_vertices, mesh2_faces)
+            'normals': _compute_face_normals(mesh2_vertices, mesh2_faces)
         }
         
         # Build KD-trees for efficient nearest neighbor search
@@ -113,18 +114,6 @@ class ContactGeometry:
                 return normal
         
         return normal_guess
-
-    def _compute_face_normals(self, vertices, faces):
-        """Compute face normals for all triangles."""
-        normals = []
-        for face in faces:
-            v0, v1, v2 = vertices[face]
-            normal = np.cross(v1 - v0, v2 - v0)
-            norm = np.linalg.norm(normal)
-            if norm > 1e-10:
-                normal = normal / norm
-            normals.append(normal)
-        return np.array(normals)
 
     def get_contact_normal(self):
         # Find contact points

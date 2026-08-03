@@ -19,7 +19,7 @@
 import numpy as np
 import numba as nb
 
-@nb.jit(nopython=True, parallel=True)
+@nb.njit(parallel=True, fastmath=True, cache=True)
 def calculate_coefficients(frequencies, gains, t60s, sample_rate):
     """Calculate coefficients for all modes"""
     num_modes = len(frequencies)
@@ -45,14 +45,14 @@ def calculate_coefficients(frequencies, gains, t60s, sample_rate):
     
     return r, c, s, g
 
-@nb.jit(nopython=True, parallel=True, cache=True)
+@nb.njit(parallel=True, fastmath=True, cache=True)
 def process_mode(c, s, g, u1, u2, excitation):
     """Process a single mode"""
     u1_new = c * u1 - s * u2 + g * excitation
     u2_new = s * u1 + c * u2
     return u1_new, u2_new
 
-@nb.jit(nopython=True, parallel=True, cache=True)
+@nb.njit(parallel=True, fastmath=True, cache=True)
 def process_all_mode(output, num_modes, c, s, g, u1, u2, excitation):
     for i in nb.prange(num_modes):
         u1_new = c[i] * u1[i] - s[i] * u2[i] + g[i] * excitation
