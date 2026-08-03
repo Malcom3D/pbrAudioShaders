@@ -17,18 +17,358 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import os
-import blosc2
-import trimesh
 import numpy as np
 from numba import jit, prange
 from scipy.spatial import cKDTree
 from scipy.interpolate import CubicSpline
 from typing import Any, List, Tuple, Dict, Optional
 from dataclasses import dataclass, field
-from itertools import groupby
 
 from pbrAudioCommon import EntityManager
 from pbrAudioCommon import _compute_face_normals
+
+@nb.njit(cache=True)
+def _pyramid_collision_numba(vertices: np.ndarray, faces: np.ndarray, contact_point: np.ndarray, center: np.ndarray, collision_margin: float) -> Tuple[np.ndarray, float]:
+    """
+    Fast pyramid collision detection using barycentric coordinates.
+    Pyramid has 4 vertices and 4 faces.
+    """
+    # Pyramid structure: apex at index 0, base at indices 1,2,3
+    direction = contact_point - center
+    direction_norm = np.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2)
+   
+    if direction_norm < 1e-10:
+        return np.array([0, 1, 2, 3], dtype=np.int32), 1.0
+   
+    direction = direction / direction_norm
+   
+    # Compute face normals
+    face_normals = _compute_face_normals_numba(vertices, faces)
+   
+    # Find which face the contact point is closest to using dot product
+    dot_products = np.zeros(face_normals.shape[0], dtype=np.float64)
+    for i in range(face_normals.shape[0]):
+        dot_products[i] = face_normals[i, 0] * direction[0] + face_normals[i, 1] * direction[1] + face_normals[i, 2] * direction[2]
+
+    closest_face = np.argmax(dot_products)
+
+    # Get vertices for this face
+    face_vertices = faces[closest_face]
+
+    # Get unique vertices
+    unique_vertices = np.unique(face_vertices)
+
+    # Add neighboring vertices for smooth transition
+    if collision_margin > 0.01:
+        for i in range(faces.shape[0]):
+            if i != closest_face:
+                # Check if faces share vertices
+                shared = False
+                for j in range(face_vertices.shape[0]):
+                    for k in range(faces[i].shape[0]):
+                        if face_vertices[j] == faces[i, k]:
+                            shared = True
+                            break
+                    if shared:
+                        break
+                if shared:
+                    # Add vertices from adjacent face
+                    new_vertices = np.concatenate([unique_vertices, faces[i]])
+                    unique_vertices = np.unique(new_vertices)
+
+    face_area = unique_vertices.shape[0] / vertices.shape[0]
+   
+    return unique_vertices, face_area
+
+@nb.njit(cache=True)
+def _octahedron_collision_numba(vertices: np.ndarray, faces: np.ndarray,
+                                contact_point: np.ndarray, center: np.ndarray,
+                                collision_margin: float) -> Tuple[np.ndarray, float]:
+    """
+    Fast octahedron collision detection using sign-based face selection.
+    Octahedron has 6 vertices and 8 faces.
+    """
+    direction = contact_point - center
+    octant_signs = np.zeros(3, dtype=np.int32)
+    for i in range(3):
+        if direction[i] >= 0:
+            octant_signs[i] = 1
+        else:
+            octant_signs[i] = -1
+
+    # Map octant to face index (pre-computed mapping for octahedron)
+    # Faces are indexed by their normal direction
+    # Face 0: (1,1,1), Face 1: (1,1,-1), Face 2: (1,-1,1), Face 3: (1,-1,-1)
+    # Face 4: (-1,1,1), Face 5: (-1,1,-1), Face 6: (-1,-1,1), Face 7: (-1,-1,-1)
+
+    face_idx = 0
+    if octant_signs[0] == 1:
+        if octant_signs[1] == 1:
+            if octant_signs[2] == 1:
+                face_idx = 0
+            else:
+                face_idx = 1
+        else:
+            if octant_signs[2] == 1:
+                face_idx = 2
+            else:
+                face_idx = 3
+    else:
+        if octant_signs[1] == 1:
+            if octant_signs[2] == 1:
+                face_idx = 4
+            else:
+                face_idx = 5
+        else:
+            if octant_signs[2] == 1:
+                face_idx = 6
+            else:
+                face_idx = 7
+
+    # Get vertices for this face
+    face_vertices = faces[face_idx]
+    unique_vertices = np.unique(face_vertices)
+
+    # Add adjacent face vertices for smooth transition
+    if collision_margin > 0.01:
+        for i in range(faces.shape[0]):
+            if i != face_idx:
+                # Check if faces share vertices
+                shared = False
+                for j in range(face_vertices.shape[0]):
+                    for k in range(faces[i].shape[0]):
+                        if face_vertices[j] == faces[i, k]:
+                            shared = True
+                            break
+                    if shared:
+                        break
+                if shared:
+                    new_vertices = np.concatenate([unique_vertices, faces[i]])
+                    unique_vertices = np.unique(new_vertices)
+
+    face_area = unique_vertices.shape[0] / vertices.shape[0]
+
+    return unique_vertices, face_area
+
+@nb.njit(cache=True)
+def _cube_collision_numba(vertices: np.ndarray, faces: np.ndarray,
+                          contact_point: np.ndarray, center: np.ndarray,
+                          collision_margin: float) -> Tuple[np.ndarray, float]:
+    """
+    Fast cube collision detection using axis-aligned bounding box.
+    Cube has 8 vertices and 6 faces (12 triangles).
+    """
+    direction = contact_point - center
+
+    # Find the dominant axis (which face is closest)
+    abs_direction = np.abs(direction)
+    dominant_axis = np.argmax(abs_direction)
+    face_sign = 1 if direction[dominant_axis] >= 0 else -1
+
+    # For a cube, each face has 2 triangles
+    # Face indices are grouped: [0,1] for +x, [2,3] for -x, etc.
+    face_indices = np.zeros(2, dtype=np.int32)
+
+    if dominant_axis == 0:  # x-axis
+        if face_sign > 0:
+            face_indices[0] = 0
+            face_indices[1] = 1
+        else:
+            face_indices[0] = 2
+            face_indices[1] = 3
+    elif dominant_axis == 1:  # y-axis
+        if face_sign > 0:
+            face_indices[0] = 4
+            face_indices[1] = 5
+        else:
+            face_indices[0] = 6
+            face_indices[1] = 7
+    else:  # z-axis
+        if face_sign > 0:
+            face_indices[0] = 8
+            face_indices[1] = 9
+        else:
+            face_indices[0] = 10
+            face_indices[1] = 11
+
+    # Get all vertices from these faces
+    face_vertices = np.concatenate([faces[face_indices[0]], faces[face_indices[1]]])
+    unique_vertices = np.unique(face_vertices)
+
+    # Add edge vertices for smooth transition
+    if collision_margin > 0.01:
+        # Find adjacent faces (sharing an edge)
+        for i in range(faces.shape[0]):
+            if i != face_indices[0] and i != face_indices[1]:
+                # Check if face shares vertices with our faces
+                shared = False
+                for j in range(face_vertices.shape[0]):
+                    for k in range(faces[i].shape[0]):
+                        if face_vertices[j] == faces[i, k]:
+                            shared = True
+                            break
+                    if shared:
+                        break
+                if shared:
+                    new_vertices = np.concatenate([unique_vertices, faces[i]])
+                    unique_vertices = np.unique(new_vertices)
+
+    face_area = unique_vertices.shape[0] / vertices.shape[0]
+
+    return unique_vertices, face_area
+
+@nb.njit(cache=True)
+def _icosahedron_collision_numba(vertices: np.ndarray, faces: np.ndarray,
+                                 contact_point: np.ndarray, center: np.ndarray,
+                                 collision_margin: float) -> Tuple[np.ndarray, float]:
+    """
+    Fast icosahedron collision detection using face-based approach.
+    """
+    direction = contact_point - center
+    direction_norm = np.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2)
+
+    if direction_norm < 1e-10:
+        return np.arange(vertices.shape[0], dtype=np.int32), 1.0
+
+    direction = direction / direction_norm
+
+    # Compute face normals
+    face_normals = _compute_face_normals_numba(vertices, faces)
+
+    # Find the face whose normal is most aligned with the contact direction
+    dot_products = np.zeros(face_normals.shape[0], dtype=np.float64)
+    for i in range(face_normals.shape[0]):
+        dot_products[i] = face_normals[i, 0] * direction[0] + face_normals[i, 1] * direction[1] + face_normals[i, 2] * direction[2]
+
+    closest_face = np.argmax(dot_products)
+
+    # Get vertices for this face
+    face_vertices = faces[closest_face]
+    unique_vertices = np.unique(face_vertices)
+
+    # Add vertices from adjacent faces
+    if collision_marginargin > 0.01:
+        for i in range(faces.shape[0]):
+            if i != closest_face:
+                # Check if faces share vertices
+                shared = False
+                for j in range(face_vertices.shape[0]):
+                    for k in range(faces[i].shape[0]):
+                        if face_vertices[j] == faces[i, k]:
+                            shared = True
+                            break
+                    if shared:
+                        break
+                if shared:
+                    new_vertices = np.concatenate([unique_vertices, faces[i]])
+                    unique unique_vertices = np.unique(new_vertices)
+
+    face_area = unique_vertices.shape[0] / vertices.shape[0]
+
+    return unique_vertices, face_area
+
+@nb.njit(cache=True)
+def _icosahedron_collision_subdivided_numba(vertices: np.ndarray, faces: np.ndarray,
+                                            contact_point: np.ndarray, center: np.ndarray,
+                                            collision_margin: float, subdivisions: int) -> Tuple[np.ndarray, float]:
+    """
+    Collision detection for subdivided icosahedron.
+    """
+    direction = contact_point - center
+    direction_norm = np.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2)
+
+    if direction_norm < 1e-10:
+        return np.arange(vertices.shape[0], dtype=np.int32), 1.0
+
+    direction direction = direction / direction_norm
+
+    # Compute face normals
+    face_normals = _compute_face_normals_numba(vertices, faces)
+
+    # Find the face whose normal is most aligned with the contact direction
+    dot_products = np.zeros(face_normals.shape[0], dtype=np.float64)
+    for i in range(face_normals.shape[0]):
+        dot_products[i] = face_normals[i, 0] * direction[0] + face_normals[i, 1] * direction[1] + face_normals[i, 2] * direction[2]
+
+    closest_face = np.argmax(dot_products)
+
+    # Get vertices for this face
+    face_vertices = faces[closest_face]
+    unique_vertices = np.unique(face_vertices)
+
+    # For subdivided icosahedron, include more vertices based on subdivision level
+    sub_scale = 1.0 + subdivisions * 0.5
+
+    # Find all vertices within the collision margin (scaled)
+    search_radius = collision_margin * 2.0 * sub_scale
+
+    # Find nearby vertices
+    nearby_vertices = []
+    for i in range(vertices.shape[0]):
+        dist = np.sqrt((vertices[i, 0] - contact_point[0])**2 +
+                       (vertices[i, 1] - contact_point[1])**2 +
+                       (vertices[i, 2] - contact_point[2])**2)
+        if dist < search_radius:
+            nearby_vertices.append(i)
+
+    if len(nearby_vertices) > 0:
+        new_vertices = np.concatenate([unique_vertices, np.array(nearby_vertices, dtype=np.int32)])
+        unique_vertices = np.unique(new_vertices)
+
+    # Add vertices from adjacent faces (sharing an edge)
+    for i in range(faces.shape[0]):
+        if i != closest_face:
+            # Check if faces share at least 2 vertices (edge)
+            shared_count = 0
+            for j in range(face_vertices.shape[0]):
+                for k in range(faces[i].shape[0]):
+                    if face_vertices[j] == faces[i, k]:
+                        shared_count += 1
+                        break
+            if shared_count >= 2:  # Share an edge
+                new_vertices = np.concatenate([unique_vertices, faces[i]])
+                unique_vertices = np.unique(new_vertices)
+
+    face_area = unique_vertices.shape[0] / vertices.shape[0]
+
+    return unique_vertices, face_area
+
+@nb.njit(cache=True)
+def _get_adjacent_faces_numba(faces: np.ndarray, face_indices: np.ndarray) -> np.ndarray:
+    """
+    Get faces adjacent to the given face indices.
+    """
+    # Collect all vertices from the given faces
+    face_vertices = np.zeros(0, dtype=np.int32)
+    for idx in face_indices:
+        face_vertices = np.concatenate([face_vertices, faces[idx]])
+
+    face_vertices_set = np.unique(face_vertices)
+
+    # Find adjacent faces
+    adjacent = []
+    for i in range(faces.shape[0]):
+        # Skip if this face is already in face_indices
+        is_in_indices = False
+        for idx in face_indices:
+            if i == idx:
+                is_in_indices = True
+                break
+        if is_in_indices:
+            continue
+
+        # Count shared vertices
+        shared_count = 0
+        for j in range(faces[i].shape[0]):
+            for k in range(face_vertices_set.shape[0]):
+                if faces[i, j] == face_vertices_set[k]:
+                    shared_count += 1
+                    break
+
+        if shared_count >= 2:  # Share an edge
+            adjacent.append(i)
+
+    return np.array(adjacent, dtype=np.int32)
 
 @dataclass 
 class ProxyPhysics:
@@ -91,17 +431,41 @@ class ProxyPhysics:
         Uses geometric relationships instead of KDTree.
         """ 
         if proxy_type == 0:  # Pyramid (4 vertices)
-            return self._pyramid_collision(vertices, faces, contact_point, center, collision_margin)
+            try:
+                return _pyramid_collision_numba(vertices, faces, contact_point, center, collision_margin)
+            except Exception as e:
+                print(e)
+                return self._pyramid_collision(vertices, faces, contact_point, center, collision_margin)
         elif proxy_type == 1:  # Octahedron (6 vertices)
-            return self._octahedron_collision(vertices, faces, contact_point, center, collision_margin)
+            try:
+                return _octahedron_collision_numba(vertices, faces, contact_point, center, collision_margin)
+            except Exception as e:
+                print(e)
+                return self._octahedron_collision(vertices, faces, contact_point, center, collision_margin)
         elif proxy_type == 2:  # Cube (8 vertices)
-            return self._cube_collision(vertices, faces, contact_point, center, collision_margin)
+            try:
+                return _cube_collision_numba(vertices, faces, contact_point, center, collision_margin)
+            except Exception as e:
+                print(e)
+                return self._cube_collision(vertices, faces, contact_point, center, collision_margin)
         elif proxy_type == 3:  # Icosahedron (12 vertices, 20 faces)
-            return self._icosahedron_collision(vertices, faces, contact_point, center, collision_margin, subdivisions=0)
+            try:
+                return _icosahedron_collision_numba(vertices, faces, contact_point, center, collision_margin)
+            except Exception as e:
+                print(e)
+                return self._icosahedron_collision(vertices, faces, contact_point, center, collision_margin, subdivisions=0)
         elif proxy_type == 4:  # Icosahedron subdiv 1 (42 vertices, 80 faces)
-            return self._icosahedron_collision_subdivided(vertices, faces, contact_point, center, collision_margin, subdivisions=1)
+            try:
+                return _icosahedron_collision_subdivided_numba(vertices, faces, contact_point, center, collision_margin, subdivisions=1)
+            except Exception as e:
+                print(e)
+                return self._icosahedron_collision_subdivided(vertices, faces, contact_point, center, collision_margin, subdivisions=1)
         elif proxy_type == 5:  # Icosahedron subdiv 2 (162 vertices, 320 faces)
-            return self._icosahedron_collision_subdivided(vertices, faces, contact_point, center, collision_margin, subdivisions=2)
+            try:
+                return _icosahedron_collision_subdivided_numba(vertices, faces, contact_point, center, collision_margin, subdivisions=2)
+            except Exception as e:
+                print(e)
+                return self._icosahedron_collision_subdivided(vertices, faces, contact_point, center, collision_margin, subdivisions=2)
 
         return np.array([], dtype=np.int32), 0.0
 
@@ -222,7 +586,11 @@ class ProxyPhysics:
         # Add edge vertices for smooth transition
         if collision_margin > 0.01:
             # Add vertices from adjacent faces (sharing an edge)
-            edge_faces = self._get_adjacent_faces(faces, face_indices)
+            try:
+                edge_faces = _get_adjacent_faces_numba(faces, face_indices)
+            except Exception as e:
+                print(e)
+                edge_faces = self._get_adjacent_faces(faces, face_indices)
             for edge_face in edge_faces:
                 unique_vertices = np.unique(np.concatenate([unique_vertices, faces[edge_face]]))
 
