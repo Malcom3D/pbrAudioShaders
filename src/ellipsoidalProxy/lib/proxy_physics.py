@@ -415,7 +415,7 @@ class ProxyPhysics:
             vertices1_idx = np.array(tree1.query_ball_point(cp1, radius, workers=-1))
             face_area1 = _compute_face_area(vertices1_idx, mesh1_faces)
 
-        if proxy2 is not False
+        if proxy2 is not False:
             vertices2_idx, face_area2 = self.analytical_proxy_collision(proxy2, mesh2_vertices, mesh2_faces, cp2, center2, collision_margin)
         else:
             tree2 = cKDTree(mesh2_vertices)
