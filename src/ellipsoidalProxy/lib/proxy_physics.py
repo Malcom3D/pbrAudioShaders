@@ -280,7 +280,7 @@ def _icosahedron_collision_subdivided_numba(vertices: np.ndarray, faces: np.ndar
     if direction_norm < 1e-10:
         return np.arange(vertices.shape[0], dtype=np.int32), 1.0
 
-    direction direction = direction / direction_norm
+    direction = direction / direction_norm
 
     # Compute face normals
     face_normals = _compute_face_normals_numba(vertices, faces)
