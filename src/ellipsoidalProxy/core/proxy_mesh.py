@@ -76,7 +76,7 @@ class ProxyMesh:
         positions, rotations = _load_pose(config_obj)
         n_frames = len(positions)
         if config_obj.static:
-            n_frames = 0
+            n_frames = 1
 
         # Create output directory for proxy meshes
         obj_proxy_path = f"{config_obj.obj_path}/proxy"
@@ -103,14 +103,6 @@ class ProxyMesh:
 
         # Generate proxy vertices for first frame (reference)
         proxy_vertices_local_0, proxy_faces = self._generate_proxy_mesh(proxy_type=config_obj.proxy_type, extents=extents_0, center=center_local_0)
-
-#        if config_obj.static:
-#            # Compute normals for the proxy
-#            proxy_normals = self._compute_vertex_normals(proxy_vertices_local_0, proxy_faces)
-#            # Save proxy mesh
-#            output_file = f"{obj_proxy_path}/{config_obj.name}.npz"
-#            np.savez_compressed(output_file, vertices=proxy_vertices_local_0.astype(np.float32), normals=proxy_normals.astype(np.float32), faces=proxy_faces.astype(np.int32))
-#            print(f"Created static proxy frames for {config_obj.name} at {obj_proxy_path}")
 
         # Build KD-tree for first frame's original vertices
         tree_original_0 = cKDTree(vertices_local_0 - center_local_0)
@@ -172,10 +164,6 @@ class ProxyMesh:
             if config_obj.static:
                 output_file = f"{obj_proxy_path}/{config_obj.name}.npz"
             np.savez_compressed(output_file, vertices=proxy_vertices_world.astype(np.float32), normals=proxy_normals_world.astype(np.float32), faces=proxy_faces.astype(np.int32))
-
-            if config_obj.static:
-                print(f"Created static proxy frames for {config_obj.name} at {obj_proxy_path}")
-                return
 
         print(f"Created {n_frames} proxy frames for {config_obj.name} at {obj_proxy_path}")
 
