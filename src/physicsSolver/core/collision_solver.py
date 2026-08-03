@@ -222,37 +222,47 @@ class CollisionSolver:
         stop_samples = min(stop_samples, total_samples)
         
         # Handle fracture and shard frames
-        stop_samples = self._adjust_for_fracture_shard(
-            stop_samples, start_samples, sample_rate, sfps,
-            config_obj1, config_obj2
-        )
+        start_samples, stop_samples = self._adjust_for_fracture_shard(stop_samples, start_samples, sample_rate, sfps, config_obj1, config_obj2)
         
         return start_samples, stop_samples, impact_end
 
-    def _adjust_for_fracture_shard(self, stop_samples, start_samples, sample_rate, sfps,
-                                    config_obj1, config_obj2):
+    def _adjust_for_fracture_shard(self, stop_samples, start_samples, sample_rate, sfps, config_obj1, config_obj2):
         """Adjust sample range for fracture and shard events."""
-        fracture_frames = []
-        shard_frames = []
-        
-        for config_obj in [config_obj1, config_obj2]:
-            if config_obj is not None:
-                if config_obj.fractured is not False:
-                    fracture_frames.append(config_obj.fractured * sample_rate / sfps)
-                if config_obj.is_shard is not False:
-                    shard_frames.append(config_obj.is_shard * sample_rate / sfps)
-        
-        # Adjust for shard frames
-        valid_shard_frames = [f for f in shard_frames if start_samples <= f <= stop_samples]
-        if valid_shard_frames:
-            start_samples = max(valid_shard_frames)
-        
-        # Adjust for fracture frames
-        valid_fracture_frames = [f for f in fracture_frames if start_samples <= f <= stop_samples]
-        if valid_fracture_frames:
-            stop_samples = min(valid_fracture_frames)
-        
-        return stop_samples
+        fracture_frame1 = None
+        if not config_obj1.fractured == False:
+            if stop_samples >= config_obj1.fractured >= start_samples:
+                fracture_frame1 = config_obj1.fractured
+                fracture_frame1 *= sample_rate / sfps
+
+        fracture_frame2 = None
+        if not config_obj2.fractured == False:
+            if stop_samples >= config_obj2.fractured >= start_samples:
+                fracture_frame2 = config_obj2.fractured
+                fracture_frame2 *= sample_rate / sfps
+
+        is_shard_frame1 = None
+        if not config_obj1.is_shard == False:
+            if stop_samples >= config_obj1.is_shard >= start_samples:
+                is_shard_frame1 = config_obj1.is_shard
+                is_shard_frame1 *= sample_rate / sfps
+
+        is_shard_frame2 = None
+        if not config_obj2.is_shard == False:
+            if stop_samples >= config_obj2.is_shard  >= start_samples:
+                is_shard_frame2 = config_obj2.is_shard
+                is_shard_frame2 *= sample_rate / sfps
+
+        if not is_shard_frame1 == None and not is_shard_frame2 == None:
+            start_samples = is_shard_frame1 if is_shard_frame1 > is_shard_frame2 else is_shard_frame2
+        if (is_shard_frame1 == None and not is_shard_frame2 == None) or (not is_shard_frame1 == None and is_shard_frame2 == None):
+            start_samples = is_shard_frame1 if is_shard_frame2 == None else is_shard_frame2
+
+        if not fracture_frame1 == None and not fracture_frame2 == None:
+            stop_samples = fracture_frame1 if fracture_frame1 < fracture_frame2 else fracture_frame2
+        if (fracture_frame1 == None and not fracture_frame2 == None) or (not fracture_frame1 == None and fracture_frame2 == None):
+            stop_samples = fracture_frame1 if fracture_frame2 == None else fracture_frame2
+
+        return start_samples, stop_samples
 
     def _load_distance_data(self, collision):
         """Load pre-computed distance data."""
