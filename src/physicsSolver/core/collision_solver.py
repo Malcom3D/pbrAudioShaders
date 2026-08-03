@@ -399,10 +399,10 @@ class CollisionSolver:
         for config_obj in self.config.objects:
             if config_obj.idx == obj1_idx:
                 proxy1 = config_obj.proxy_type
-                is_proxy1 = True if config_obj.proxy_type is not False and config_obj.proxy_type in [0,1,2] else False
+                is_proxy1 = True if config_obj.proxy_type is not False else False
             if config_obj.idx == obj2_idx:
                 proxy2 = config_obj.proxy_type 
-                is_proxy2 = True if config_obj.proxy_type is not False and config_obj.proxy_type in [0,1,2] else False
+                is_proxy2 = True if config_obj.proxy_type is not False else False
     
         if is_proxy1 and is_proxy2:
             # Both are proxies - use analytical collision
