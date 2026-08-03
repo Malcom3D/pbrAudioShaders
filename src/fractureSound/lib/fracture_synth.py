@@ -25,7 +25,6 @@ import soundfile as sf
 from pbrAudioCommon import EntityManager
 from pbrAudioCommon import _parse_lib
 from rigidBody import ModalBank
-from rigidBody import ConnectedBuffer
 
 from .fracture_data import FractureEvent, FractureType
 
@@ -115,8 +114,8 @@ class FractureSynth:
             combined = combined / max_val * 0.9
         
         # Save to file
-        output_file = f"{self.fracture_audio_dir}/fracture_{event.original_obj_idx}_{event.fragment1_idx}_{event.fragment2_idx}.wav"
-        sf.write(output_file, combined, self.sample_rate)
+        output_file = f"{self.fracture_audio_dir}/fracture_{event.original_obj_idx}_{event.fragment1_idx}_{event.fragment2_idx}.raw"
+        sf.write(output_file, combined, self.sample_rate, subtype='FLOAT')
         
         print(f"Fracture sound saved to {output_file}")
     

@@ -24,7 +24,6 @@ import trimesh
 
 from pbrAudioCommon import EntityManager
 from pbrAudioCommon import _parse_lib, _load_mesh
-from rigidBody import ModalBank
 
 from .fracture_data import FractureEvent, FragmentData
 
@@ -48,7 +47,7 @@ class FractureModalModel:
         self.fracture_modal_path = f"{config.system.cache_path}/fracture_modal"
         os.makedirs(self.fracture_modal_path, exist_ok=True)
     
-    def compute_fragment_modal(self, event: FractureEvent, fragment_idx: int) -> None:
+    def compute(self, event: FractureEvent, fragment_idx: int) -> None:
         """
         Compute modified modal model for a fracture fragment.
         
@@ -73,6 +72,8 @@ class FractureModalModel:
         
         # Load original modal model
         original_lib = f"{self.dsp_path}/{fragment_obj.name}.lib"
+        if fragment_obj.proxy_type is not False:
+            original_lib = f"{fragment_obj.name}_proxy_{fragment_obj.proxy_type}.lib"
         
         # If fragment modal doesn't exist yet, create modified version
         fragment_lib = f"{self.fracture_modal_path}/{fragment_obj.name}_fracture.lib"
@@ -87,34 +88,16 @@ class FractureModalModel:
         fragment_geo = self._get_fragment_geometry(event, fragment_idx)
         
         # Apply frequency modifications based on fragment size
-        modified_frequencies = self._modify_frequencies(
-            modal_data['frequencies'],
-            fragment_geo,
-            event
-        )
+        modified_frequencies = self._modify_frequencies(modal_data['frequencies'], fragment_geo, event)
         
         # Apply damping modifications
-        modified_t60s = self._modify_damping(
-            modal_data['t60s'],
-            fragment_geo,
-            event
-        )
+        modified_t60s = self._modify_damping(modal_data['t60s'], fragment_geo, event)
         
         # Apply gain modifications (mode shapes affected by new boundaries)
-        modified_gains = self._modify_gains(
-            modal_data['gains'],
-            fragment_geo,
-            event
-        )
+        modified_gains = self._modify_gains(modal_data['gains'], fragment_geo, event)
         
         # Create modified modal model
-        self._write_fracture_lib(
-            fragment_lib,
-            fragment_obj.name,
-            modified_frequencies,
-            modified_t60s,
-            modified_gains
-        )
+        self._write_fracture_lib(fragment_lib, fragment_obj.name, modified_frequencies, modified_t60s, modified_gains)
         
         print(f"Created fracture modal model for {fragment_obj.name}")
     
@@ -146,17 +129,7 @@ class FractureModalModel:
         mesh = trimesh.Trimesh(vertices=vertices, faces=faces, vertex_normals=normals)
         mesh.density = fragment_obj.acoustic_shader.density
         
-        fragment_data = FragmentData(
-            obj_idx=fragment_idx,
-            vertices=vertices,
-            normals=normals,
-            faces=faces,
-            mass=mesh.mass,
-            volume=mesh.volume,
-            center_of_mass=mesh.center_mass,
-            inertia_tensor=mesh.moment_inertia
-        )
-        
+        fragment_data = FragmentData(obj_idx=fragment_idx, vertices=vertices, normals=normals, faces=faces, mass=mesh.mass, volume=mesh.volume, center_of_mass=mesh.center_mass, inertia_tensor=mesh.moment_inertia)
         # Store in event
         if fragment_idx == event.fragment1_idx:
             event.fragment1_data = fragment_data

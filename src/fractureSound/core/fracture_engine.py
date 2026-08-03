@@ -31,7 +31,6 @@ dask_config.set({'num_workers': 1024, 'optimization.fuse.active': True, 'optimiz
 from pbrAudioCommon import EntityManager
 from pbrAudioCommon import _update_status
 from physicsSolver import TrajectoryData, CollisionData, ForceDataSequence
-from rigidBody import ModalPlayer, SampleCounter, ConnectedBuffer
 
 from ..lib.fracture_data import FractureEvent, FractureType, FragmentData
 from ..lib.fracture_modal import FractureModalModel
@@ -74,10 +73,10 @@ class fractureEngine:
                 if isinstance(conf_obj.shard, np.ndarray):
                     original_obj = conf_obj.idx
                     fragment_indices = obj.shard.tolist()
-                    _ = self.detect_fracture_events(original_obj, fragment_indices)
+                    _ = self._detect_fracture_events(original_obj, fragment_indices)
                     self.process_all_fractures()
         
-    def detect_fracture_events(self, obj_idx: int, fragment_indices: List[int]) -> List[FractureEvent]:
+    def _detect_fracture_events(self, obj_idx: int, fragment_indices: List[int]) -> List[FractureEvent]:
         """
         Detect fracture events by analyzing the transition from original object to fragments.
         
@@ -250,7 +249,7 @@ class fractureEngine:
         except:
             return False
     
-    def prebake_fracture_modal(self, event: FractureEvent, fragment_idx: int):
+    def _prebake_fracture_modal(self, event: FractureEvent, fragment_idx: int):
         """
         Pre-bake modal models for fracture fragments.
         
@@ -258,9 +257,9 @@ class fractureEngine:
         modal properties and the fracture pattern.
         """
         fmm = FractureModalModel(self.entity_manager)
-        fmm.compute_fragment_modal(event, fragment_idx)
+        fmm.compute(event, fragment_idx)
     
-    def bake_fracture_sound(self, event: FractureEvent):
+    def _bake_fracture_sound(self, event: FractureEvent):
         """
         Bake fracture sound for a fracture event.
         
@@ -279,18 +278,13 @@ class fractureEngine:
             # Get fragment indices
             fragments = [event.fragment1_idx, event.fragment2_idx]
             for frag_idx in fragments:
-                modal_tasks.append(
-                    self._delayed_prebake_fracture_modal(event, frag_idx)
-                )
+                modal_tasks.append(self._delayed_prebake_fracture_modal(event, frag_idx))
         
         if modal_tasks:
             compute(*modal_tasks)
         
         # Bake fracture sounds
-        sound_tasks = [
-            self._delayed_bake_fracture_sound(event)
-            for event in self.fracture_events
-        ]
+        sound_tasks = [self._delayed_bake_fracture_sound(event) for event in self.fracture_events]
         
         if sound_tasks:
             compute(*sound_tasks)
@@ -298,9 +292,9 @@ class fractureEngine:
     @delayed
     def _delayed_prebake_fracture_modal(self, event: FractureEvent, fragment_idx: int):
         """Delayed wrapper for prebake_fracture_modal."""
-        self.prebake_fracture_modal(event, fragment_idx)
+        self._prebake_fracture_modal(event, fragment_idx)
     
     @delayed
     def _delayed_bake_fracture_sound(self, event: FractureEvent):
         """Delayed wrapper for bake_fracture_sound."""
-        self.bake_fracture_sound(event)
+        self._bake_fracture_sound(event)

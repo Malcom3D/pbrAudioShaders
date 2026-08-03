@@ -177,7 +177,6 @@ class physicsEngine:
                 force_obj_idx = forces[force_idx].obj_idx
                 force_other_obj_idx = forces[force_idx].other_obj_idx
                 forces[force_idx].save(f"{self.forces_dir}/{force_obj_idx:05d}_{force_other_obj_idx:05d}.pkl")
-                print('ForceDataSequence saved to : ', f"{self.forces_dir}/{force_obj_idx:05d}_{force_other_obj_idx:05d}.pkl")
 
     def _collision(self):
         collisions = self.entity_manager.get('collisions')
