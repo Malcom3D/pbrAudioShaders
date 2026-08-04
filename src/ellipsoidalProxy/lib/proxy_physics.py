@@ -27,7 +27,16 @@ from dataclasses import dataclass, field
 from pbrAudioCommon import EntityManager
 from pbrAudioCommon import _compute_face_normals
 
-@nb.njit(cache=True)
+@nb.njit(parallel=True, fastmath=True, cache=True)
+def _numpy_concatenate(array_a: np.ndarray, array_b: np.ndarray) -> np.ndarray:
+    shape = (array_a.shape[0] + array_b.shape[0], array_a.shape[1])
+    dtype = array_a.dtype
+    new_array = np.zeros(shape, dtype=dtype)
+    new_array[:array_a.shape[0]] = array_a
+    new_array[-array_a.shape[0]:] = array_b
+    return new_array
+
+@nb.njit(parallel=True, fastmath=True, cache=True)
 def _pyramid_collision_numba(vertices: np.ndarray, faces: np.ndarray, contact_point: np.ndarray, center: np.ndarray, collision_margin: float) -> Tuple[np.ndarray, float]:
     """
     Fast pyramid collision detection using barycentric coordinates.
@@ -73,11 +82,7 @@ def _pyramid_collision_numba(vertices: np.ndarray, faces: np.ndarray, contact_po
                         break
                 if shared:
                     # Add vertices from adjacent face
-                    shape = (unique_vertices.shape[0] + faces[i].shape[0], unique_vertices.shape[1])
-                    dtype = unique_vertices.dtype
-                    new_vertices = np.zeros(shape, dtype=dtype)
-                    new_vertices[:unique_vertices.shape[0]] = unique_vertices
-                    new_vertices[-faces[i].shape[0]:] = faces[i]
+                    new_vertices = _numpy_concatenate([unique_vertices, faces[i]])
 #                    new_vertices = np.concatenate([unique_vertices, faces[i]])
                     unique_vertices = np.unique(new_vertices)
 
@@ -85,7 +90,7 @@ def _pyramid_collision_numba(vertices: np.ndarray, faces: np.ndarray, contact_po
    
     return unique_vertices, face_area
 
-@nb.njit(cache=True)
+@nb.njit(parallel=True, fastmath=True, cache=True)
 def _octahedron_collision_numba(vertices: np.ndarray, faces: np.ndarray,
                                 contact_point: np.ndarray, center: np.ndarray,
                                 collision_margin: float) -> Tuple[np.ndarray, float]:
@@ -148,14 +153,15 @@ def _octahedron_collision_numba(vertices: np.ndarray, faces: np.ndarray,
                     if shared:
                         break
                 if shared:
-                    new_vertices = np.concatenate([unique_vertices, faces[i]])
+                    new_vertices = _numpy_concatenate([unique_vertices, faces[i]])
+#                    new_vertices = np.concatenate([unique_vertices, faces[i]])
                     unique_vertices = np.unique(new_vertices)
 
     face_area = unique_vertices.shape[0] / vertices.shape[0]
 
     return unique_vertices, face_area
 
-@nb.njit(cache=True)
+@nb.njit(parallel=True, fastmath=True, cache=True)
 def _cube_collision_numba(vertices: np.ndarray, faces: np.ndarray,
                           contact_point: np.ndarray, center: np.ndarray,
                           collision_margin: float) -> Tuple[np.ndarray, float]:
@@ -197,7 +203,8 @@ def _cube_collision_numba(vertices: np.ndarray, faces: np.ndarray,
             face_indices[1] = 11
 
     # Get all vertices from these faces
-    face_vertices = np.concatenate([faces[face_indices[0]], faces[face_indices[1]]])
+    face_vertices = _numpy_concatenate([faces[face_indices[0]], faces[face_indices[1]]])
+#    face_vertices = np.concatenate([faces[face_indices[0]], faces[face_indices[1]]])
     unique_vertices = np.unique(face_vertices)
 
     # Add edge vertices for smooth transition
@@ -215,14 +222,15 @@ def _cube_collision_numba(vertices: np.ndarray, faces: np.ndarray,
                     if shared:
                         break
                 if shared:
-                    new_vertices = np.concatenate([unique_vertices, faces[i]])
+#                    new_vertices = np.concatenate([unique_vertices, faces[i]])
+                    new_vertices = _numpy_concatenate([unique_vertices, faces[i]])
                     unique_vertices = np.unique(new_vertices)
 
     face_area = unique_vertices.shape[0] / vertices.shape[0]
 
     return unique_vertices, face_area
 
-@nb.njit(cache=True)
+@nb.njit(parallel=True, fastmath=True, cache=True)
 def _icosahedron_collision_numba(vertices: np.ndarray, faces: np.ndarray,
                                  contact_point: np.ndarray, center: np.ndarray,
                                  collision_margin: float) -> Tuple[np.ndarray, float]:
@@ -265,14 +273,15 @@ def _icosahedron_collision_numba(vertices: np.ndarray, faces: np.ndarray,
                     if shared:
                         break
                 if shared:
-                    new_vertices = np.concatenate([unique_vertices, faces[i]])
+#                    new_vertices = np.concatenate([unique_vertices, faces[i]])
+                    new_vertices = _numpy_concatenate([unique_vertices, faces[i]])
                     unique_vertices = np.unique(new_vertices)
 
     face_area = unique_vertices.shape[0] / vertices.shape[0]
 
     return unique_vertices, face_area
 
-@nb.njit(cache=True)
+@nb.njit(parallel=True, fastmath=True, cache=True)
 def _icosahedron_collision_subdivided_numba(vertices: np.ndarray, faces: np.ndarray,
                                             contact_point: np.ndarray, center: np.ndarray,
                                             collision_margin: float, subdivisions: int) -> Tuple[np.ndarray, float]:
@@ -317,7 +326,8 @@ def _icosahedron_collision_subdivided_numba(vertices: np.ndarray, faces: np.ndar
             nearby_vertices.append(i)
 
     if len(nearby_vertices) > 0:
-        new_vertices = np.concatenate([unique_vertices, np.array(nearby_vertices, dtype=np.int32)])
+#        new_vertices = np.concatenate([unique_vertices, np.array(nearby_vertices, dtype=np.int32)])
+        new_vertices = _numpy_concatenate([unique_vertices, np.array(nearby_vertices, dtype=np.int32)])
         unique_vertices = np.unique(new_vertices)
 
     # Add vertices from adjacent faces (sharing an edge)
@@ -331,14 +341,15 @@ def _icosahedron_collision_subdivided_numba(vertices: np.ndarray, faces: np.ndar
                         shared_count += 1
                         break
             if shared_count >= 2:  # Share an edge
-                new_vertices = np.concatenate([unique_vertices, faces[i]])
+#                new_vertices = np.concatenate([unique_vertices, faces[i]])
+                new_vertices = _numpy_concatenate([unique_vertices, faces[i]])
                 unique_vertices = np.unique(new_vertices)
 
     face_area = unique_vertices.shape[0] / vertices.shape[0]
 
     return unique_vertices, face_area
 
-@nb.njit(cache=True)
+@nb.njit(parallel=True, fastmath=True, cache=True)
 def _get_adjacent_faces_numba(faces: np.ndarray, face_indices: np.ndarray) -> np.ndarray:
     """
     Get faces adjacent to the given face indices.
@@ -346,7 +357,8 @@ def _get_adjacent_faces_numba(faces: np.ndarray, face_indices: np.ndarray) -> np
     # Collect all vertices from the given faces
     face_vertices = np.zeros(0, dtype=np.int32)
     for idx in face_indices:
-        face_vertices = np.concatenate([face_vertices, faces[idx]])
+#        face_vertices = np.concatenate([face_vertices, faces[idx]])
+        face_vertices = _numpy_concatenate([face_vertices, faces[idx]])
 
     face_vertices_set = np.unique(face_vertices)
 
@@ -514,7 +526,8 @@ class ProxyPhysics:
             for i, face in enumerate(faces):
                 if i != closest_face:
                     if len(np.intersect1d(face, face_vertices)) > 0:
-                        unique_vertices = np.unique(np.concatenate([unique_vertices, face]))
+#                        unique_vertices = np.unique(np.concatenate([unique_vertices, face]))
+                        unique_vertices = np.unique(_numpy_concatenate([unique_vertices, face]))
 
         face_area = len(unique_vertices) / len(vertices)
 
@@ -556,7 +569,8 @@ class ProxyPhysics:
             for i, face in enumerate(faces):
                 if i != face_idx:
                     if len(np.intersect1d(face, face_vertices)) > 0:
-                        unique_vertices = np.unique(np.concatenate([unique_vertices, face]))
+#                        unique_vertices = np.unique(np.concatenate([unique_vertices, face]))
+                        unique_vertices = np.unique(_numpy_concatenate([unique_vertices, face]))
 
         face_area = len(unique_vertices) / len(vertices)
 
@@ -597,7 +611,8 @@ class ProxyPhysics:
                 print(e)
                 edge_faces = self._get_adjacent_faces(faces, face_indices)
             for edge_face in edge_faces:
-                unique_vertices = np.unique(np.concatenate([unique_vertices, faces[edge_face]]))
+#                unique_vertices = np.unique(np.concatenate([unique_vertices, faces[edge_face]]))
+                unique_vertices = np.unique(_numpy_concatenate([unique_vertices, faces[edge_face]]))
 
         face_area = len(unique_vertices) / len(vertices)
 
@@ -635,7 +650,8 @@ class ProxyPhysics:
             for i, face in enumerate(faces):
                 if i != closest_face:
                     if len(np.intersect1d(face, face_vertices)) > 0:
-                        unique_vertices = np.unique(np.concatenate([unique_vertices, face]))
+#                        unique_vertices = np.unique(np.concatenate([unique_vertices, face]))
+                        unique_vertices = np.unique(_numpy_concatenate([unique_vertices, face]))
         
         face_area = len(unique_vertices) / len(vertices)
         
@@ -678,14 +694,16 @@ class ProxyPhysics:
         nearby_vertices = np.where(distances < search_radius)[0]
         
         if len(nearby_vertices) > 0:
-                       unique_vertices = np.unique(np.concatenate([unique_vertices, nearby_vertices]))
+#            unique_vertices = np.unique(np.concatenate([unique_vertices, nearby_vertices]))
+            unique_vertices = np.unique(_numpy_concatenate([unique_vertices, nearby_vertices]))
         
         # Add vertices from adjacent faces (sharing an edge)
         face_vertices_set = set(face_vertices)
         for i, face in enumerate(faces):
             if i != closest_face:
                 if len(set(face) & face_vertices_set) >= 2:  # Share an edge
-                    unique_vertices = np.unique(np.concatenate([unique_vertices, face]))
+#                    unique_vertices = np.unique(np.concatenate([unique_vertices, face]))
+                    unique_vertices = np.unique(_numpy_concatenate([unique_vertices, face]))
         
         face_area = len(unique_vertices) / len(vertices)
         
