@@ -29,7 +29,7 @@ from pbrAudioCommon import _compute_face_normals
 
 @nb.njit(parallel=True, fastmath=True, cache=True)
 def _numpy_concatenate(array_a, array_b) -> np.ndarray:
-    shape = (array_a.shape[0] + array_b.shape[0], array_a.shape[1])
+    shape = (len(array_a) + len(array_b), len(array_a))
     dtype = array_a.dtype
     new_array = np.zeros(shape, dtype=dtype)
     new_array[:array_a.shape[0]] = array_a
