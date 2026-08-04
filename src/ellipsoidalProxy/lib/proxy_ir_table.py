@@ -251,8 +251,7 @@ class ProxyIRTable:
             )
         return frequencies
     
-    def _generate_ir(self, modal_params: Dict[str,, np.ndarray], 
-                     contact_type: int, size: float) -> np.ndarray:
+    def _generate_ir(self, modal_params: Dict[str, np.ndarray], contact_type: int, size: float) -> np.ndarray:
         """
         Generate impulse response for a specific contact type.
         
