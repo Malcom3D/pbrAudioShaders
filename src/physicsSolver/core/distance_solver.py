@@ -42,7 +42,7 @@ class DistanceSolver:
 
     def __post_init__(self):
         config = self.entity_manager.get('config')
-        set_debug(config.debug.enabled)
+        set_debug(config.system.debug)
         self.output_dir = f"{config.system.cache_path}/distances"
         os.makedirs(self.output_dir, exist_ok=True)
 
