@@ -28,12 +28,14 @@ decimals = 18
 np.set_printoptions(precision=decimals, floatmode='fixed', threshold=np.inf)
 
 
-from .core.proxy_synth import ProxySynth
+from .core.proxy_engine import ProxyEngine
+from .lib.proxy_synth import ProxySynth
 from .lib.proxy_mesh import ProxyMesh
 from .lib.modal4proxy import Modal4Proxy
 from .lib.proxy_physics import ProxyPhysics
 
 __all__ = [
+    'ProxyEngine',
     'ProxySynth',
     'ProxyMesh',
     'Modal4Proxy',
