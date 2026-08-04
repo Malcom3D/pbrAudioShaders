@@ -356,9 +356,11 @@ def _get_adjacent_faces_numba(faces: np.ndarray, face_indices: np.ndarray) -> np
     """
     # Collect all vertices from the given faces
     face_vertices = np.zeros(0, dtype=np.int32)
+    for f_idx in nb.prange(face_indices.shape[0]):
+        idx = face_indices[f_idx]
+        face_vertices = _numpy_concatenate(face_vertices, faces[idx])
     for idx in face_indices:
 #        face_vertices = np.concatenate([face_vertices, faces[idx]])
-        face_vertices = _numpy_concatenate(face_vertices, faces[idx])
 
     face_vertices_set = np.unique(face_vertices)
 
@@ -635,7 +637,7 @@ class ProxyPhysics:
         direction = direction / direction_norm
         
         # Compute face normals
-        face_normals = self._compute_face_normals(vertices, faces)
+        face_normals = _compute_face_normals(vertices, faces)
         
         # Find the face whose normal is most aligned with the contact direction
         dot_products = np.dot(face_normals, direction)
@@ -675,7 +677,7 @@ class ProxyPhysics:
         direction = direction / direction_norm
         
         # Compute face normals
-        face_normals = self._compute_face_normals(vertices, faces)
+        face_normals = _compute_face_normals(vertices, faces)
         
         # Find the face whose normal is most aligned with the contact direction
         dot_products = np.dot(face_normals, direction)
