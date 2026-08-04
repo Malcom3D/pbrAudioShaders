@@ -315,7 +315,6 @@ class ProxyIRTable:
         return ir.astype(np.float32)
     
     def _generate_noise_excitation(self, length: int, filter_type: str) -> np.ndarray:
-:
         """Generate noise excitation with filtering."""
         noise = np.random.randn(length)
         
