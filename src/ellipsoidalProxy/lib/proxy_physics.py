@@ -43,7 +43,7 @@ def _pyramid_collision_numba(vertices: np.ndarray, faces: np.ndarray, contact_po
     direction = direction / direction_norm
    
     # Compute face normals
-    face_normals = _compute_face_normals_numba(vertices, faces)
+    face_normals = _compute_face_normals(vertices, faces)
    
     # Find which face the contact point is closest to using dot product
     dot_products = np.zeros(face_normals.shape[0], dtype=np.float64)
@@ -73,7 +73,12 @@ def _pyramid_collision_numba(vertices: np.ndarray, faces: np.ndarray, contact_po
                         break
                 if shared:
                     # Add vertices from adjacent face
-                    new_vertices = np.concatenate([unique_vertices, faces[i]])
+                    shape = (unique_vertices.shape[0] + faces[i].shape[0], unique_vertices.shape[1])
+                    dtype = unique_vertices.dtype
+                    new_vertices = np.zeros(shape, dtype=dtype)
+                    new_vertices[:unique_vertices.shape[0]] = unique_vertices
+                    new_vertices[-faces[i].shape[0]:] = faces[i]
+#                    new_vertices = np.concatenate([unique_vertices, faces[i]])
                     unique_vertices = np.unique(new_vertices)
 
     face_area = unique_vertices.shape[0] / vertices.shape[0]
@@ -233,7 +238,7 @@ def _icosahedron_collision_numba(vertices: np.ndarray, faces: np.ndarray,
     direction = direction / direction_norm
 
     # Compute face normals
-    face_normals = _compute_face_normals_numba(vertices, faces)
+    face_normals = _compute_face_normals(vertices, faces)
 
     # Find the face whose normal is most aligned with the contact direction
     dot_products = np.zeros(face_normals.shape[0], dtype=np.float64)
@@ -283,7 +288,7 @@ def _icosahedron_collision_subdivided_numba(vertices: np.ndarray, faces: np.ndar
     direction = direction / direction_norm
 
     # Compute face normals
-    face_normals = _compute_face_normals_numba(vertices, faces)
+    face_normals = _compute_face_normals(vertices, faces)
 
     # Find the face whose normal is most aligned with the contact direction
     dot_products = np.zeros(face_normals.shape[0], dtype=np.float64)
