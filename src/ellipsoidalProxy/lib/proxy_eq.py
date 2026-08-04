@@ -126,7 +126,7 @@ class ProxyEqualizer:
         # Smooth the envelope
         window_size = max(3, int(self.sample_rate * 0.01))  # 10ms window
         kernel = np.ones(window_size) / window_size
-        force_env = np.convolve(force_env, kernel kernel, mode='same')
+        force_env = np.convolve(force_env, kernel, mode='same')
         
         # Normalize to 0-1 range
         max_force = np.max(np.abs(force_env))
