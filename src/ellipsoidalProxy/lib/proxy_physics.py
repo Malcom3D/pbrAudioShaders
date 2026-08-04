@@ -359,7 +359,7 @@ def _get_adjacent_faces_numba(faces: np.ndarray, face_indices: np.ndarray) -> np
     for f_idx in nb.prange(face_indices.shape[0]):
         idx = face_indices[f_idx]
         face_vertices = _numpy_concatenate(face_vertices, faces[idx])
-    for idx in face_indices:
+#    for idx in face_indices:
 #        face_vertices = np.concatenate([face_vertices, faces[idx]])
 
     face_vertices_set = np.unique(face_vertices)
