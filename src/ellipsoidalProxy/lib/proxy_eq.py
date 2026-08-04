@@ -213,7 +213,7 @@ class ProxyEqualizer:
         audio_fft *= eq_curve
         
         # Inverse FFT
-        output = np..fft.irfft(audio_fft, n=self.fft_size)
+        output = np.fft.irfft(audio_fft, n=self.fft_size)
         
         # Trim to original length
         output = output[:n_samples]
