@@ -73,8 +73,8 @@ def _pyramid_collision_numba(vertices: np.ndarray, faces: np.ndarray, contact_po
             if i != closest_face:
                 # Check if faces share vertices
                 shared = False
-                for j in nb.prange(face_vertices.shape[0]):
-                    for k in nb.prange(faces[i].shape[0]):
+                for j in range(face_vertices.shape[0]):
+                    for k in range(faces[i].shape[0]):
                         if face_vertices[j] == faces[i, k]:
                             shared = True
                             break
@@ -145,8 +145,8 @@ def _octahedron_collision_numba(vertices: np.ndarray, faces: np.ndarray,
             if i != face_idx:
                 # Check if faces share vertices
                 shared = False
-                for j in nb.prange(face_vertices.shape[0]):
-                    for k in nb.prange(faces[i].shape[0]):
+                for j in range(face_vertices.shape[0]):
+                    for k in range(faces[i].shape[0]):
                         if face_vertices[j] == faces[i, k]:
                             shared = True
                             break
@@ -214,8 +214,8 @@ def _cube_collision_numba(vertices: np.ndarray, faces: np.ndarray,
             if i != face_indices[0] and i != face_indices[1]:
                 # Check if face shares vertices with our faces
                 shared = False
-                for j in nb.prange(face_vertices.shape[0]):
-                    for k in nb.prange(faces[i].shape[0]):
+                for j in range(face_vertices.shape[0]):
+                    for k in range(faces[i].shape[0]):
                         if face_vertices[j] == faces[i, k]:
                             shared = True
                             break
@@ -265,8 +265,8 @@ def _icosahedron_collision_numba(vertices: np.ndarray, faces: np.ndarray,
             if i != closest_face:
                 # Check if faces share vertices
                 shared = False
-                for j in nb.prange(face_vertices.shape[0]):
-                    for k in nb.prange(faces[i].shape[0]):
+                for j in range(face_vertices.shape[0]):
+                    for k in range(faces[i].shape[0]):
                         if face_vertices[j] == faces[i, k]:
                             shared = True
                             break
@@ -335,8 +335,8 @@ def _icosahedron_collision_subdivided_numba(vertices: np.ndarray, faces: np.ndar
         if i != closest_face:
             # Check if faces share at least 2 vertices (edge)
             shared_count = 0
-            for j in nb.prange(face_vertices.shape[0]):
-                for k in nb.prange(faces[i].shape[0]):
+            for j in range(face_vertices.shape[0]):
+                for k in range(faces[i].shape[0]):
                     if face_vertices[j] == faces[i, k]:
                         shared_count += 1
                         break
@@ -376,8 +376,8 @@ def _get_adjacent_faces_numba(faces: np.ndarray, face_indices: np.ndarray) -> np
 
         # Count shared vertices
         shared_count = 0
-        for j in nb.prange(faces[i].shape[0]):
-            for k in nb.prange(face_vertices_set.shape[0]):
+        for j in range(faces[i].shape[0]):
+            for k in range(face_vertices_set.shape[0]):
                 if faces[i, j] == face_vertices_set[k]:
                     shared_count += 1
                     break

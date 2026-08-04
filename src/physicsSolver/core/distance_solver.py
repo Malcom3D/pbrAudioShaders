@@ -32,6 +32,7 @@ from numba import njit, prange, float64, int64, boolean
 from pbrAudioCommon import EntityManager
 from pbrAudioCommon import Config, ObjectConfig
 from pbrAudioCommon import _load_pose, _load_mesh
+from pbrAudioCommon.lib.debug_utils import debug_print, set_debug
 
 from ..lib.collision_data import CollisionData, CollisionType
 
@@ -41,6 +42,7 @@ class DistanceSolver:
 
     def __post_init__(self):
         config = self.entity_manager.get('config')
+        set_debug(config.debug.enabled)
         self.output_dir = f"{config.system.cache_path}/distances"
         os.makedirs(self.output_dir, exist_ok=True)
 
@@ -136,7 +138,7 @@ class DistanceSolver:
         # Step 1: Compute adaptive threshold
         threshold = self._compute_adaptive_threshold(distances, collision_margin)
         
-        #print(f"Adaptive threshold for {config_objs[0].name} and {config_objs[1].name}: {threshold}")
+        debug_print(f"Adaptive threshold for {config_objs[0].name} and {config_objs[1].name}: {threshold}")
         
         # Step 2: Identify contact regions (where distance <= threshold)
         contact_mask = distances <= threshold
