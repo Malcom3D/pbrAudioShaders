@@ -287,9 +287,7 @@ def _cube_collision_numba(vertices: np.ndarray, faces: np.ndarray,
     return unique_vertices, face_area
 
 @nb.njit(parallel=True, fastmath=True, cache=True)
-def _icosahedron_collision_numba(vertices: np.ndarray, faces: np.ndarray,
-                                 contact_point: np.ndarray, center: np.ndarray,
-                                 collision_margin: float) -> Tuple[np.ndarray, float]:
+def _icosahedron_collision_numba(vertices: np.ndarray, faces: np.ndarray, contact_point: np.ndarray, center: np.ndarray, collision_margin: float) -> Tuple[np.ndarray, float]:
     """
     Fast icosahedron collision detection using face-based approach.
     """
@@ -338,9 +336,7 @@ def _icosahedron_collision_numba(vertices: np.ndarray, faces: np.ndarray,
     return unique_vertices, face_area
 
 @nb.njit(parallel=True, fastmath=True, cache=True)
-def _icosahedron_collision_subdivided_numba(vertices: np.ndarray, faces: np.ndarray,
-                                            contact_point: np.ndarray, center: np.ndarray,
-                                            collision_margin: float, subdivisions: int) -> Tuple[np.ndarray, float]:
+def _icosahedron_collision_subdivided_numba(vertices: np.ndarray, faces: np.ndarray, contact_point: np.ndarray, center: np.ndarray, collision_margin: float, subdivisions: int) -> Tuple[np.ndarray, float]:
     """
     Collision detection for subdivided icosahedron.
     """
@@ -372,18 +368,18 @@ def _icosahedron_collision_subdivided_numba(vertices: np.ndarray, faces: np.ndar
     # Find all vertices within the collision margin (scaled)
     search_radius = collision_margin * 2.0 * sub_scale
 
-    # Find nearby vertices
-    nearby_vertices = []
+    # Find nearby vertices using a boolean mask instead of list
+    distances = np.zeros(vertices.shape[0], dtype=np.float64)
     for i in nb.prange(vertices.shape[0]):
-        dist = np.sqrt((vertices[i, 0] - contact_point[0])**2 +
-                       (vertices[i, 1] - contact_point[1])**2 +
-                       (vertices[i, 2] - contact_point[2])**2)
-        if dist < search_radius:
-            nearby_vertices.append(i)
+        dist = np.sqrt((vertices[i, 0] - contact_point[0])**2 + (vertices[i, 1] - contact_point[1])**2 + (vertices[i, 2] - contact_point[2])**2)
+        distances[i] = dist
+    
+    # Create mask and get indices
+    mask = distances < search_radius
+    nearby_vertices = np.where(mask)[0]
 
-    if len(nearby_vertices) > 0:
-#        new_vertices = np.concatenate([unique_vertices, np.array(nearby_vertices, dtype=np.int32)])
-        new_vertices = _numpy_concatenate(unique_vertices, np.array(nearby_vertices, dtype=np.int32))
+    if nearby_vertices.shape[0] > 0:
+        new_vertices = _numpy_concatenate(unique_vertices, nearby_vertices)
         unique_vertices = np.unique(new_vertices)
 
     # Add vertices from adjacent faces (sharing an edge)
@@ -397,53 +393,12 @@ def _icosahedron_collision_subdivided_numba(vertices: np.ndarray, faces: np.ndar
                         shared_count += 1
                         break
             if shared_count >= 2:  # Share an edge
-#                new_vertices = np.concatenate([unique_vertices, faces[i]])
                 new_vertices = _numpy_concatenate(unique_vertices, faces[i])
                 unique_vertices = np.unique(new_vertices)
 
     face_area = unique_vertices.shape[0] / vertices.shape[0]
 
     return unique_vertices, face_area
-
-@nb.njit(parallel=True, fastmath=True, cache=True)
-def _get_adjacent_faces_numba(faces: np.ndarray, face_indices: np.ndarray) -> np.ndarray:
-    """
-    Get faces adjacent to the given face indices.
-    """
-    # Collect all vertices from the given faces
-    face_vertices = np.zeros((0,3), dtype=np.int32)
-    for f_idx in nb.prange(face_indices.shape[0]):
-        idx = face_indices[f_idx]
-        face_vertices = _numpy_concatenate(face_vertices, faces[idx])
-#    for idx in face_indices:
-#        face_vertices = np.concatenate([face_vertices, faces[idx]])
-
-    face_vertices_set = np.unique(face_vertices)
-
-    # Find adjacent faces
-    adjacent = []
-    for i in nb.prange(faces.shape[0]):
-        # Skip if this face is already in face_indices
-        is_in_indices = False
-        for idx in face_indices:
-            if i == idx:
-                is_in_indices = True
-                break
-        if is_in_indices:
-            continue
-
-        # Count shared vertices
-        shared_count = 0
-        for j in range(faces[i].shape[0]):
-            for k in range(face_vertices_set.shape[0]):
-                if faces[i, j] == face_vertices_set[k]:
-                    shared_count += 1
-                    break
-
-        if shared_count >= 2:  # Share an edge
-            adjacent.append(i)
-
-    return np.array(adjacent, dtype=np.int32)
 
 @dataclass 
 class ProxyPhysics:
@@ -513,168 +468,9 @@ class ProxyPhysics:
             return _cube_collision_numba(vertices, faces, contact_point, center, collision_margin)
         elif proxy_type == 3:  # Icosahedron (12 vertices, 20 faces)
             return _icosahedron_collision_numba(vertices, faces, contact_point, center, collision_margin)
-#            return self._icosahedron_collision(vertices, faces, contact_point, center, collision_margin, subdivisions=0)
         elif proxy_type == 4:  # Icosahedron subdiv 1 (42 vertices, 80 faces)
             return _icosahedron_collision_subdivided_numba(vertices, faces, contact_point, center, collision_margin, subdivisions=1)
-#            return self._icosahedron_collision_subdivided(vertices, faces, contact_point, center, collision_margin, subdivisions=1)
         elif proxy_type == 5:  # Icosahedron subdiv 2 (162 vertices, 320 faces)
             return _icosahedron_collision_subdivided_numba(vertices, faces, contact_point, center, collision_margin, subdivisions=2)
-#            return self._icosahedron_collision_subdivided(vertices, faces, contact_point, center, collision_margin, subdivisions=2)
 
         return np.array([], dtype=np.int32), 0.0
-
-    def _icosahedron_collision(self, vertices, faces, contact_point, center, collision_margin, subdivisions=0):
-        """
-        Fast icosahedron collision detection using face-based approach.
-        
-        Icosahedron has 12 vertices and 20 faces (base), with subdivisions
-        increasing vertex/face count. Uses the fact that all faces are
-        equilateral triangles on a sphere-like surface.
-        """
-        direction = contact_point - center
-        direction_norm = np.linalg.norm(direction)
-        
-        if direction_norm < 1e-10:
-            return np.arange(len(vertices), dtype=np.int32), 1.0
-        
-        direction = direction / direction_norm
-        
-        # Compute face normals
-        face_normals = _compute_face_normals(vertices, faces)
-        
-        # Find the face whose normal is most aligned with the contact direction
-        dot_products = np.dot(face_normals, direction)
-        closest_face = np.argmax(dot_products)
-        
-        # Get vertices for this face
-        face_vertices = faces[closest_face]
-        unique_vertices = np.unique(face_vertices)
-        
-        # Add vertices from adjacent faces
-        if collision_margin > 0.01:
-            for i, face in enumerate(faces):
-                if i != closest_face:
-                    if len(np.intersect1d(face, face_vertices)) > 0:
-                        unique_vertices = np.unique(np.concatenate([unique_vertices, face]))
-#                        unique_vertices = np.unique(_numpy_concatenate(unique_vertices, face))
-        
-        face_area = len(unique_vertices) / len(vertices)
-        
-        return unique_vertices, face_area
-
-    def _icosahedron_collision_subdivided(self, vertices, faces, contact_point, center, collision_margin, subdivisions):
-        """
-        Collision detection for subdivided icosahedron (proxy types 3, 4, 5).
-        
-        Uses a hierarchical approach:
-        1. Find the base icosahedron face (using 12 base vertices)
-        2. For subdivided meshes, find the specific sub-face containing the contact point
-        3. Include vertices from surrounding faces based on collision margin
-        """
-        direction = contact_point - center
-        direction_norm = np.linalg.norm(direction)
-        
-        if direction_norm < 1e-10:
-            return np.arange(len(vertices), dtype=np.int32), 1.0
-        
-        direction = direction / direction_norm
-        
-        # Compute face normals
-        face_normals = _compute_face_normals(vertices, faces)
-        
-        # Find the face whose normal is most aligned with the contact direction
-        dot_products = np.dot(face_normals, direction)
-        closest_face = np.argmax(dot_products)
-        
-        # Get vertices for this face
-        face_vertices = faces[closest_face]
-        unique_vertices = np.unique(face_vertices)
-        
-        # For subdivided icosahedron, include more vertices based on subdivision level
-        sub_scale = 1.0 + subdivisions * 0.5
-        
-        # Find all vertices within the collision margin (scaled)
-        search_radius = collision_margin * 2.0 * sub_scale
-        distances = np.linalg.norm(vertices - contact_point, axis=1)
-        nearby_vertices = np.where(distances < search_radius)[0]
-        
-        if len(nearby_vertices) > 0:
-            unique_vertices = np.unique(np.concatenate([unique_vertices, nearby_vertices]))
-#            unique_vertices = np.unique(_numpy_concatenate(unique_vertices, nearby_vertices))
-        
-        # Add vertices from adjacent faces (sharing an edge)
-        face_vertices_set = set(face_vertices)
-        for i, face in enumerate(faces):
-            if i != closest_face:
-                if len(set(face) & face_vertices_set) >= 2:  # Share an edge
-                    unique_vertices = np.unique(np.concatenate([unique_vertices, face]))
-#                    unique_vertices = np.unique(_numpy_concatenate(unique_vertices, face))
-        
-        face_area = len(unique_vertices) / len(vertices)
-        
-        return unique_vertices, face_area
-
-    def _get_adjacent_faces(self, faces, face_indices):
-        """Get faces adjacent to the given face indices."""
-        adjacent = set()
-        face_vertices_set = set(faces[face_indices].flatten())
-
-        for i, face in enumerate(faces):
-            if i not in face_indices:
-                if len(set(face.flatten()) & face_vertices_set) >= 2:  # Share an edge
-                    adjacent.add(i)
-
-        return list(adjacent)
-
-    def _octant_to_face_indices(self, octant: np.ndarray, proxy_type: int = 0) -> np.ndarray:
-        """
-        Map octant sign to face indices for proxy meshes.
-    
-        For pyramid (proxy_type=0): 4 vertex, 4 faces
-        For octahedron (proxy_type=1): 6 vertex, 8 faces
-        For octant/cube (proxy_type=2): 8 vertex, 6 faces
-    
-        Returns face indices for the given octant.
-        """
-        if proxy_type == 0:
-            # Pyramid has 4 faces
-            # Faces are: [apex, base1, base2], [apex, base2, base3], [apex, base3, base1], [base1, base3, base2]
-            # Apex is at +x, base is at -x
-            # Map based on which quadrant the contact point is in
-            if octant[1] >= 0 and octant[2] >= 0:
-                return np.array([0])  # Front face
-            elif octant[1] >= 0 and octant[2] < 0:
-                return np.array([1])  # Right face
-            elif octant[1] < 0 and octant[2] >= 00:
-                return np.array([2])  # Left face
-            else:
-                return np.array([3])  # Base face
-        elif proxy_type == 1:
-            # Octahedron has 8 faces
-            octant_key = (octant[0] >= 0, octant[1] >= 0, octant[2] >= 0)
-            face_map = {
-                (True, True, True): 0,
-                (True, True, False): 1,
-                (True, False, True): 2,
-                (True, False, False): 3,
-                (False, True, True): 4,
-                (False, True, False): 5,
-                (False, False, True): 6,
-                (False, False, False): 7
-            }
-            return np.array([face_map.get(octant_key, 0)])
-        elif proxy_type == 2:
-            # Cube has 6 faces
-            # Determine which face is closest based on the dominant axis
-            abs_octant = np.abs(octant)
-            dominant_axis = np.argmax(abs_octant)
-            if dominant_axis == 0:  # x-axis
-                return np.array([0, 1]) if octant[0] >= 0 else np.array([2, 3])
-            elif dominant_axis == 1:  # y-axis
-                return np.array([4, 5]) if octant[1] >= 0 else np.array([6, 7])
-            else:  # z-axis
-                return np.array([8, 9]) if octant[2] >= 0 else np.array([10, 11])
-        else:
-            # Default to octahedron behavior
-            return np.array([0])
-
