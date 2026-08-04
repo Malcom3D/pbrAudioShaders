@@ -316,7 +316,7 @@ def _icosahedron_collision_numba(vertices: np.ndarray, faces: np.ndarray,
     unique_vertices = np.unique(face_vertices)
 
     # Add vertices from adjacent faces
-    if collision_marginargin > 0.01:
+    if collision_margin > 0.01:
         for i in range(faces.shape[0]):
             if i != closest_face:
                 # Check if faces share vertices
@@ -515,11 +515,11 @@ class ProxyPhysics:
             return _icosahedron_collision_numba(vertices, faces, contact_point, center, collision_margin)
 #            return self._icosahedron_collision(vertices, faces, contact_point, center, collision_margin, subdivisions=0)
         elif proxy_type == 4:  # Icosahedron subdiv 1 (42 vertices, 80 faces)
-#            return _icosahedron_collision_subdivided_numba(vertices, faces, contact_point, center, collision_margin, subdivisions=1)
-            return self._icosahedron_collision_subdivided(vertices, faces, contact_point, center, collision_margin, subdivisions=1)
+            return _icosahedron_collision_subdivided_numba(vertices, faces, contact_point, center, collision_margin, subdivisions=1)
+#            return self._icosahedron_collision_subdivided(vertices, faces, contact_point, center, collision_margin, subdivisions=1)
         elif proxy_type == 5:  # Icosahedron subdiv 2 (162 vertices, 320 faces)
-#            return _icosahedron_collision_subdivided_numba(vertices, faces, contact_point, center, collision_margin, subdivisions=2)
-            return self._icosahedron_collision_subdivided(vertices, faces, contact_point, center, collision_margin, subdivisions=2)
+            return _icosahedron_collision_subdivided_numba(vertices, faces, contact_point, center, collision_margin, subdivisions=2)
+#            return self._icosahedron_collision_subdivided(vertices, faces, contact_point, center, collision_margin, subdivisions=2)
 
         return np.array([], dtype=np.int32), 0.0
 
