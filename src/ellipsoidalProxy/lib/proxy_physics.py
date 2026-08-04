@@ -28,12 +28,12 @@ from pbrAudioCommon import EntityManager
 from pbrAudioCommon import _compute_face_normals
 
 @nb.njit(parallel=True, fastmath=True, cache=True)
-def _numpy_concatenate(array_a: np.ndarray, array_b: np.ndarray) -> np.ndarray:
+def _numpy_concatenate(array_a, array_b) -> np.ndarray:
     shape = (array_a.shape[0] + array_b.shape[0], array_a.shape[1])
     dtype = array_a.dtype
     new_array = np.zeros(shape, dtype=dtype)
     new_array[:array_a.shape[0]] = array_a
-    new_array[-array_a.shape[0]:] = array_b
+    new_array[-array_b.shape[0]:] = array_b
     return new_array
 
 @nb.njit(parallel=True, fastmath=True, cache=True)
