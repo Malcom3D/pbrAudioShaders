@@ -29,12 +29,68 @@ from pbrAudioCommon import _compute_face_normals
 
 @nb.njit(parallel=True, fastmath=True, cache=True)
 def _numpy_concatenate(array_a, array_b) -> np.ndarray:
-    shape = (len(array_a) + len(array_b), len(array_a))
-    dtype = array_a.dtype
-    new_array = np.zeros(shape, dtype=dtype)
-    new_array[:array_a.shape[0]] = array_a
-    new_array[-array_b.shape[0]:] = array_b
-    return new_array
+    """
+    numba function to replace np.concatenate
+    Concatenates two arrays along the first axis (axis=0).
+    Supports 1D and 2D arrays.
+    """
+    # Handle 1D arrays
+    if array_a.ndim == 1 and array_b.ndim == 1:
+        result = np.empty(array_a.shape[0] + array_b.shape[0], dtype=array_a.dtype)
+        for i in nb.prange(array_a.shape[0]):
+            result[i] = array_a[i]
+        for i in nb.prange(array_b.shape[0]):
+            result[array_a.shape[0] + i] = array_b[i]
+        return result
+    
+    # Handle 2D arrays
+    elif array_a.ndim == 2 and array_b.ndim == 2:
+        # Check if they have the same number of columns
+        if array_a.shape[1] != array_b.shape[1]:
+            raise ValueError("Arrays must have the same number of columns for concatenation")
+        
+        result = np.empty((array_a.shape[0] + array_b.shape[0], array_a.shape[1]), dtype=array_a.dtype)
+        for i in nb.prange(array_a.shape[0]):
+            for j in range(array_a.shape[1]):
+                result[i, j] = array_a[i, j]
+        for i in nb.prange(array_b.shape[0]):
+            for j in range(array_b_b.shape[1]):
+                result[array_a.shape[0] + i, j] = array_b[i, j]
+        return result
+    
+    # Handle mixed dimensions (e.g., 1D + 2D)
+    elif array_a.ndim == 1 and array_b.ndim == 2:
+        # Convert 1D to 2D if needed
+        if array_b.shape[1] == 1:
+            result = np.empty((array_a.shape[0] + array_b.shape[0], 1), dtype=array_a.dtype)
+            for i in nb.prange(array_a.shape[0]):
+                result[i, 0] = array_a[i]
+            for i in nb.prange(array_b.shape[0]):
+                result[array_a.shape[0] + i, 0] = array_b[i,  0]
+            return result
+        else:
+            raise ValueError("Cannot concatenate 1D array with 2D array of different column count")
+    
+    elif array_a.ndim == 2 and array_b.ndim == 1:
+        # Convert 1D to 2D if needed
+        if array_a.shape[1] == 1:
+            result = np.empty((array_a.shape[0] + array_b.shape[0], 1), dtype=array_a.dtype)
+            for i in nb.prange(array_a.shape[0]):
+                result[i, 0] = array_a[i, 0]
+            for i in nb.prange(array_b.shape[0]):
+                result[array_a.shape[0] + i, 0] = array_b[i]
+            return result
+        else:
+            raise ValueError("Cannot concatenate 2D array with 1D array of different column count")
+    
+    else:
+        # General case for higher dimensions
+        result = np.empty((array_a.shape[0] + array_b.shape[0],) + array_a.shape[1:], dtype=array_a.dtype)
+        for i in nb.prange(array_a.shape[0]):
+            result[i] = array_a[i]
+        for i in nb.prange(array_b.shape[0]):
+            result[array_a.shape[0] + i] = array_b[i]
+        return result
 
 @nb.njit(parallel=True, fastmath=True, cache=True)
 def _pyramid_collision_numba(vertices: np.ndarray, faces: np.ndarray, contact_point: np.ndarray, center: np.ndarray, collision_margin: float) -> Tuple[np.ndarray, float]:
@@ -69,7 +125,7 @@ def _pyramid_collision_numba(vertices: np.ndarray, faces: np.ndarray, contact_po
 
     # Add neighboring vertices for smooth transition
     if collision_margin > 0.01:
-        for i in nb.prange(faces.shape[0]):
+        for i in range(faces.shape[0]):
             if i != closest_face:
                 # Check if faces share vertices
                 shared = False
@@ -141,7 +197,7 @@ def _octahedron_collision_numba(vertices: np.ndarray, faces: np.ndarray,
 
     # Add adjacent face vertices for smooth transition
     if collision_margin > 0.01:
-        for i in nb.prange(faces.shape[0]):
+        for i in range(faces.shape[0]):
             if i != face_idx:
                 # Check if faces share vertices
                 shared = False
@@ -210,7 +266,7 @@ def _cube_collision_numba(vertices: np.ndarray, faces: np.ndarray,
     # Add edge vertices for smooth transition
     if collision_margin > 0.01:
         # Find adjacent faces (sharing an edge)
-        for i in nb.prange(faces.shape[0]):
+        for i in range(faces.shape[0]):
             if i != face_indices[0] and i != face_indices[1]:
                 # Check if face shares vertices with our faces
                 shared = False
@@ -261,7 +317,7 @@ def _icosahedron_collision_numba(vertices: np.ndarray, faces: np.ndarray,
 
     # Add vertices from adjacent faces
     if collision_marginargin > 0.01:
-        for i in nb.prange(faces.shape[0]):
+        for i in range(faces.shape[0]):
             if i != closest_face:
                 # Check if faces share vertices
                 shared = False
@@ -331,7 +387,7 @@ def _icosahedron_collision_subdivided_numba(vertices: np.ndarray, faces: np.ndar
         unique_vertices = np.unique(new_vertices)
 
     # Add vertices from adjacent faces (sharing an edge)
-    for i in nb.prange(faces.shape[0]):
+    for i in range(faces.shape[0]):
         if i != closest_face:
             # Check if faces share at least 2 vertices (edge)
             shared_count = 0
@@ -355,7 +411,7 @@ def _get_adjacent_faces_numba(faces: np.ndarray, face_indices: np.ndarray) -> np
     Get faces adjacent to the given face indices.
     """
     # Collect all vertices from the given faces
-    face_vertices = np.zeros(0, dtype=np.int32)
+    face_vertices = np.zeros((0,3), dtype=np.int32)
     for f_idx in nb.prange(face_indices.shape[0]):
         idx = face_indices[f_idx]
         face_vertices = _numpy_concatenate(face_vertices, faces[idx])
@@ -432,7 +488,7 @@ class ProxyPhysics:
             tree1 = cKDTree(mesh1_vertices)
             radius = collision_margin * (4.0 if contact_type in [4, 5] else 2.0)
             vertices1_idx = np.array(tree1.query_ball_point(cp1, radius, workers=-1))
-            face_area1 = _compute_face_area(vertices1_idx, mesh1_faces)
+            face_area1 = self._compute_face_area(vertices1_idx, mesh1_faces)
 
         if proxy2 is not False:
             vertices2_idx, face_area2 = self.analytical_proxy_collision(proxy2, mesh2_vertices, mesh2_faces, cp2, center2, collision_margin)
@@ -440,7 +496,7 @@ class ProxyPhysics:
             tree2 = cKDTree(mesh2_vertices)
             radius = collision_margin * (4.0 if contact_type in [4, 5] else 2.0)
             vertices2_idx = np.array(tree2.query_ball_point(cp2, radius, workers=-1))
-            face_area2 = _compute_face_area(vertices2_idx, mesh2_faces)
+            face_area2 = self._compute_face_area(vertices2_idx, mesh2_faces)
    
         return vertices1_idx, vertices2_idx, face_area1, face_area2
 
@@ -450,41 +506,23 @@ class ProxyPhysics:
         Uses geometric relationships instead of KDTree.
         """ 
         if proxy_type == 0:  # Pyramid (4 vertices)
-            try:
-                return _pyramid_collision_numba(vertices, faces, contact_point, center, collision_margin)
-            except Exception as e:
-                print(e)
-                return self._pyramid_collision(vertices, faces, contact_point, center, collision_margin)
+            return _pyramid_collision_numba(vertices, faces, contact_point, center, collision_margin)
+#            return self._pyramid_collision(vertices, faces, contact_point, center, collision_margin)
         elif proxy_type == 1:  # Octahedron (6 vertices)
-            try:
-                return _octahedron_collision_numba(vertices, faces, contact_point, center, collision_margin)
-            except Exception as e:
-                print(e)
-                return self._octahedron_collision(vertices, faces, contact_point, center, collision_margin)
+            return _octahedron_collision_numba(vertices, faces, contact_point, center, collision_margin)
+#            return self._octahedron_collision(vertices, faces, contact_point, center, collision_margin)
         elif proxy_type == 2:  # Cube (8 vertices)
-            try:
-                return _cube_collision_numba(vertices, faces, contact_point, center, collision_margin)
-            except Exception as e:
-                print(e)
-                return self._cube_collision(vertices, faces, contact_point, center, collision_margin)
+#            return _cube_collision_numba(vertices, faces, contact_point, center, collision_margin)
+            return self._cube_collision(vertices, faces, contact_point, center, collision_margin)
         elif proxy_type == 3:  # Icosahedron (12 vertices, 20 faces)
-            try:
-                return _icosahedron_collision_numba(vertices, faces, contact_point, center, collision_margin)
-            except Exception as e:
-                print(e)
-                return self._icosahedron_collision(vertices, faces, contact_point, center, collision_margin, subdivisions=0)
+#            return _icosahedron_collision_numba(vertices, faces, contact_point, center, collision_margin)
+            return self._icosahedron_collision(vertices, faces, contact_point, center, collision_margin, subdivisions=0)
         elif proxy_type == 4:  # Icosahedron subdiv 1 (42 vertices, 80 faces)
-            try:
-                return _icosahedron_collision_subdivided_numba(vertices, faces, contact_point, center, collision_margin, subdivisions=1)
-            except Exception as e:
-                print(e)
-                return self._icosahedron_collision_subdivided(vertices, faces, contact_point, center, collision_margin, subdivisions=1)
+#            return _icosahedron_collision_subdivided_numba(vertices, faces, contact_point, center, collision_margin, subdivisions=1)
+            return self._icosahedron_collision_subdivided(vertices, faces, contact_point, center, collision_margin, subdivisions=1)
         elif proxy_type == 5:  # Icosahedron subdiv 2 (162 vertices, 320 faces)
-            try:
-                return _icosahedron_collision_subdivided_numba(vertices, faces, contact_point, center, collision_margin, subdivisions=2)
-            except Exception as e:
-                print(e)
-                return self._icosahedron_collision_subdivided(vertices, faces, contact_point, center, collision_margin, subdivisions=2)
+#            return _icosahedron_collision_subdivided_numba(vertices, faces, contact_point, center, collision_margin, subdivisions=2)
+            return self._icosahedron_collision_subdivided(vertices, faces, contact_point, center, collision_margin, subdivisions=2)
 
         return np.array([], dtype=np.int32), 0.0
 
@@ -528,8 +566,8 @@ class ProxyPhysics:
             for i, face in enumerate(faces):
                 if i != closest_face:
                     if len(np.intersect1d(face, face_vertices)) > 0:
-#                        unique_vertices = np.unique(np.concatenate([unique_vertices, face]))
-                        unique_vertices = np.unique(_numpy_concatenate(unique_vertices, face))
+                        unique_vertices = np.unique(np.concatenate([unique_vertices, face]))
+#                        unique_vertices = np.unique(_numpy_concatenate(unique_vertices, face))
 
         face_area = len(unique_vertices) / len(vertices)
 
@@ -571,8 +609,8 @@ class ProxyPhysics:
             for i, face in enumerate(faces):
                 if i != face_idx:
                     if len(np.intersect1d(face, face_vertices)) > 0:
-#                        unique_vertices = np.unique(np.concatenate([unique_vertices, face]))
-                        unique_vertices = np.unique(_numpy_concatenate(unique_vertices, face))
+                        unique_vertices = np.unique(np.concatenate([unique_vertices, face]))
+#                        unique_vertices = np.unique(_numpy_concatenate(unique_vertices, face))
 
         face_area = len(unique_vertices) / len(vertices)
 
@@ -606,15 +644,16 @@ class ProxyPhysics:
 
         # Add edge vertices for smooth transition
         if collision_margin > 0.01:
-            # Add vertices from adjacent faces (sharing an edge)
-            try:
-                edge_faces = _get_adjacent_faces_numba(faces, face_indices)
-            except Exception as e:
-                print(e)
-                edge_faces = self._get_adjacent_faces(faces, face_indices)
+            edge_faces = self._get_adjacent_faces(faces, face_indices)
+#            # Add vertices from adjacent faces (sharing an edge)
+#            try:
+#                edge_faces = _get_adjacent_faces_numba(faces, face_indices)
+#            except Exception as e:
+#                print(e)
+#                edge_faces = self._get_adjacent_faces(faces, face_indices)
             for edge_face in edge_faces:
-#                unique_vertices = np.unique(np.concatenate([unique_vertices, faces[edge_face]]))
-                unique_vertices = np.unique(_numpy_concatenate(unique_vertices, faces[edge_face]))
+                unique_vertices = np.unique(np.concatenate([unique_vertices, faces[edge_face]]))
+#                unique_vertices = np.unique(_numpy_concatenate(unique_vertices, faces[edge_face]))
 
         face_area = len(unique_vertices) / len(vertices)
 
@@ -652,8 +691,8 @@ class ProxyPhysics:
             for i, face in enumerate(faces):
                 if i != closest_face:
                     if len(np.intersect1d(face, face_vertices)) > 0:
-#                        unique_vertices = np.unique(np.concatenate([unique_vertices, face]))
-                        unique_vertices = np.unique(_numpy_concatenate(unique_vertices, face))
+                        unique_vertices = np.unique(np.concatenate([unique_vertices, face]))
+#                        unique_vertices = np.unique(_numpy_concatenate(unique_vertices, face))
         
         face_area = len(unique_vertices) / len(vertices)
         
@@ -696,16 +735,16 @@ class ProxyPhysics:
         nearby_vertices = np.where(distances < search_radius)[0]
         
         if len(nearby_vertices) > 0:
-#            unique_vertices = np.unique(np.concatenate([unique_vertices, nearby_vertices]))
-            unique_vertices = np.unique(_numpy_concatenate(unique_vertices, nearby_vertices))
+            unique_vertices = np.unique(np.concatenate([unique_vertices, nearby_vertices]))
+#            unique_vertices = np.unique(_numpy_concatenate(unique_vertices, nearby_vertices))
         
         # Add vertices from adjacent faces (sharing an edge)
         face_vertices_set = set(face_vertices)
         for i, face in enumerate(faces):
             if i != closest_face:
                 if len(set(face) & face_vertices_set) >= 2:  # Share an edge
-#                    unique_vertices = np.unique(np.concatenate([unique_vertices, face]))
-                    unique_vertices = np.unique(_numpy_concatenate(unique_vertices, face))
+                    unique_vertices = np.unique(np.concatenate([unique_vertices, face]))
+#                    unique_vertices = np.unique(_numpy_concatenate(unique_vertices, face))
         
         face_area = len(unique_vertices) / len(vertices)
         

@@ -26,9 +26,9 @@ from dataclasses import dataclass
 
 from pbrAudioCommon import EntityManager
 from pbrAudioCommon import _load_mesh, _mesh_to_obj, _compute_rayleigh_damping
+from pbrAudioCommon import ShapeType, ShapeProperties
+from pbrAudioCommon import PrimitiveGeometry
 
-from ..lib.primitive_geometry import PrimitiveGeometry
-from ..lib.shape_properties import ShapeType, ShapeProperties
 from ..lib.approx2faust import Approx2Faust, ModalParameters
 
 @dataclass

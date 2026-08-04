@@ -18,7 +18,7 @@
 
 __version__ = "0.0.8"
 __author__ = "Malcom3D"
-__description__ = "Ellipsoidal sound proxies preprocess for low importance meshes, small shards and debris sound synthesis"
+__description__ = "Ellipsoidal proxy generation, modal adaptation module for low importance meshes and lightweight proxy synthesizer for small meshes and debris sound synthesis"
 
 import os
 import sys
@@ -28,11 +28,13 @@ decimals = 18
 np.set_printoptions(precision=decimals, floatmode='fixed', threshold=np.inf)
 
 
-from .core.proxy_mesh import ProxyMesh
-from .core.modal4proxy import Modal4Proxy
+from .core.proxy_synth import ProxySynth
+from .lib.proxy_mesh import ProxyMesh
+from .lib.modal4proxy import Modal4Proxy
 from .lib.proxy_physics import ProxyPhysics
 
 __all__ = [
+    'ProxySynth',
     'ProxyMesh',
     'Modal4Proxy',
     'ProxyPhysics'

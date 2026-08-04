@@ -21,8 +21,8 @@ from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass, field
 from enum import Enum
 
-from ..lib.primitive_geometry import PrimitiveGeometry
-from ..lib.shape_properties import ShapeType, ShapeProperties
+from pbrAudioCommon import PrimitiveGeometry
+from pbrAudioCommon import ShapeType, ShapeProperties
 
 @dataclass
 class ModalParameters:
