@@ -80,10 +80,7 @@ class ProxySynth:
         n_bands = self.ir_table.n_frequency_bands
         
         # Pre-compute FFTs: (n_sizes, n_types, n_bands, fft_size/2+1)
-        self._ir_ffts = np.zeros(
-            (n_sizes, n_types, n_bands, self.fft_size // 2 + 1),
-            dtype=np.complex64
-        )
+        self._ir_ffts = np.zeros((n_sizes, n_types, n_bands, self.fft_size // 2 + 1), dtype=np.complex64)
         
         for size_idx in range(n_sizes):
             for type_idx in range(n_types):
@@ -212,9 +209,7 @@ class ProxySynth:
                 impact_duration = force_data.get_impact_duration(frame)
                 
                 # Process impact
-                impact_audio = self._process_impact(
-                    size_scale, force_mag, impact_duration
-                )
+                impact_audio = self._process_impact(size_scale, force_mag, impact_duration)
                 
                 # Add to track
                 start = sample_idx
@@ -227,9 +222,7 @@ class ProxySynth:
                 contact_duration = 1.0 / self.sample_rate  # 1 sample
                 
                 # Process continuous contact
-                contact_audio = self._process_continuous(
-                    size_scale, contact_type, force_mag, velocity_mag, contact_duration
-                )
+                contact_audio = self._process_continuous(size_scale, contact_type, force_mag, velocity_mag, contact_duration)
                 
                 # Add to appropriate track
                 start = sample_idx
@@ -258,8 +251,7 @@ class ProxySynth:
         
         return mixed
     
-    def _process_impact(self, size_scale: float, force: float,
-                        duration: float) -> np.ndarray:
+    def _process_impact(self, size_scale: float, force: float, duration: float) -> np.ndarray:
         """
         Process impact event using SIMD-optimized convolution.
         """
@@ -299,9 +291,7 @@ class ProxySynth:
         
         return output
     
-    def _process_continuous(self, size_scale: float, contact_type: int,
-                             force: float, velocity: float,
-                             duration: float) -> np.ndarray:
+    def _process_continuous(self, size_scale: float, contact_type: int, force: float, velocity: float, duration: float) -> np.ndarray:
         """
         Process continuous contact using SIMD-optimized operations.
         """
@@ -325,8 +315,7 @@ class ProxySynth:
         
         return output
     
-    def _generate_sliding_excitation(self, n_samples: int, force: float,
-                                      velocity: float) -> np.ndarray:
+    def _generate_sliding_excitation(self, n_samples: int, force: float, velocity: float) -> np.ndarray:
         """Generate sliding excitation using SIMD operations."""
         # White noise
         noise = np.random.randn(n_samples)
@@ -346,8 +335,7 @@ class ProxySynth:
         
         return excitation
     
-    def _generate_scraping_excitation(self, n_samples: int, force: float,
-                                       velocity: float) -> np.ndarray:
+    def _generate_scraping_excitation(self, n_samples: int, force: float, velocity: float) -> np.ndarray:
         """Generate scraping excitation using SIMD operations."""
         # Bandpass noise with higher frequency content
         noise = np.random.randn(n_samples)
@@ -371,8 +359,7 @@ class ProxySynth:
         
         return excitation
     
-    def _generate_rolling_excitation(self, n_samples: int, force: float,
-                                      velocity: float, size_scale: float) -> np.ndarray:
+    def _generate_rolling_excitation(self, n_samples: int, force: float, velocity: float, size_scale: float) -> np.ndarray:
         """Generate rolling excitation using SIMD operations."""
         # Pulse rate based on size and velocity
         base_rate = 5.0 + 20.0 * (1 - size_scale)

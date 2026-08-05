@@ -23,7 +23,7 @@ from typing import Any, List, Tuple, Dict, Optional
 from dataclasses import dataclass, field
 
 from pbrAudioCommon import EntityManager
-from physicsSolver.lib.score_data import ScoreEvent, ScoreTrack
+from pbrAudioCommon import ScoreEvent, ScoreTrack
 
 @dataclass
 class ModalComposer:

@@ -46,7 +46,6 @@ from ..lib.collision_data import CollisionData
 from ..lib.trajectory_data import TrajectoryData, tmpTrajectoryData
 from ..lib.force_data import ForceDataSequence
 from ..lib.modal_vertices import ModalVertices
-from ..lib.score_data import ScoreTrack
 
 @dataclass
 class physicsEngine:

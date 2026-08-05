@@ -27,12 +27,11 @@ from typing import Any, List, Tuple, Dict, Optional
 from dataclasses import dataclass, field
 from itertools import groupby
 
-from pbrAudioCommon import EntityManager
+from pbrAudioCommon import EntityManager, ScoreEvent, ScoreTrack
 from ellipsoidalProxy import ProxyPhysics
 
 from ..lib.collision_data import CollisionData
 from ..lib.modal_vertices import ModalVertices
-from ..lib.score_data import ScoreEvent, ScoreTrack
 from ..lib.force_data import ContactType
 
 @dataclass

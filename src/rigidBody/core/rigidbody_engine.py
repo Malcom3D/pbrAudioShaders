@@ -27,11 +27,10 @@ from dask import config as dask_config
 #dask_config.set(num_workers=1024)
 dask_config.set({'num_workers': 1024, 'optimization.fuse.active': True, 'optimization.fuse.max_depth': 10,})
 
-from pbrAudioCommon import EntityManager
+from pbrAudioCommon import EntityManager, ScoreTrack
 from pbrAudioCommon import _update_status
 from physicsSolver import ForceDataSequence, ModalVertices, CollisionData, TrajectoryData
-from physicsSolver import ScoreTrack
-from ellipsoidalProxy import Modal4Proxy
+from ellipsoidalProxy import Modal4Proxy, ProxySynth, ProxyIRTable
 from postProcess import PostProcessEngine
 
 from ..core.mesh2modal import Mesh2Modal
@@ -48,6 +47,7 @@ class rigidBodyEngine:
     obj_static: List[int] = field(default_factory=list)
     obj_pairs: List[int] = field(default_factory=list)
     obj_modal: List[int] = field(default_factory=list)
+    obj_proxy_synth: List[int] = field(default_factory=list)
 
     def __post_init__(self):
         from physicsSolver import ForceDataSequence, ModalVertices, CollisionData, TrajectoryData
@@ -64,14 +64,16 @@ class rigidBodyEngine:
         # Ensure status directory exists
         os.makedirs(self.status_dir, exist_ok=True)
 
-        obj_static, obj_dyn, obj_pairs, obj_modal = ([] for _ in range(4))
+        obj_static, obj_dyn, obj_pairs, obj_modal, obj_proxy_synth = ([] for _ in range(5))
         for config_obj in config.objects:
             if not config_obj.static and not config_obj.idx in obj_dyn:
                 self.obj_dyn.append(config_obj.idx)
             if config_obj.static and not config_obj.idx in obj_static:
                 self.obj_static.append(config_obj.idx)
-            if config_obj.proxy_type is False or config_obj.proxy_type in [2,3,4]:
+            if config_obj.proxy_type is not False:
                 self.obj_modal.append(config_obj.idx)
+                if config.system.enable_proxy_synth and config_obj.proxy_type in [0,1,2]:
+                    self.obj_proxy_synth.append(config_obj.idx)
         for i in range(len(config.objects)):
             for j in range(i + 1, len(config.objects)):
                 self.obj_pairs.append([config.objects[i].idx, config.objects[j].idx])
@@ -181,7 +183,8 @@ class rigidBodyEngine:
         score_tracks = self.entity_manager.get('score_tracks')
         print('Save score_tracks: ', len(score_tracks))
         for s_idx in score_tracks.keys():
-            score_tracks[s_idx].save(f"{self.scoretracks_dir}/{s_idx:05d}.tar.gz")
+            if score_tracks[s_idx].is_final:
+                score_tracks[s_idx].save(f"{self.scoretracks_dir}/{s_idx:05d}.tar.gz")
 #        tasks_save_score_tracks = [self.save_score_tracks(score_tracks[s_idx], f"{s_idx:05d}.tar.gz") for s_idx in score_tracks.keys()]
 #        results_save_score_tracks = compute(*tasks_save_score_tracks)
 
@@ -208,16 +211,29 @@ class rigidBodyEngine:
         sample_counter.set_total_samples(self.total_samples)
         _ = self.entity_manager.register('sample_counter', sample_counter)
 
-        tasks_luthier = [self.bake_luthier(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
+        modal_obj_idx = list(set(self.obj_dyn + self.obj_static) - set(self.obj_proxy_synth))
+        tasks_luthier = [self.bake_luthier(obj_idx) for obj_idx in modal_obj_idx]
         results_luthier = compute(*tasks_luthier)
         self.progress = _update_status(f"{self.status_dir}/bake", 10)
 
 #        self.players = [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
 #        tasks_player = [self.bake_player(player) for player in self.players]
 #        tasks_save = [self.bake_save(player) for player in self.players]
-        players = [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
+        players = [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in modal_obj_idx]
         tasks_player = [self.bake_player(player) for player in players]
         results_player = compute(*tasks_player)
+
+        self.progress = _update_status(f"{self.status_dir}/bake", 60)
+
+        # ProxySynth luthier
+        if not len(self.obj_proxy_synth) == 0:
+            self.proxy_synth = ProxySynth(self.entity_manager)
+            self.proxy_synth.luthier()
+            ir_table=ProxyIRTable(self.entity_manager)
+            ir_table.compute_ir_table(self.obj_proxy_synth)
+            task_proxy_synth = [self.bake_proxy_synth(ir_table, obj_idx) for obj_idx in self.obj_proxy_synth]
+            results_proxy_synth = compute(*tasks_proxy_synth)
+
         self.progress = _update_status(f"{self.status_dir}/bake", 90)
 
         print('rigidBodyEngine: Save player')
@@ -261,6 +277,11 @@ class rigidBodyEngine:
     @delayed
     def bake_player(self, player: Any):
         player.compute()
+
+    @delayed
+    def bake_proxy_synth(self, ir_table: Any, obj_idx: int):
+        ps = ProxySynth(entity_manager=self.entity_manager, ir_table=ProxyIRTable.compute_ir_table(entity_manager))
+        ps.compute(obj_idx)
 
     @delayed
     def bake_save(self, player: Any):

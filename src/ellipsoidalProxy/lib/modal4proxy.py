@@ -46,7 +46,7 @@ class Modal4Proxy:
 
     def compute(self, obj_idx: int) -> None:
         """
-        Compute modal model for a proxied object.
+        Compute modal model for a proxed object.
 
         Args:
             obj_idx: Object index

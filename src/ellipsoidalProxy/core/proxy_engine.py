@@ -58,8 +58,8 @@ class ProxyEngine:
         proxy_meshes : List of proxy mesh configurations
         """
         self.ir_table.compute_ir_table(proxy_meshes)
-    
-    def process_object(self, obj_idx: int) -> None:
+
+    def compute(self, obj_idx: int) -> None:
         """
         Process audio for a proxy object.
         
@@ -70,23 +70,10 @@ class ProxyEngine:
         """
         self.proxy_synth.compute(obj_idx)
     
-    def compute(self) -> None:
+    def luthier(self, proxy_meshes) -> None:
         """
         Process all proxy objects.
         """
         config = self.entity_manager.get('config')
         
-        # Collect all proxy meshes
-        proxy_meshes = []
-        for obj in config.objects:
-            if obj.proxy_type is not False and obj.proxy_type in [0, 1, 2]:
-                proxy_meshes.append(obj)
-        
-        # Compute IR table
-        if proxy_meshes:
-            self.compute_ir_table(proxy_meshes)
-            
-            # Process each object
-            for obj in proxy_meshes:
-                self.process_object(obj.idx)
-
+        self.compute_ir_table(proxy_meshes)

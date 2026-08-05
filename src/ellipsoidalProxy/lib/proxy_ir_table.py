@@ -24,9 +24,9 @@ from scipy import signal
 from scipy.interpolate import RegularGridInterpolator
 
 from pbrAudioCommon import EntityManager
-from pbrAudioCommon import _compute_rayleigh_damping
 from pbrAudioCommon import ShapeType, ShapeProperties
 from pbrAudioCommon import PrimitiveGeometry
+from pbrAudioCommon import _compute_rayleigh_damping, _load_mesh
 
 @dataclass
 class ProxyIRTable:
@@ -64,22 +64,14 @@ class ProxyIRTable:
         
         # Compute frequency bands (logarithmic spacing)
         nyquist = self.sample_rate / 2
-        self.freq_bands = np.logspace(
-            np.log10(20), 
-            np.log10(nyquist), 
-            self.n_frequency_bands + 1
-        )
+        self.freq_bands = np.logspace(np.log10(20), np.log10(nyquist), self.n_frequency_bands + 1)
         
         # Initialize size steps
         self.size_steps = np.linspace(0, 1, self.n_size_steps)
         
         # Initialize IR table
-        self.ir_table = np.zeros((
-            self.n_size_steps,
-            4,  # impact, sliding, scraping, rolling
-            self.n_frequency_bands,
-            self.max_ir_length
-        ), dtype=np.float32)
+        event_types = 4 impact, sliding, scraping, rolling
+        self.ir_table = np.zeros((self.n_size_steps, event_types, self.n_frequency_bands, self.max_ir_length), dtype=np.float32)
     
     def compute_ir_table(self, proxy_meshes: List[Any]) -> None:
         """
@@ -106,19 +98,11 @@ class ProxyIRTable:
                 size = self.min_size + size_scale * (self.max_size - self.min_size)
                 
                 # Compute modal parameters for this size
-                modal_params = self._compute_modal_params(
-                    material_props=material_props,
-                    size=size,
-                    proxy_type=meshes[0].proxy_type
-                )
+                modal_params = self._compute_modal_params(material_props=material_props, size=size, proxy_type=meshes[0].proxy_type)
                 
                 # Generate IRs for each contact type
                 for contact_type in range(4):
-                    ir = self._generate_ir(
-                        modal_params=modal_params,
-                        contact_type=contact_type,
-                        size=size
-                    )
+                    ir = self._generate_ir(modal_params=modal_params, contact_type=contact_type, size=size)
                     
                     # Split into frequency bands
                     banded_ir = self._split_into_frequency_bands(ir)
@@ -131,12 +115,7 @@ class ProxyIRTable:
         groups = {}
         for mesh in proxy_meshes:
             if mesh.acoustic_shader:
-                key = (
-                    mesh.acoustic_shader.young_modulus,
-                    mesh.acoustic_shader.poisson_ratio,
-                    mesh.acoustic_shader.density,
-                    mesh.acoustic_shader.damping
-                )
+                key = (mesh.acoustic_shader.young_modulus, mesh.acoustic_shader.poisson_ratio, mesh.acoustic_shader.density, mesh.acoustic_shader.damping)
             else:
                 key = (None, None, None, None)
             
@@ -150,21 +129,12 @@ class ProxyIRTable:
         # Use bounding box diagonal as size measure
         if hasattr(mesh, 'obj_path'):
             # Load mesh to compute size
-            vertices, _, _ = self._load_mesh_vertices(mesh)
+            vertices, _, _ = _load_mesh(mesh, 0, use_proxy_path=True)
             if len(vertices) > 0:
                 min_coords = np.min(vertices, axis=0)
                 max_coords = np.max(vertices, axis=0)
                 return float(np.linalg.norm(max_coords - min_coords))
         return 0.1  # Default size
-    
-    def _load_mesh_vertices(self, mesh: Any) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Load mesh vertices from config."""
-        from pbrAudioCommon import _load_mesh
-        try:
-            vertices, normals, faces = _load_mesh(mesh, 0, use_proxy_path=True)
-            return vertices, normals, faces
-        except:
-            return np.array([]), np.array([]), np.array([])
     
     def _get_material_properties(self, mesh: Any) -> Dict[str, float]:
         """Extract material properties from mesh config."""
@@ -182,8 +152,7 @@ class ProxyIRTable:
             'damping': 0.02
         }
     
-    def _compute_modal_params(self, material_props: Dict[str, float], 
-                              size: float, proxy_type: int) -> Dict[str, np.ndarray]:
+    def _compute_modal_params(self, material_props: Dict[str, float], size: float, proxy_type: int) -> Dict[str, np.ndarray]:
         """
         Compute approximate modal parameters for a proxy shape.
         
