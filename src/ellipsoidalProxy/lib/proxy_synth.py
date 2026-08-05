@@ -218,7 +218,7 @@ class ProxySynth:
                 impact_duration = force_data.get_impact_duration(frame)
                 
                 # Process impact
-                if np.isnan(impact_duration)
+                if np.isnan(impact_duration):
                     debug_print('ERROR: impact_duration is nan, at frame:', frame, 'for', config_obj.idx, config_obj.name)
                 impact_audio = self._process_impact(size_scale, force_mag, impact_duration)
                 
