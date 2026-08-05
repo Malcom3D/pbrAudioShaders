@@ -359,7 +359,7 @@ class ProxyIRTable:
             band_fft = ir_fft * mask
             
             # Inverse FFT
-            band_ir = np.fft.irfft(band_fft, n=self.max_ir_length * 2)
+            band_ir = np.fft.irfft(band_fft, n=self.max_ir_length)
             
             banded_ir[band_idx] = band_ir
         

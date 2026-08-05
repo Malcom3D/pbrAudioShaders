@@ -62,6 +62,11 @@ class ProxySynth:
         set_debug_prefix(self.__class__.__name__)
 
         self.sample_rate = config.system.sample_rate
+        fps = config.system.fps
+        fps_base = config.system.fps_base
+        subframes = config.system.subframes
+        sample_rate = config.system.sample_rate
+        self.sfps = ( fps / fps_base ) * subframes # subframes per seconds
         
         # Initialize components
         if self.ir_table is None:
@@ -173,8 +178,7 @@ class ProxySynth:
         
         return 0.5  # Default
     
-    def _process_object_audio(self, config_obj: Any, force_data: Any,
-                               trajectory: Any, size_scale: float) -> np.ndarray:
+    def _process_object_audio(self, config_obj: Any, force_data: Any, trajectory: Any, size_scale: float) -> np.ndarray:
         """
         Process all audio for an object.
         
@@ -182,7 +186,7 @@ class ProxySynth:
         """
         # Get total duration
         frames = force_data.frames
-        total_samples = int(frames[-1])
+        total_samples = int(force_data.frames[-1])
         
         # Initialize output tracks
         impact_track = np.zeros(total_samples, dtype=np.float32)
@@ -214,6 +218,8 @@ class ProxySynth:
                 impact_duration = force_data.get_impact_duration(frame)
                 
                 # Process impact
+                if np.isnan(impact_duration)
+                    debug_print('ERROR: impact_duration is nan, at frame:', frame, 'for', config_obj.idx, config_obj.name)
                 impact_audio = self._process_impact(size_scale, force_mag, impact_duration)
                 
                 # Add to track

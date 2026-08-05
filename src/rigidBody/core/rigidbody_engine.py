@@ -232,7 +232,7 @@ class rigidBodyEngine:
         if not len(self.obj_proxy_synth) == 0:
             ir_table=ProxyIRTable(self.entity_manager)
             ir_table.compute_ir_table(self.obj_proxy_synth)
-            task_proxy_synth = [self.bake_proxy_synth(ir_table, obj_idx) for obj_idx in idx_proxy_synth]
+            tasks_proxy_synth = [self.bake_proxy_synth(ir_table, obj_idx) for obj_idx in idx_proxy_synth]
             results_proxy_synth = compute(*tasks_proxy_synth)
 
         self.progress = _update_status(f"{self.status_dir}/bake", 90)
