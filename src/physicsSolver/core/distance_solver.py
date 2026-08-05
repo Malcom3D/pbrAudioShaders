@@ -32,7 +32,7 @@ from numba import njit, prange, float64, int64, boolean
 from pbrAudioCommon import EntityManager
 from pbrAudioCommon import Config, ObjectConfig
 from pbrAudioCommon import _load_pose, _load_mesh
-from pbrAudioCommon.lib.debug_utils import debug_print, set_debug
+from pbrAudioCommon.lib.debug_utils import debug_debug_print, set_debug
 
 from ..lib.collision_data import CollisionData, CollisionType
 
@@ -138,7 +138,7 @@ class DistanceSolver:
         # Step 1: Compute adaptive threshold
         threshold = self._compute_adaptive_threshold(distances, collision_margin)
         
-        debug_print(f"Adaptive threshold for {config_objs[0].name} and {config_objs[1].name}: {threshold}")
+        debug_debug_print(f"Adaptive threshold for {config_objs[0].name} and {config_objs[1].name}: {threshold}")
         
         # Step 2: Identify contact regions (where distance <= threshold)
         contact_mask = distances <= threshold
@@ -158,7 +158,7 @@ class DistanceSolver:
             
             # Check if this is an impact (short duration, sharp distance change)
             is_impact = self._is_impact_event(region_distances, region_times, duration, threshold, sfps)
-            print(f"impact {config_objs[0].name} and {config_objs[1].name}", is_impact)
+            debug_print(f"impact {config_objs[0].name} and {config_objs[1].name}", is_impact)
             
             if is_impact:
                 # For impacts, find the exact impact time (minimum distance)
@@ -166,7 +166,7 @@ class DistanceSolver:
                 impact_time = times[impact_idx]
                 impact_distance = distances[impact_idx]
                 
-                print(f"Impact detected between {config_objs[0].name} and {config_objs[1].name} "
+                debug_print(f"Impact detected between {config_objs[0].name} and {config_objs[1].name} "
                       f"at frame {impact_time*sfps/sample_rate:.2f}, distance: {impact_distance:.6f}")
                 
                 # Create collision data for impact
@@ -180,7 +180,7 @@ class DistanceSolver:
 #                contact_range_time = len(region_times) * sample_rate / sfps
                 contact_start_distance = region_distances[0]
                 
-                print(f"Continuous contact between {config_objs[0].name} and {config_objs[1].name} "
+                debug_print(f"Continuous contact between {config_objs[0].name} and {config_objs[1].name} "
                       f"from frame {region_times[0]*sfps/sample_rate:.2f} to {region_times[-1]*sfps/sample_rate:.2f}, "
                       f"avg distance: {avg_distance:.6f}")
                 
@@ -375,7 +375,7 @@ class DistanceSolver:
         # Calculate minimum distance between transformed meshes
         min_distance, closest_points = self._calculate_min_distance(mesh1=mesh1, mesh2=mesh2, collision_margin=collision_margin, samples_per_object=samples_per_object)
 
-        print('_calculate_min_distance', mesh1_name, mesh2_name, closest_points['method'], frame_idx, min_distance)
+        debug_print('_calculate_min_distance', mesh1_name, mesh2_name, closest_points['method'], frame_idx, min_distance)
 
         return min_distance, closest_points
 

@@ -24,6 +24,7 @@ import trimesh
 
 from pbrAudioCommon import EntityManager
 from pbrAudioCommon import _parse_lib, _load_mesh
+from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
 from .fracture_data import FractureEvent, FragmentData
 
@@ -43,6 +44,10 @@ class FractureModalModel:
     
     def __post_init__(self):
         config = self.entity_manager.get('config')
+
+        set_debug(config.system.debug)
+        set_debug_prefix(self.__class__.__name__)
+
         self.dsp_path = f"{config.system.cache_path}/dsp"
         self.fracture_modal_path = f"{config.system.cache_path}/fracture_modal"
         os.makedirs(self.fracture_modal_path, exist_ok=True)
@@ -99,7 +104,7 @@ class FractureModalModel:
         # Create modified modal model
         self._write_fracture_lib(fragment_lib, fragment_obj.name, modified_frequencies, modified_t60s, modified_gains)
         
-        print(f"Created fracture modal model for {fragment_obj.name}")
+        debug_print(f"Created fracture modal model for {fragment_obj.name}")
     
     def _get_fragment_geometry(self, event: FractureEvent, fragment_idx: int) -> FragmentData:
         """Get or compute fragment geometry data."""

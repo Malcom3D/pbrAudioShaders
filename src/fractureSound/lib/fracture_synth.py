@@ -24,6 +24,8 @@ import soundfile as sf
 
 from pbrAudioCommon import EntityManager
 from pbrAudioCommon import _parse_lib
+from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
+
 from rigidBody import ModalBank
 
 from .fracture_data import FractureEvent, FractureType
@@ -43,6 +45,10 @@ class FractureSynth:
     
     def __post_init__(self):
         config = self.entity_manager.get('config')
+
+        set_debug(config.system.debug)
+        set_debug_prefix(self.__class__.__name__)
+
         self.sample_rate = config.system.sample_rate
         self.fracture_modal_path = f"{config.system.cache_path}/fracture_modal"
         self.fracture_audio_dir = f"{config.system.cache_path}/fracture_audio"
@@ -117,7 +123,7 @@ class FractureSynth:
         output_file = f"{self.fracture_audio_dir}/fracture_{event.original_obj_idx}_{event.fragment1_idx}_{event.fragment2_idx}.raw"
         sf.write(output_file, combined, self.sample_rate, subtype='FLOAT')
         
-        print(f"Fracture sound saved to {output_file}")
+        debug_print(f"Fracture sound saved to {output_file}")
     
     def _load_fracture_modal(self, obj_name: str) -> Dict[str, Any]:
         """Load fracture modal model."""

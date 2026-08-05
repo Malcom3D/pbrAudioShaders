@@ -25,6 +25,7 @@ from scipy.spatial.transform import Rotation
 
 from pbrAudioCommon import EntityManager
 from pbrAudioCommon import _load_mesh, _load_pose
+from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
 
 @dataclass
@@ -43,6 +44,10 @@ class ProxyMesh:
     """
     entity_manager: EntityManager
 
+    def __post_init(self):
+        set_debug(config.system.debug)
+        set_debug_prefix(self.__class__.__name__)
+
     def compute(self, obj_idx: int) -> List[int]:
         """
         Compute proxy mesh for an object.
@@ -59,7 +64,7 @@ class ProxyMesh:
         for config_obj in config.objects:
             if config_obj.idx == obj_idx:
                 if config_obj.proxy_type is not False:
-                    print(f"Creating proxy mesh for {config_obj.name} idx={config_obj.idx} proxy_type={config_obj.proxy_type}")
+                    debug_print(f"Creating proxy mesh for {config_obj.name} idx={config_obj.idx} proxy_type={config_obj.proxy_type}")
                     self._create_proxy_sequence(config_obj)
                     proxy_objects.append(config_obj.idx)
 
@@ -168,7 +173,7 @@ class ProxyMesh:
                 output_file = f"{obj_proxy_path}/{config_obj.name}.npz"
             np.savez_compressed(output_file, vertices=proxy_vertices_world.astype(np.float32), normals=proxy_normals_world.astype(np.float32), faces=proxy_faces.astype(np.int32))
 
-        print(f"Created {n_frames} proxy frames for {config_obj.name} at {obj_proxy_path}")
+        debug_print(f"Created {n_frames} proxy frames for {config_obj.name} at {obj_proxy_path}")
 
     def _generate_proxy_mesh(self, proxy_type: int, extents: np.ndarray, center: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -201,7 +206,7 @@ class ProxyMesh:
             vertices = vertices * half_extents[np.newaxis, :] + center
         else:
             # Default to 4-vertex pyramid for unknown types
-            print(f"Warning: Unknown proxy_type {proxy_type}, using 4-vertex pyramid")
+            debug_print(f"Warning: Unknown proxy_type {proxy_type}, using 4-vertex pyramid")
             vertices, faces = self._create_pyramid_4v(extents, center)
 
         return vertices, faces

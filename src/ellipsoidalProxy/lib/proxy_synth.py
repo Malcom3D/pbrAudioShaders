@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 import soundfile as sf
 
 from pbrAudioCommon import EntityManager
+from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
 from .proxy_ir_table import ProxyIRTable
 from .proxy_eq import ProxyEqualizer
@@ -56,6 +57,10 @@ class ProxySynth:
     
     def __post_init__(self):
         config = self.entity_manager.get('config')
+
+        set_debug(config.system.debug)
+        set_debug_prefix(self.__class__.__name__)
+
         self.sample_rate = config.system.sample_rate
         
         # Initialize components
@@ -441,5 +446,5 @@ class ProxySynth:
         """Save synthesized audio to file."""
         output_file = f"{self.output_dir}/{config_obj.name}_proxy.wav"
         sf.write(output_file, audio, self.sample_rate, subtype='FLOAT')
-        print(f"Saved proxy audio to {output_file}")
+        debug_print(f"Saved proxy audio to {output_file}")
 

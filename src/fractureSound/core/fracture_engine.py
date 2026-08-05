@@ -30,6 +30,8 @@ dask_config.set({'num_workers': 1024, 'optimization.fuse.active': True, 'optimiz
 
 from pbrAudioCommon import EntityManager
 from pbrAudioCommon import _update_status
+from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
+
 from physicsSolver import TrajectoryData, CollisionData, ForceDataSequence
 
 from ..lib.fracture_data import FractureEvent, FractureType, FragmentData
@@ -45,6 +47,10 @@ class fractureEngine:
     
     def __post_init__(self):
         config = self.entity_manager.get('config')
+
+        set_debug(config.system.debug)
+        set_debug_prefix(self.__class__.__name__)
+
         self.status_dir = f"{config.system.cache_path}/status/{__class__.__name__}"
         self.fracture_dir = f"{config.system.cache_path}/fracture" # ToDo: add Collection name
         self.fracture_modal_dir = f"{config.system.cache_path}/fracture_modal"
@@ -132,7 +138,7 @@ class fractureEngine:
         
         if fracture_frame is None:
             # No fracture detected
-            print('No fracture detected for', original_obj.name)
+            debug_print('No fracture detected for', original_obj.name)
             return []
         
         # Get collision data at fracture time

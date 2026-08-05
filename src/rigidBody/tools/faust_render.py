@@ -42,7 +42,6 @@ class FaustRender:
         """
         self.duration = duration if duration != None else self.duration
         cmd = f"{self.faust_render} {dsp_file} {output_file} {self.duration}"
-        print(cmd)
         exit_code = os.system(cmd)
         if not exit_code == 0:
-            print('Error')
+            debug_print('Error')

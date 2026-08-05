@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 from pbrAudioCommon import EntityManager
 from pbrAudioCommon import Config, ObjectConfig
 from pbrAudioCommon import _load_pose, _load_mesh
+from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
 @dataclass
 class RotationSolver:
@@ -40,6 +41,10 @@ class RotationSolver:
 
     def compute(self, obj_idx: int) -> None:
         config = self.entity_manager.get('config')
+
+        set_debug(config.system.debug)
+        set_debug_prefix(self.__class__.__name__)
+
         fps = config.system.fps
         fps_base = config.system.fps_base
         subframes = config.system.subframes
@@ -200,7 +205,7 @@ class RotationSolver:
             # Check if the computed rotation is valid
             if not self._is_valid_rotation(optimal_rot):
                 optimal_rot = slerp(impact_time)
-                print(f"Warning: RotationSolver produced invalid rotation for object {config_obj.idx}, using fallback.")
+                debug_print(f"Warning: RotationSolver produced invalid rotation for object {config_obj.idx}, using fallback.")
 
         else:
             # No post-impact data available

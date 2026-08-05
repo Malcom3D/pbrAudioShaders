@@ -26,6 +26,8 @@ from dataclasses import dataclass, field
 
 from pbrAudioCommon import EntityManager
 from pbrAudioCommon import _parse_lib
+from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
+
 
 @dataclass
 class ModalPlayer:
@@ -35,9 +37,11 @@ class ModalPlayer:
 #    score: List = field(default_factory=list)
 
     def __post_init__(self):
-        print('ModalPlayer init: ', self.obj_idx)
         config = self.entity_manager.get('config')
-        print('ModalPlayer sample_counter: ', self.obj_idx)
+        set_debug(config.system.debug)
+        set_debug_prefix(self.__class__.__name__)
+        debug_print('ModalPlayer init: ', self.obj_idx)
+        debug_print('ModalPlayer sample_counter: ', self.obj_idx)
         self.sample_counter = self.entity_manager.get('sample_counter')
         self.score_path = f"{config.system.cache_path}/score"
         self.output_dir = f"{config.system.cache_path}/modal_player"
@@ -69,16 +73,16 @@ class ModalPlayer:
             if conf_obj.idx == self.obj_idx:
                 config_obj = conf_obj
                 # Get modal model T60 times for both objects
-                print('Get modal model T60 times for both objects', self.obj_idx)
+                debug_print('Get modal model T60 times for both objects', self.obj_idx)
                 t60_obj = self._get_modal_t60(config_obj)
                 # Calculate samples based on T60 (reverberation time)
                 # We want to capture the full decay of the modal response
                 self.t60_samples = int(t60_obj * spsf)
 
                 sample_indices = []
-#                print('ModalPlayer get rigidbody_synth: ', self.obj_idx)
+#                debug_print('ModalPlayer get rigidbody_synth: ', self.obj_idx)
                 rigidbody_synth = self.entity_manager.get('rigidbody_synth')
-#                print('ModalPlayer get resonance_synth: ', self.obj_idx)
+#                debug_print('ModalPlayer get resonance_synth: ', self.obj_idx)
                 resonance_synth = self.entity_manager.get('resonance_synth')
                 for rb_key in rigidbody_synth.keys():
                     if rigidbody_synth[rb_key].obj_idx == self.obj_idx:
@@ -88,17 +92,17 @@ class ModalPlayer:
                     if resonance_synth[re_key].obj_idx == self.obj_idx:
                         self.resonance_synth = resonance_synth[re_key]
                         break
-#                print('ModalPlayer get score_tracks: ', self.obj_idx)
+#                debug_print('ModalPlayer get score_tracks: ', self.obj_idx)
                 score_tracks = self.entity_manager.get('score_tracks')
                 for idx in score_tracks.keys():
                     if score_tracks[idx].obj_idx == self.obj_idx and score_tracks[idx].is_final:
                         self.score = score_tracks[idx]
 
         # Register with sample counter
-        print('Register with sample counter', self.obj_idx)
+        debug_print('Register with sample counter', self.obj_idx)
         self.sample_counter.register_player(self.player_id)
-        print('ModalPlayer init end: ', self.obj_idx)
-        print('ModalPlayer t60: ', self.t60_samples)
+        debug_print('ModalPlayer init end: ', self.obj_idx)
+        debug_print('ModalPlayer t60: ', self.t60_samples)
 
         sound_path = f"{config.system.cache_path}/audio_force"
         self.sliding_sound, self.scraping_sound, self.rolling_sound = self._load_sound_tracks(sound_path, config_obj.name)
@@ -117,12 +121,12 @@ class ModalPlayer:
         fracture_frame, is_shard_frame = (None for _ in range(2))
         if not isinstance(config_obj.fractured, bool):
             fracture_frame = config_obj.fractured * sample_rate / sfps
-            print('Object: ', config_obj.name, 'fracture at frame', fracture_frame)
+            debug_print('Object: ', config_obj.name, 'fracture at frame', fracture_frame)
         if not isinstance(config_obj.is_shard, bool):
             is_shard_frame = config_obj.is_shard * sample_rate / sfps
-            print('Object: ', config_obj.name, 'is shard from frame', is_shard_frame)
+            debug_print('Object: ', config_obj.name, 'is shard from frame', is_shard_frame)
 
-        print('ModalPlayer compute: ', self.obj_idx)
+        debug_print('ModalPlayer compute: ', self.obj_idx)
         t60_empty, old_sample_idx = (0 for _ in range(2))
         sample_idx = self.sample_counter.get_current()
     
@@ -208,7 +212,7 @@ class ModalPlayer:
             # Call ready - this will either:
             # - Return True if all players are ready (sample was advanced and callback executed)
             # - Return False if we're still waiting for other players
-#            print(self.player_id, 'call ready')
+#            debug_print(self.player_id, 'call ready')
             all_ready = self.sample_counter.ready(self.player_id)
         
             if all_ready:
@@ -223,7 +227,7 @@ class ModalPlayer:
             # Unregister when done
             if sample_idx >= self.sample_counter.total_samples - 1:
                 self.sample_counter.unregister_player(self.player_id)
-                print(f"Player {self.player_id} finished processing")
+                debug_print(f"Player {self.player_id} finished processing")
 
     def _get_modal_t60(self, config_obj: Any) -> float:
         """
@@ -273,7 +277,7 @@ class ModalPlayer:
 
         # skip if track is all zeros
         if not np.any(track):
-            print(f"Track {suffix} synth track for {config_obj.name} is empty, skipping")
+            debug_print(f"Track {suffix} synth track for {config_obj.name} is empty, skipping")
             return
 
         # Normalize track
@@ -326,14 +330,14 @@ class ModalPlayer:
             
         wave_file = f"{self.output_dir}/{track_file}"
         sf.write(wave_file, track, sample_rate, subtype=subtype)
-        print(f"Saved {track_name} tracks to {self.output_dir}")
+        debug_print(f"Saved {track_name} tracks to {self.output_dir}")
 
         # Save project file
         json_file = f"{self.output_dir}/{config_obj.name}_{suffix}.json"
         with open(json_file, 'w') as f:
             json.dump(project_data, f, indent=2)
 
-        print(f"Created {suffix} synth track project: {json_file}")
+        debug_print(f"Created {suffix} synth track project: {json_file}")
 
     def _load_sound_tracks(self, sound_path: str, obj_name: str):
         sliding_sound = np.zeros(self.sample_counter.total_samples, dtype=np.float32)

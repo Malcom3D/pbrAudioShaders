@@ -23,6 +23,7 @@ from dask import delayed, compute
 
 from pbrAudioCommon import EntityManager
 from pbrAudioCommon import _parse_lib
+from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
 from ..lib.modal_bank import ModalBank
 
@@ -35,10 +36,15 @@ class RigidBodySynth:
     sample_rate: int
 
     def __post_init__(self):
+        config = self.entity_manager.get('config')
+
+        set_debug(config.system.debug)
+        set_debug_prefix(self.__class__.__name__)
+
         self.connected_buffer = self.entity_manager.get('connected_buffer')
         self.modal_data = _parse_lib(self.modal_lib)
         self.banks = np.zeros(len(self.modal_data['gains']), dtype=object)
-        #print('RigidBodySynth: ', len(self.modal_data['gains']), self.vertex_list.shape[0], self.modal_data['nModes'])
+        #debug_print('RigidBodySynth: ', len(self.modal_data['gains']), self.vertex_list.shape[0], self.modal_data['nModes'])
         for idx in range(self.vertex_list.shape[0]):
             self.banks[int(self.vertex_list[idx])] = ModalBank(frequencies=self.modal_data['frequencies'], gains=self.modal_data['gains'][int(self.vertex_list[idx])], t60s=self.modal_data['t60s'], sample_rate=self.sample_rate)
 

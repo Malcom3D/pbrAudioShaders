@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 
 from pbrAudioCommon import EntityManager
 from pbrAudioCommon import _load_pose
+from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
 from ..lib.trajectory_data import tmpTrajectoryData
 
@@ -34,6 +35,10 @@ class PositionSolver:
 
     def compute(self, obj_idx: int):
         config = self.entity_manager.get('config')
+
+        set_debug(config.system.debug)
+        set_debug_prefix(self.__class__.__name__)
+
         fps = config.system.fps
         fps_base = config.system.fps_base
         subframes = config.system.subframes
@@ -195,7 +200,7 @@ class PositionSolver:
     
         # Check consistency (should be very close if lines intersect)
         if np.linalg.norm(P_line1 - P_line2) > tolerance:
-            #print(f"Warning: Lines don't intersect perfectly. Distance: {np.linalg.norm(P_line1 - P_line2)}")
+            #debug_print(f"Warning: Lines don't intersect perfectly. Distance: {np.linalg.norm(P_line1 - P_line2)}")
             # Return the midpoint as best estimate
             P = (P_line1 + P_line2) / 2
         else:

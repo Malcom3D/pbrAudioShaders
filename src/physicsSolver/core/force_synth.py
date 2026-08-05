@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from typing import List, Dict, Tuple, Optional, Any
 
 from pbrAudioCommon import EntityManager
+from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
 from ..lib.force_data import ContactType
 from ..lib.hertzian_contact import HertzianContact
@@ -36,6 +37,10 @@ class ForceSynth:
 
     def __post_init__(self):
         config = self.entity_manager.get('config')
+
+        set_debug(config.system.debug)
+        set_debug_prefix(self.__class__.__name__)
+
         self.collisions_dir = f"{config.system.cache_path}/collisions"
         os.makedirs(self.collisions_dir, exist_ok=True)
         self.audio_force_dir = f"{config.system.cache_path}/audio_force"
@@ -61,7 +66,7 @@ class ForceSynth:
                 if config_obj.static:
                     # exit: obj_idx are static
                     return
-                elif config.enable_proxy_synth and config_obj.proxy in [0,1,2]:
+                elif config.system.enable_proxy_synth and config_obj.proxy_type in [0,1,2]:
                     # exit: obj_idx are proxy synthsized with ProxySynth
                     return
                 elif not config_obj.static:
@@ -191,12 +196,12 @@ class ForceSynth:
             if force_data_sequence is not None:
 
                 for key in tracks.keys():
-                    print(config_obj.name, key, tracks[key].shape)
+                    debug_print(config_obj.name, key, tracks[key].shape)
 
                 tracks = denoiser.process(tracks, force_data_sequence, sample_rate)
 
                 for key in tracks.keys():
-                    print(config_obj.name, 'denoised', key, tracks[key].shape)
+                    debug_print(config_obj.name, 'denoised', key, tracks[key].shape)
 
             self._save_tracks(config_obj, tracks, total_samples, int(sample_rate))
         self._save_tracks(config_obj, tracks, total_samples, int(sample_rate))
@@ -957,7 +962,7 @@ class ForceSynth:
                 'volume': 1.0,
                 'pan': 0.0
             })
-            print(f"Saved {track_name} tracks to {self.audio_force_dir}")
+            debug_print(f"Saved {track_name} tracks to {self.audio_force_dir}")
 
         # Save project file
         if unprocessed:
@@ -968,4 +973,4 @@ class ForceSynth:
         with open(json_file, 'w') as f:
             json.dump(project_data, f, indent=2)
 
-        print(f"Created multitrack project: {json_file}")
+        debug_print(f"Created multitrack project: {json_file}")

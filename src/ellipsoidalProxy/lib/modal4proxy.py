@@ -24,6 +24,7 @@ from scipy.spatial import ConvexHull
 
 from pbrAudioCommon import EntityManager
 from pbrAudioCommon import _load_mesh, _parse_lib, _compute_rayleigh_damping
+from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
 
 @dataclass
@@ -43,6 +44,8 @@ class Modal4Proxy:
 
     def __post_init__(self):
         self.config = self.entity_manager.get('config')
+        set_debug(self.config.system.debug)
+        set_debug_prefix(self.__class__.__name__)
 
     def compute(self, obj_idx: int) -> None:
         """
@@ -965,6 +968,6 @@ process = no.process;
             with open(resonance_file, 'w') as f:
                 f.write(resonance_content)
 
-            print(f"Modal4Proxy: Saved resonance model to {resonance_file}")
+            debug_print(f"Modal4Proxy: Saved resonance model to {resonance_file}")
 
-        print(f"Modal4Proxy: Saved modal model to {lib_file}")
+        debug_print(f"Modal4Proxy: Saved modal model to {lib_file}")

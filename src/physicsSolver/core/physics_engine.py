@@ -29,6 +29,8 @@ dask_config.set({'num_workers': 1024, 'optimization.fuse.active': True, 'optimiz
 
 from pbrAudioCommon import EntityManager
 from pbrAudioCommon import _update_status
+from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
+
 from ellipsoidalProxy import ProxyMesh
 
 
@@ -56,6 +58,10 @@ class physicsEngine:
 
     def __post_init__(self):
         config = self.entity_manager.get('config')
+
+        set_debug(config.system.debug)
+        set_debug_prefix(self.__class__.__name__)
+
         self.status_dir = f"{config.system.cache_path}/status/{__class__.__name__}"
         self.collisions_dir = f"{config.system.cache_path}/collisions"
         self.trajectories_dir = f"{config.system.cache_path}/trajectories"
