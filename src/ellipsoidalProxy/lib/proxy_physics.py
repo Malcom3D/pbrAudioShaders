@@ -400,6 +400,54 @@ def _icosahedron_collision_subdivided_numba(vertices: np.ndarray, faces: np.ndar
 
     return unique_vertices, face_area
 
+@nb.njit(parallel=True, fastmath=True, cache=True)
+def _convex_hull_collision_numba(vertices: np.ndarray, faces: np.ndarray, contact_point: np.ndarray, center: np.ndarray, collision_margin: float) -> Tuple[np.ndarray, float]:
+    """
+    Fast convex hull collision detection using face-based approach.
+    """
+    direction = contact_point - center
+    direction_norm = np.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2)
+
+    if direction_norm < 1e-10:
+        return np.arange(vertices.shape[0], dtype=np.int32), 1.0
+
+    direction = direction / direction_norm
+
+    # Compute face normals
+    face_normals = _compute_face_normals(vertices, faces)
+
+    # Find the face whose normal is most aligned with the contact direction
+    dot_products = np.zeros(face_normals.shape[0], dtype=np.float64)
+    for i in nb.prange(face_normals.shape[0]):
+        dot_products[i] = face_normals[i, 0] * direction[0] + face_normals[i, 1] * direction[1] + face_normals[i, 2] * direction[2]
+
+    closest_face = np.argmax(dot_products)
+
+    # Get vertices for this face
+    face_vertices = faces[closest_face]
+    unique_vertices = np.unique(face_vertices)
+
+    # Add vertices from adjacent faces
+    if collision_margin > 0.01:
+        for i in range(faces.shape[0]):
+            if i != closest_face:
+                # Check if faces share vertices
+                shared = False
+                for j in range(face_vertices.shape[0]):
+                    for k in range(faces[i].shape[0]):
+                        if face_vertices[j] == faces[i, k]:
+                            shared = True
+                            break
+                    if shared:
+                        break
+                if shared:
+                    new_vertices = _numpy_concatenate(unique_vertices, faces[i])
+                    unique_vertices = np.unique(new_vertices)
+
+    face_area = unique_vertices.shape[0] / vertices.shape[0]
+
+    return unique_vertices, face_area
+
 @dataclass 
 class ProxyPhysics:
     entity_manager: EntityManager
@@ -472,5 +520,7 @@ class ProxyPhysics:
             return _icosahedron_collision_subdivided_numba(vertices, faces, contact_point, center, collision_margin, subdivisions=1)
         elif proxy_type == 5:  # Icosahedron subdiv 2 (162 vertices, 320 faces)
             return _icosahedron_collision_subdivided_numba(vertices, faces, contact_point, center, collision_margin, subdivisions=2)
+        elif proxy_type == 6:  # Convex hull
+            return _convex_hull_collision_numba(vertices, faces, contact_point, center, collision_margin)
 
         return np.array([], dtype=np.int32), 0.0

@@ -345,7 +345,7 @@ class ProxyIRTable:
         freqs = np.fft.rfftfreq(ir_length * 2, 1/self.sample_rate)
         
         # Initialize banded IR
-        banded_ir = np.zeros((n_bands, ir_length), dtype=np.float32)
+        banded_ir = np.zeros((n_bands, self.max_ir_length), dtype=np.float32)
         
         # For each band, apply bandpass filter in frequency domain
         for band_idx in range(n_bands):
@@ -359,7 +359,7 @@ class ProxyIRTable:
             band_fft = ir_fft * mask
             
             # Inverse FFT
-            band_ir = np.fft.irfft(band_fft, n=ir_length * 2)[:ir_length]
+            band_ir = np.fft.irfft(band_fft, n=self.max_ir_length * 2)
             
             banded_ir[band_idx] = band_ir
         

@@ -38,6 +38,7 @@ class ProxyMesh:
     - 1: 6-vertex octahedron (axis-aligned, 6 vertices at extents)
     - 2: 8-vertex hexahedron/cube (axis-aligned, 8 vertices at corners)
     - 3,4,5: icosahedron with subdivision of (proxy_type - 3)
+    - 6: convex hull mesh with proxy_samples number of vertices (axis-aligned)
 
     The proxy mesh vertices maintain consistent indexing across frames
     by mapping to the original mesh's extremal vertices.
@@ -107,12 +108,17 @@ class ProxyMesh:
         center_local_0 = (min_coords_0 + max_coords_0) / 2
 
         # Generate proxy vertices for first frame (reference)
-        proxy_vertices_local_0, proxy_faces = self._generate_proxy_mesh(proxy_type=config_obj.proxy_type, extents=extents_0, center=center_local_0)
+        if config_obj.proxy_type == 6:
+            # Convex hull proxy - use the mesh_to_convex_hull function
+            proxy_vertices_local_0, proxy_faces = self._generate_convex_hull_proxy(vertices=vertices_local_0, faces=faces_0, config_obj=config_obj)
+        else:
+            proxy_vertices_local_0, proxy_faces = self._generate_proxy_mesh(proxy_type=config_obj.proxy_type, extents=extents_0, center=center_local_0)
 
         # Build KD-tree for first frame's original vertices
         tree_original_0 = cKDTree(vertices_local_0 - center_local_0)
 
         # For each proxy vertex, find the nearest original vertex
+
         # This establishes the consistent vertex mapping
         proxy_vertex_mapping = []
         for pv in proxy_vertices_local_0:
@@ -144,7 +150,10 @@ class ProxyMesh:
             center_local = (min_coords + max_coords) / 2
 
             # Generate proxy mesh based on proxy_type
-            proxy_vertices_local, proxy_faces = self._generate_proxy_mesh(proxy_type=config_obj.proxy_type, extents=extents, center=center_local)
+            if config_obj.proxy_type == 6:
+                proxy_vertices_local, proxy_faces = self._generate_convex_hull_proxy(vertices=vertices_local, faces=faces, config_obj=config_obj)
+            else:
+                proxy_vertices_local, proxy_faces = self._generate_proxy_mesh(proxy_type=config_obj.proxy_type, extents=extents, center=center_local)
 
             # Now re-index proxy vertices to maintain consistency
             # For each proxy vertex, find the corresponding original vertex
@@ -175,13 +184,60 @@ class ProxyMesh:
 
         debug_print(f"Created {n_frames} proxy frames for {config_obj.name} at {obj_proxy_path}")
 
+    def _generate_convex_hull_proxy(self, vertices: np.ndarray, faces: np.ndarray, config_obj: Any) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Generate a convex hull proxy mesh from the original mesh.
+
+        Args:
+            vertices: Original mesh vertices
+            faces: Original mesh faces
+            config_obj: Object configuration containing proxy_samples
+
+        Returns:
+            Tuple of (vertices, faces) for the convex hull proxy
+        """
+        # Create trimesh object
+        mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
+
+        # Sample the mesh surface
+        sampled_mesh, face_indices = trimesh.sample.sample_surface_even(mesh, count=mesh.vertices.shape[0], radius=config_obj.min_detail_size)
+
+        # Create submesh from sampled faces
+        remesh = mesh.submesh([face_indices])[0]
+
+        # Compute convex hull
+        convmesh = remesh.convex_hull
+
+        # Validate and fix the convex hull
+        if not convmesh.is_watertight or not convmesh.is_winding_consistent or not convmesh.is_volume or convmesh.is_empty or not convmesh.is_convex:
+            remesh.fix_normals()
+            remesh.fill_holes()
+            if not convmesh.is_watertight or not convmesh.is_winding_consistent or not convmesh.is_volume or convmesh.is_empty or not convmesh.is_convex:
+                debug_print(f"Warning: Convex hull for {config_obj.name} is not valid, using fallback")
+                # Fallback to proxy_type 5 (Icosahedron with subdivision 2)
+                vertices, faces = self._create_icosahedron(subdivisions=2)
+                # Compute bounding box in local coordinates
+                min_coords = np.min(mesh.vertices, axis=0)
+                max_coords = np.max(mesh.vertices, axis=0)
+                half_extents = (max_coords - min_coords) / 2.0
+                center = (min_coords + max_coords) / 2
+                vertices = vertices * half_extents[np.newaxis, :] + center
+
+        convmesh.process(validate=True)
+
+        # Extract vertices and faces
+        proxy_vertices = convmesh.vertices
+        proxy_faces = convmesh.faces
+
+        return proxy_vertices, proxy_faces
+
     def _generate_proxy_mesh(self, proxy_type: int, extents: np.ndarray, center: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
         Generate a proxy mesh based on proxy_type, scaled to fit extents.
 
         Args:
             proxy_type: 0=4-vertex pyramid, 1=6-vertex octahedron, 
-                        2=8-vertex cube, 3,4,5=icosahedron
+                        2=8-vertex cube, 3,4,5=icosahedron, 6=ConvexHull
             extents: (dx, dy, dz) bounding box extents
             center: Center of the bounding box in local coordinates
 

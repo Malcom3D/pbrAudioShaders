@@ -76,7 +76,11 @@ class Modal4Proxy:
         max_freq = config_obj.acoustic_shader.high_frequency
 
         # Number of modes based on proxy_type
-        n_modes = proxy_type + 2
+        if proxy_type == 6:
+            # For convex hull, use more modes based on vertex count
+            n_modes = max(5, min(20, config_obj.proxy_samples // 10))
+        else:
+            n_modes = proxy_type + 2
 
         # Load original mesh for shape analysis
         vertices, normals, faces = _load_mesh(config_obj, 0, use_proxy_path=False)
@@ -102,6 +106,22 @@ class Modal4Proxy:
             )
         elif proxy_type in [3, 4, 5]:
             # Adapt mesh2faust modal model for subdivided icosahedron
+            self._adapt_mesh2faust_modal_model(
+                config_obj=config_obj,
+                proxy_type=proxy_type,
+                proxy_vertices=proxy_vertices,
+                original_vertices=vertices,
+                original_faces=faces,
+                young_modulus=young_modulus,
+                poisson_ratio=poisson_ratio,
+                density=density,
+                damping=damping,
+                min_freq=min_freq,
+                max_freq=max_freq,
+                n_modes=n_modes
+            )
+        elif proxy_type == 6:
+            # Adapt mesh2faust modal model for convex hull
             self._adapt_mesh2faust_modal_model(
                 config_obj=config_obj,
                 proxy_type=proxy_type,
