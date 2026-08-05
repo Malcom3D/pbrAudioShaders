@@ -32,7 +32,7 @@ from numba import njit, prange, float64, int64, boolean
 from pbrAudioCommon import EntityManager
 from pbrAudioCommon import Config, ObjectConfig
 from pbrAudioCommon import _load_pose, _load_mesh
-from pbrAudioCommon import debug_print, set_debug
+from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
 from ..lib.collision_data import CollisionData, CollisionType
 

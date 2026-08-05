@@ -79,7 +79,7 @@ class CollisionData:
 
         with open(filepath, 'wb') as f:
             pickle.dump(save_dict, f)
-        debug_print(f"CollisionData data saved to {filepath}")        
+        print(f"CollisionData data saved to {filepath}")        
 
     @staticmethod
     def load(filepath: str) -> 'CollisionData':

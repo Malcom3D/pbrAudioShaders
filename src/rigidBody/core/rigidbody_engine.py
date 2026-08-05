@@ -181,10 +181,12 @@ class rigidBodyEngine:
         self.progress = _update_status(f"{self.status_dir}/prebake", 95)
 
         score_tracks = self.entity_manager.get('score_tracks')
-        print('Save score_tracks: ', len(score_tracks))
+        n_score = 0
         for s_idx in score_tracks.keys():
             if score_tracks[s_idx].is_final:
                 score_tracks[s_idx].save(f"{self.scoretracks_dir}/{s_idx:05d}.tar.gz")
+                n_score += 1
+        print('Saved final score_tracks: ', n_score)
 #        tasks_save_score_tracks = [self.save_score_tracks(score_tracks[s_idx], f"{s_idx:05d}.tar.gz") for s_idx in score_tracks.keys()]
 #        results_save_score_tracks = compute(*tasks_save_score_tracks)
 
@@ -227,8 +229,6 @@ class rigidBodyEngine:
 
         # ProxySynth luthier
         if not len(self.obj_proxy_synth) == 0:
-            self.proxy_synth = ProxySynth(self.entity_manager)
-            self.proxy_synth.luthier()
             ir_table=ProxyIRTable(self.entity_manager)
             ir_table.compute_ir_table(self.obj_proxy_synth)
             task_proxy_synth = [self.bake_proxy_synth(ir_table, obj_idx) for obj_idx in self.obj_proxy_synth]
@@ -280,7 +280,7 @@ class rigidBodyEngine:
 
     @delayed
     def bake_proxy_synth(self, ir_table: Any, obj_idx: int):
-        ps = ProxySynth(entity_manager=self.entity_manager, ir_table=ProxyIRTable.compute_ir_table(entity_manager))
+        ps = ProxySynth(entity_manager=self.entity_manager, ir_table=ir_table)
         ps.compute(obj_idx)
 
     @delayed
