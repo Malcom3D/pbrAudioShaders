@@ -29,6 +29,7 @@ from itertools import groupby
 
 from pbrAudioCommon import EntityManager
 from pbrAudioCommon import ScoreEvent, ScoreTrack
+from pbrAudioCommon import _adjust_for_fracture_shard
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 from ellipsoidalProxy import ProxyPhysics
 
@@ -63,6 +64,14 @@ class CollisionSolver:
         config_obj1, config_obj2 = self._get_object_configs(obj1_idx, obj2_idx)
         trajectory1, trajectory2 = self._get_trajectories(obj1_idx, obj2_idx)
         
+        # Check if objects are fractured and fractured own shard: do not exist at the same time
+        if config_obj1.fractured is not False and config_obj1.shard is not False:
+           if config_obj2.idx in config_obj1.shard:
+               return
+        elif config_obj2.fractured is not False and config_obj2.shard is not False:
+           if config_obj1.idx in config_obj2.shard:
+               return
+
         # Check if either object is a proxy mesh
         is_proxy1 = config_obj1.proxy_type is not False
         is_proxy2 = config_obj2.proxy_type is not False
@@ -77,9 +86,6 @@ class CollisionSolver:
         
         # Calculate sample range
         start_samples, stop_samples, impact_end = self._calculate_sample_range(collision, total_samples, sample_rate, sfps, config_obj1, config_obj2)
-        if start_samples > stop_samples: 
-            # objects are fractured and shard: shard_frame (start_samples) is after fracture_frame (stop_samples)
-            return
         
         # Load distance data
         distances_data = self._load_distance_data(collision)
@@ -230,43 +236,9 @@ class CollisionSolver:
         stop_samples = min(stop_samples, total_samples)
         
         # Handle fracture and shard frames
-        start_samples, stop_samples = self._adjust_for_fracture_shard(stop_samples, start_samples, sample_rate, sfps, config_obj1, config_obj2)
+        start_samples, stop_samples = _adjust_for_fracture_shard(stop_samples, start_samples, sample_rate, sfps, config_obj1, config_obj2)
         
         return start_samples, stop_samples, impact_end
-
-    def _adjust_for_fracture_shard(self, stop_samples, start_samples, sample_rate, sfps, config_obj1, config_obj2):
-        """Adjust sample range for fracture and shard events."""
-        fracture_frame1 = -1
-        if not config_obj1.fractured == False:
-            if stop_samples >= config_obj1.fractured >= start_samples:
-                fracture_frame1 = config_obj1.fractured - 1
-                fracture_frame1 *= sample_rate / sfps
-
-        fracture_frame2 = -1
-        if not config_obj2.fractured == False:
-            if stop_samples >= config_obj2.fractured >= start_samples:
-                fracture_frame2 = config_obj2.fractured - 1
-                fracture_frame2 *= sample_rate / sfps
-
-        is_shard_frame1 = -1
-        if not config_obj1.is_shard == False:
-            if stop_samples >= config_obj1.is_shard >= start_samples:
-                is_shard_frame1 = config_obj1.is_shard
-                is_shard_frame1 *= sample_rate / sfps
-
-        is_shard_frame2 = -1
-        if not config_obj2.is_shard == False:
-            if stop_samples >= config_obj2.is_shard  >= start_samples:
-                is_shard_frame2 = config_obj2.is_shard
-                is_shard_frame2 *= sample_rate / sfps
-
-        fracture_samples = min(fracture_frame1, fracture_frame2)
-        stop_samples = min(stop_samples, fracture_samples) if not fracture_samples == -1 else stop_samples
-
-        shard_samples = max(is_shard_frame1, is_shard_frame2)
-        start_samples = max(start_samples, shard_samples) if not shard_samples == -1 else start_samples
-
-        return start_samples, stop_samples
 
     def _load_distance_data(self, collision):
         """Load pre-computed distance data."""
