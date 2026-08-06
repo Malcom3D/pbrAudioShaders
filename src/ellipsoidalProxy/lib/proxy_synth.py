@@ -363,7 +363,7 @@ class ProxySynth:
         velocity_profile = np.zeros(n_samples)
         
         for i in range(n_samples):
-            frame = = start_frame + (i / n_samples) * (end_frame - start_frame)
+            frame = start_frame + (i / n_samples) * (end_frame - start_frame)
             try:
                 force_profile[i] = force_data.get_normal_force_magnitude(frame)
                 velocity = trajectory.get_velocity(frame)
