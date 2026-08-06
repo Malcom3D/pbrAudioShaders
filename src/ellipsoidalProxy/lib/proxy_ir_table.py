@@ -70,7 +70,7 @@ class ProxyIRTable:
         self.size_steps = np.linspace(0, 1, self.n_size_steps)
         
         # Initialize IR table
-        event_types = 5 # no-contact, impact, sliding, scraping, rolling
+        event_types = 6 # no-contact, impact, sliding, scraping, rolling, static
         self.ir_table = np.zeros((self.n_size_steps, event_types, self.n_frequency_bands, self.max_ir_length), dtype=np.float32)
     
     def compute_ir_table(self, proxy_meshes: List[Any]) -> None:

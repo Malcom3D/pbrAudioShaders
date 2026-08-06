@@ -120,7 +120,7 @@ class ModalPlayer:
 
         fracture_frame, is_shard_frame = (None for _ in range(2))
         if not isinstance(config_obj.fractured, bool):
-            fracture_frame = config_obj.fractured * sample_rate / sfps
+            fracture_frame = (config_obj.fractured - 1) * sample_rate / sfps
             debug_print('Object: ', config_obj.name, 'fracture at frame', fracture_frame)
         if not isinstance(config_obj.is_shard, bool):
             is_shard_frame = config_obj.is_shard * sample_rate / sfps

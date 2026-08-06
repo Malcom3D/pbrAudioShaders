@@ -236,13 +236,13 @@ class CollisionSolver:
         fracture_frame1 = -1
         if not config_obj1.fractured == False:
             if stop_samples >= config_obj1.fractured >= start_samples:
-                fracture_frame1 = config_obj1.fractured
+                fracture_frame1 = config_obj1.fractured - 1
                 fracture_frame1 *= sample_rate / sfps
 
         fracture_frame2 = -1
         if not config_obj2.fractured == False:
             if stop_samples >= config_obj2.fractured >= start_samples:
-                fracture_frame2 = config_obj2.fractured
+                fracture_frame2 = config_obj2.fractured - 1
                 fracture_frame2 *= sample_rate / sfps
 
         is_shard_frame1 = -1

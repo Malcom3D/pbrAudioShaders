@@ -66,9 +66,9 @@ class ForceSynth:
                 if config_obj.static:
                     # exit: obj_idx are static
                     return
-                elif config.system.enable_proxy_synth and config_obj.proxy_type in [0,1,2]:
-                    # exit: obj_idx are proxy synthsized with ProxySynth
-                    return
+#                elif config.system.enable_proxy_synth and config_obj.proxy_type in [0,1,2]:
+#                    # exit: obj_idx are proxy synthsized with ProxySynth
+#                    return
                 elif not config_obj.static:
                     for c_idx in collision_data.keys():
                         if (collision_data[c_idx].obj1_idx == obj_idx or collision_data[c_idx].obj2_idx == obj_idx) and collision_data[c_idx].valid:
@@ -81,7 +81,7 @@ class ForceSynth:
 
         fracture_frame = None
         if not config_obj.fractured == False:
-            fracture_frame = config_obj.fractured
+            fracture_frame = config_obj.fractured - 1
             fracture_frame *= sample_rate / sfps
 
         is_shard_frame = None
