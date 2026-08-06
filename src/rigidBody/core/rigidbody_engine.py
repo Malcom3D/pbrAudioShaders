@@ -30,7 +30,7 @@ dask_config.set({'num_workers': 1024, 'optimization.fuse.active': True, 'optimiz
 from pbrAudioCommon import EntityManager, ScoreTrack
 from pbrAudioCommon import _update_status
 from physicsSolver import ForceDataSequence, ModalVertices, CollisionData, TrajectoryData
-from ellipsoidalProxy import Modal4Proxy, ProxySynth, ProxyIRTable
+from ellipsoidalProxy import Modal4Proxy, ProxySynth
 from postProcess import PostProcessEngine
 
 from ..core.mesh2modal import Mesh2Modal
@@ -215,6 +215,7 @@ class rigidBodyEngine:
 
         idx_proxy_synth = [obj.idx for obj in self.obj_proxy_synth]
         modal_obj_idx = list(set(self.obj_dyn + self.obj_static) - set(idx_proxy_synth))
+
         tasks_luthier = [self.bake_luthier(obj_idx) for obj_idx in modal_obj_idx]
         results_luthier = compute(*tasks_luthier)
         self.progress = _update_status(f"{self.status_dir}/bake", 10)
@@ -228,11 +229,9 @@ class rigidBodyEngine:
 
         self.progress = _update_status(f"{self.status_dir}/bake", 60)
 
-        # ProxySynth luthier
+        # ProxySynth
         if not len(self.obj_proxy_synth) == 0:
-            ir_table=ProxyIRTable(self.entity_manager)
-            ir_table.compute_ir_table(self.obj_proxy_synth)
-            tasks_proxy_synth = [self.bake_proxy_synth(ir_table, obj_idx) for obj_idx in idx_proxy_synth]
+            tasks_proxy_synth = [self.bake_proxy_synth(obj_idx) for obj_idx in idx_proxy_synth]
             results_proxy_synth = compute(*tasks_proxy_synth)
 
         self.progress = _update_status(f"{self.status_dir}/bake", 90)
@@ -280,8 +279,8 @@ class rigidBodyEngine:
         player.compute()
 
     @delayed
-    def bake_proxy_synth(self, ir_table: Any, obj_idx: int):
-        ps = ProxySynth(entity_manager=self.entity_manager, ir_table=ir_table)
+    def bake_proxy_synth(self, obj_idx: int):
+        ps = ProxySynth(self.entity_manager)
         ps.compute(obj_idx)
 
     @delayed
