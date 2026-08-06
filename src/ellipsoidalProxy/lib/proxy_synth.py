@@ -471,7 +471,7 @@ class ProxySynth:
             frame = start_frame + (i / n_samples) * (end_frame - start_frame)
             try:
                 force_profile[i] = force_data.get_normal_force_magnitude(frame)
-                               angular_velocity = trajectory.get_angular_velocity(frame)
+                angular_velocity = trajectory.get_angular_velocity(frame)
                 angular_velocity_profile[i] = np.linalg.norm(angular_velocity)
             except:
                 force_profile[i] = 1.0
