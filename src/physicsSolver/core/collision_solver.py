@@ -77,6 +77,9 @@ class CollisionSolver:
         
         # Calculate sample range
         start_samples, stop_samples, impact_end = self._calculate_sample_range(collision, total_samples, sample_rate, sfps, config_obj1, config_obj2)
+        if start_samples > stop_samples: 
+            # objects are fractured and shard: shard_frame (start_samples) is after fracture_frame (stop_samples)
+            return
         
         # Load distance data
         distances_data = self._load_distance_data(collision)
