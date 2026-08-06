@@ -310,12 +310,10 @@ class ProxySynth:
         
         # Convolve with IR using FFT
         output = self._fft_convolve(excitation, ir)
-)
         
         return output
     
-    def def _process_contact_from_collision(self, collision: Any, force_data: Any,
-                                         trajectory: Any, size_scale: float) -> np.ndarray:
+    def def _process_contact_from_collision(self, collision: Any, force_data: Any, trajectory: Any, size_scale: float) -> np.ndarray:
         """
         Process continuous contact using CollisionData for detailed excitation.
         
