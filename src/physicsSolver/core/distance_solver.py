@@ -31,7 +31,7 @@ from numba import njit, prange, float64, int64, boolean
 
 from pbrAudioCommon import EntityManager
 from pbrAudioCommon import Config, ObjectConfig
-from pbrAudioCommon import _load_pose, _load_mesh, _adjust_for_fracture_shard
+from pbrAudioCommon import _load_pose, _load_mesh
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
 from ..lib.collision_data import CollisionData, CollisionType
@@ -65,11 +65,11 @@ class DistanceSolver:
                 config_objs[1] = conf_obj
 
         # Check if objects are fractured and fractured own shard: do not exist at the same time
-        if config_objs[0].fractured is not False and config_obj[0].shard is not False:
-           if config_obj[1].idx in config_obj[0].shard:
+        if config_objs[0].fractured is not False and config_objs[0].shard is not False:
+           if config_objs[1].idx in config_objs[0].shard:
                return
-        elif config_obj[1].fractured is not False and config_obj[1].shard is not False:
-           if config_obj[0].idx in config_obj[1].shard:
+        elif config_objs[1].fractured is not False and config_objs[1].shard is not False:
+           if config_objs[0].idx in config_objs[1].shard:
                return
 
         trajectory, frames  = ([] for _ in range(2))
