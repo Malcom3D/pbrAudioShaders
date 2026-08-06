@@ -96,12 +96,12 @@ class Pym2f:
         for attempt in range(self.max_fallback_attempts + 1):
             if attempt == 0:
                 # First attempt: use mesh2faust
-                print(f"Pym2f: Attempting mesh2faust for {config_obj.name} (attempt {attempt})")
+                debug_print(f"Pym2f: Attempting mesh2faust for {config_obj.name} (attempt {attempt})")
                 success, file_names = self._try_mesh2faust(config_obj, vertices, normals, faces, obj_file, young_modulus, poisson_ratio, density, damping, minmode, maxmode, expos, output_name)
             elif attempt == 1 and not config_obj.static:
                 try:
                     # Second attempt: use mesh2faust with obj from random frame
-                    print(f"Pym2f: Attempting mesh2faust on random frame for {config_obj.name} (attempt {attempt})")
+                    debug_print(f"Pym2f: Attempting mesh2faust on random frame for {config_obj.name} (attempt {attempt})")
                     rand_frame = np.random.randint(1,int(re.findall(r'\d+', filenames[-2])[-1]))
                     rand_vertices, rand_normals, rand_faces = _load_mesh(config_obj, rand_frame)
                     mesh_obj = _mesh_to_obj(rand_vertices, rand_normals, rand_faces, obj_file, config_obj.resonance)
@@ -111,7 +111,7 @@ class Pym2f:
             else:
                 # Fallback: use approximate model
                 if self.use_fallback:
-                    print(f"Pym2f: Attempting fallback for {config_obj.name} (attempt {attempt})")
+                    debug_print(f"Pym2f: Attempting fallback for {config_obj.name} (attempt {attempt})")
                     success, file_names = self._try_fallback(config_obj, vertices, faces, obj_file, young_modulus, poisson_ratio, density, damping, minmode, maxmode, expos, output_name)
             
             if success:
@@ -166,7 +166,7 @@ class Pym2f:
                     if exit_code == 0:
                         file_names.append(f"{output_name}_resonance.lib")
                     else:
-                        print(f"Pym2f: Warning - - resonance model generation failed for {outputoutput_name}")
+                        debug_print(f"Pym2f: Warning - - resonance model generation failed for {outputoutput_name}")
                 
                 return True, file_names
         
@@ -187,12 +187,12 @@ class Pym2f:
         # Classify shape
         shape_props = self.primitive_geometry.classify(vertices, faces)
         
-        print(f"Pym2f fallback: Classified {config_obj.name} as {shape_props.shape_type.value} "
+        debug_print(f"Pym2f fallback: Classified {config_obj.name} as {shape_props.shape_type.value} "
               f"(confidence: {shape_props.confidence:.2f})")
         
         # Check if classification is good enough
         if shape_props.confidence < self.fallback_min_confidence:
-            print(f"Pym2f fallback: Low confidence ({shape_props.confidence:.2f}), "
+            debug_print(f"Pym2f fallback: Low confidence ({shape_props.confidence:.2f}), "
                   f"using irregular shape approximation")
         
         # Compute modal parameters
@@ -227,7 +227,7 @@ class Pym2f:
         
         # Validate the generated file
         if not self._validate_lib_file(lib_file):
-            print(f"Pym2f fallback: Generated lib file validation failed for {output_name}")
+            debug_print(f"Pym2f fallback: Generated lib file validation failed for {output_name}")
             os.remove(lib_file)
             return False, []
         
@@ -258,7 +258,7 @@ class Pym2f:
             
             file_names.append(resonance_file)
         
-        print(f"Pym2f fallback: Successfully generated approximate modal model for {config_obj.name}")
+        debug_print(f"Pym2f fallback: Successfully generated approximate modal model for {config_obj.name}")
         return True, file_names
 
     def _validate_lib_file(self, lib_file: str) -> bool:
@@ -273,37 +273,37 @@ class Pym2f:
         - Reasonable frequency range
         """
         if not os.path.exists(lib_file):
-            print(f"Pym2f validation: File {lib_file} does not exist")
+            debug_print(f"Pym2f validation: File {lib_file} does not exist")
             return False
         
         file_size = os.path.getsize(lib_file)
         if file_size == 0:
-            print(f"Pym2f validation: File {lib_file} is empty")
+            debug_print(f"Pym2f validation: File {lib_file} is empty")
             return False
         
         try:
             with open(lib_file, 'r') as f:
                 content = f.read()
         except Exception as e:
-            print(f"Pym2f validation: Cannot read {lib_file}: {e}")
+            debug_print(f"Pym2f validation: Cannot read {lib_file}: {e}")
             return False
         
         # Check for essential content
         if 'modeFreqsUnscaled' not in content:
-            print(f"Pym2f validation: {lib_file} missing modeFreqsUnscaled")
+            debug_print(f"Pym2f validation: {lib_file} missing modeFreqsUnscaled")
             return False
         
         if 'modesT60s' not in content:
-            print(f"Pym2f validation: {lib_file} missing modesT60s")
+            debug_print(f"Pym2f validation: {lib_file} missing modesT60s")
             return False
         
         if 'modesGains' not in content:
-            print(f"Pym2f validation: {lib_file} missing modesGains")
+            debug_print(f"Pym2f validation: {lib_file} missing modesGains")
             return False
         
         # Check for NaN or Inf in the content
         if 'nan' in content.lower() or '-nan' in content.lower() or 'inf' in content.lower():
-            print(f"Pym2f validation: {lib_file} contains NaN or Inf values")
+            debug_print(f"Pym2f validation: {lib_file} contains NaN or Inf values")
             return False
         
         # Extract and validate frequencies
@@ -328,7 +328,7 @@ class Pym2f:
                         # Check for reasonable frequency range
                         freqs = [float(f) for f in freq_tuple_match]
                         if max(freqs) < 1.0 or min(freqs) < 0:
-                            print(f"Pym2f validation: {lib_file} has unreasonable frequencies")
+                            debug_print(f"Pym2f validation: {lib_file} has unreasonable frequencies")
                             freq_validated = False
                         else:
                             freq_validated = True
@@ -344,7 +344,7 @@ class Pym2f:
                             gains = [float(f) for f in gain_tuple_match.split(",")]
                             gains_validated = True
                         except:
-                            print(f"Pym2f validation: {lib_file} has unreasonable gains")
+                            debug_print(f"Pym2f validation: {lib_file} has unreasonable gains")
                             gains_validated = False
         
         return (freq_validated and gains_validated)
@@ -359,7 +359,7 @@ class Pym2f:
         """
         for file_name in file_names:
             if not os.path.exists(file_name):
-                print(f"Pym2f: Warning - {file_name} not found for post-processing")
+                debug_print(f"Pym2f: Warning - {file_name} not found for post-processing")
                 continue
             
             with open(file_name, 'r') as file:
@@ -374,5 +374,5 @@ class Pym2f:
             # Move to cache directory
             dest_path = f"{self.cache_path}/dsp/{file_name}"
             shutil.move(file_name, dest_path)
-            print(f"Pym2f: Saved {file_name} to {dest_path}")
+            debug_print(f"Pym2f: Saved {file_name} to {dest_path}")
 

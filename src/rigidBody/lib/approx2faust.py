@@ -679,6 +679,11 @@ class Approx2Faust:
         
         # Format frequencies
         freq_str = ", ".join([f"{f:.6f}" for f in modal_params.frequencies])
+
+        # Print mode frequencies
+        print('Mode frequencies:')
+        for f in modal_params.frequencies:
+            print(f)
         
         # Format T60s
         t60_str = ", ".join([f"{t:.6f}" for t in modal_params.t60s])
