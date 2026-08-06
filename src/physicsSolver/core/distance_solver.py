@@ -65,11 +65,11 @@ class DistanceSolver:
                 config_objs[1] = conf_obj
 
         # Check if objects are fractured and fractured own shard: do not exist at the same time
-        if config_obj1.fractured is not False and config_obj1.shard is not False:
-           if config_obj2.idx in config_obj1.shard:
+        if config_objs[0].fractured is not False and config_obj[0].shard is not False:
+           if config_obj[1].idx in config_obj[0].shard:
                return
-        elif config_obj2.fractured is not False and config_obj2.shard is not False:
-           if config_obj1.idx in config_obj2.shard:
+        elif config_obj[1].fractured is not False and config_obj[1].shard is not False:
+           if config_obj[0].idx in config_obj[1].shard:
                return
 
         trajectory, frames  = ([] for _ in range(2))
