@@ -110,6 +110,13 @@ class ModalPlayer:
     def compute(self) -> None:
         """Non-blocking version that works with Blender."""
         config = self.entity_manager.get('config')
+
+        fps = config.system.fps
+        fps_base = config.system.fps_base
+        subframes = config.system.subframes
+        sample_rate = config.system.sample_rate
+        sfps = ( fps / fps_base ) * subframes # subframes per seconds
+
         for conf_obj in config.objects:
             if conf_obj.idx == self.obj_idx:
                 config_obj = conf_obj

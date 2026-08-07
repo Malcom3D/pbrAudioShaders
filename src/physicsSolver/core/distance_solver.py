@@ -31,7 +31,7 @@ from numba import njit, prange, float64, int64, boolean
 
 from pbrAudioCommon import EntityManager
 from pbrAudioCommon import Config, ObjectConfig
-from pbrAudioCommon import _load_pose, _load_mesh
+from pbrAudioCommon import _load_pose, _load_mesh, _adjust_for_fracture_shard
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
 from ..lib.collision_data import CollisionData, CollisionType
@@ -64,7 +64,7 @@ class DistanceSolver:
             elif conf_obj.idx == objs_idx[1]:
                 config_objs[1] = conf_obj
 
-        # Check if objects are fractured and fractured own shard: do not exist at the same time
+        # Check if objects are fractured and fractured own shard: cannot exist at the same time
         if config_objs[0].fractured is not False and config_objs[0].shard is not False:
            if config_objs[1].idx in config_objs[0].shard:
                return
@@ -84,21 +84,26 @@ class DistanceSolver:
         trajectory2 = trajectory[1] if trajectory[1].obj_idx == objs_idx[1] else trajectory[0]
 
         frames = np.unique(np.sort(np.concatenate((frames[0], frames[1]))))
+        # Limit start and stop samples by fractured (do not exist after fracture frame) and shard (do not exist before fracture frame) existence
+        start_samples, stop_samples = _adjust_for_fracture_shard(frames[-1], frames[0], sample_rate, sfps, config_objs[0], config_objs[1])
+        start_idx = np.where(frames <= start_samples)[-1][-1]
+        stop_idx = np.where(frames >= start_samples)[-1][0]
+        frames = frames[start_idx:stop_idx]
 
-        if isinstance(config_objs[1].connected, np.ndarray) and objs_idx[0] in config_objs[1].connected[:,0] and isinstance(config_objs[0].connected, np.ndarray) and objs_idx[1] in config_objs[0].connected[:,0]:
-            frame = sample_rate / sfps
-            distance, closest_points = self._distance(config_objs=config_objs, trajectory1=trajectory1, trajectory2=trajectory2, frame=frame, sfps=sfps, sample_rate=sample_rate, collision_margin=collision_margin, samples_per_object=samples_per_object)
-            distances = np.array(distance)
-            closest_point1 = np.array(closest_points['mesh1_point'])
-            closest_point2 = np.array(closest_points['mesh2_point'])
-            filename = f"{self.output_dir}/connected_{objs_idx[0]}_{objs_idx[1]}.npz"
-            np.savez_compressed(filename, distances, closest_point1, closest_point2)
+#        if config_objs[1].connected is not False and objs_idx[0] in config_objs[1].connected[:,0] and config_objs[0].connected is not False and objs_idx[1] in config_objs[0].connected[:,0]:
+#            frame = sample_rate / sfps
+#            distance, closest_points = self._distance(config_objs=config_objs, trajectory1=trajectory1, trajectory2=trajectory2, frame=frame, sfps=sfps, sample_rate=sample_rate, collision_margin=collision_margin, samples_per_object=samples_per_object)
+#            distances = np.array(distance)
+#            closest_point1 = np.array(closest_points['mesh1_point'])
+#            closest_point2 = np.array(closest_points['mesh2_point'])
+#            filename = f"{self.output_dir}/connected_{objs_idx[0]}_{objs_idx[1]}.npz"
+#            np.savez_compressed(filename, distances, closest_point1, closest_point2)
 
-            collision_type = CollisionType.CONNECTED
-            collision_data = CollisionData(type=collision_type, obj1_idx=objs_idx[0], obj2_idx=objs_idx[1], frame=float('inf'))
+#            collision_type = CollisionType.CONNECTED
+#            collision_data = CollisionData(type=collision_type, obj1_idx=objs_idx[0], obj2_idx=objs_idx[1], frame=float('inf'))
 #            collision_idx = len(self.entity_manager.get('collisions')) + 1
 #            self.entity_manager.register('collisions', collision_data, collision_idx)
-            _ = self.entity_manager.register('collisions', collision_data)
+#            _ = self.entity_manager.register('collisions', collision_data)
 
         if not config_objs[0].static or not config_objs[1].static:
             distances, closest_point1, closest_point2 = ([] for _ in range(3))
@@ -111,11 +116,16 @@ class DistanceSolver:
             distances = np.array(distances)
             closest_point1 = np.array(closest_point1)
             closest_point2 = np.array(closest_point2)
-            filename = f"{self.output_dir}/{objs_idx[0]}_{objs_idx[1]}.npz"
-            np.savez_compressed(filename, distances, closest_point1, closest_point2)
+            if config_objs[1].connected is not False and objs_idx[0] in config_objs[1].connected[:,0] and config_objs[0].connected is not False and objs_idx[1] in config_objs[0].connected[:,0]:
+                collision_type = CollisionType.CONNECTED
+                collision_events = [CollisionData(type=collision_type, obj1_idx=objs_idx[0], obj2_idx=objs_idx[1], frame=float('inf'))]
+                filename = f"{self.output_dir}/connected_{objs_idx[0]}_{objs_idx[1]}.npz"
+            else:
+                # Analyze distances to detect collisions and contacts
+                collision_events = self._analyze_distances(distances=distances, times=frames, config_objs=config_objs, collision_margin=collision_margin, sfps=sfps, sample_rate=sample_rate)
+                filename = f"{self.output_dir}/{objs_idx[0]}_{objs_idx[1]}.npz"
 
-            # Analyze distances to detect collisions and contacts
-            collision_events = self._analyze_distances(distances=distances, times=frames, config_objs=config_objs, collision_margin=collision_margin, sfps=sfps, sample_rate=sample_rate)
+            np.savez_compressed(filename, distances, closest_point1, closest_point2)
 
             for collision_data in collision_events:
 #                collision_idx = len(self.entity_manager.get('collisions')) + 1
