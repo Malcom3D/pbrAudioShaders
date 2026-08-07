@@ -29,7 +29,6 @@ from itertools import groupby
 
 from pbrAudioCommon import EntityManager
 from pbrAudioCommon import ScoreEvent, ScoreTrack
-from pbrAudioCommon import _adjust_for_fracture_shard
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 from ellipsoidalProxy import ProxyPhysics
 
@@ -64,14 +63,6 @@ class CollisionSolver:
         config_obj1, config_obj2 = self._get_object_configs(obj1_idx, obj2_idx)
         trajectory1, trajectory2 = self._get_trajectories(obj1_idx, obj2_idx)
         
-        # Check if objects are fractured and fractured own shard: do not exist at the same time
-        if config_obj1.fractured is not False and config_obj1.shard is not False:
-           if config_obj2.idx in config_obj1.shard:
-               return
-        elif config_obj2.fractured is not False and config_obj2.shard is not False:
-           if config_obj1.idx in config_obj2.shard:
-               return
-
         # Check if either object is a proxy mesh
         is_proxy1 = config_obj1.proxy_type is not False
         is_proxy2 = config_obj2.proxy_type is not False
@@ -234,9 +225,6 @@ class CollisionSolver:
         if collision.type.value == 'contact':
             stop_samples = int(collision.frame + collision.frame_range + collision.impulse_range)
         stop_samples = min(stop_samples, total_samples)
-        
-        # Handle fracture and shard frames
-        start_samples, stop_samples = _adjust_for_fracture_shard(stop_samples, start_samples, sample_rate, sfps, config_obj1, config_obj2)
         
         return int(start_samples), int(stop_samples), int(impact_end)
 
