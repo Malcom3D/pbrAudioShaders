@@ -75,8 +75,8 @@ class fractureEngine:
     def bake(self):
         config = self.entity_manager.get('config')
         for conf_obj in config.objects:
-            if conf_obj.fractured:
-                if isinstance(conf_obj.shard, np.ndarray):
+            if conf_obj.fractured is not False:
+                if conf_obj.shard is not False:
                     original_obj = conf_obj.idx
                     fragment_indices = obj.shard.tolist()
                     _ = self._detect_fracture_events(original_obj, fragment_indices)
