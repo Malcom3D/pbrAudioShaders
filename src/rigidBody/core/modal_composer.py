@@ -74,7 +74,7 @@ class ModalComposer:
             # Check if objects are fractured and fractured own shard: do not exist at the same time
             config_obj1 = config_obj
             for conf_obj in config.objects:
-                if conf_obj.idx == obj2_idx
+                if conf_obj.idx == obj2_idx:
                     config_obj2 = conf_obj
 
             if config_obj1.fractured is not False and config_obj1.shard is not False:
