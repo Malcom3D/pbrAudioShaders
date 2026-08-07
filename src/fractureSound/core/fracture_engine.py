@@ -78,7 +78,7 @@ class fractureEngine:
             if conf_obj.fractured is not False:
                 if conf_obj.shard is not False:
                     original_obj = conf_obj.idx
-                    fragment_indices = obj.shard.tolist()
+                    fragment_indices = conf_obj.shard.tolist()
                     _ = self._detect_fracture_events(original_obj, fragment_indices)
                     self.process_all_fractures()
         

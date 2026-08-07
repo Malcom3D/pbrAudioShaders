@@ -84,11 +84,6 @@ class DistanceSolver:
         trajectory2 = trajectory[1] if trajectory[1].obj_idx == objs_idx[1] else trajectory[0]
 
         frames = np.unique(np.sort(np.concatenate((frames[0], frames[1]))))
-        # Limit start and stop samples by fractured (do not exist after fracture frame) and shard (do not exist before fracture frame) existence
-        start_samples, stop_samples = _adjust_for_fracture_shard(frames[-1], frames[0], sample_rate, sfps, config_objs[0], config_objs[1])
-        start_idx = np.where(frames <= start_samples)[-1][-1]
-        stop_idx = np.where(frames >= start_samples)[-1][0]
-        frames = frames[start_idx:stop_idx]
 
 #        if config_objs[1].connected is not False and objs_idx[0] in config_objs[1].connected[:,0] and config_objs[0].connected is not False and objs_idx[1] in config_objs[0].connected[:,0]:
 #            frame = sample_rate / sfps
@@ -167,6 +162,11 @@ class DistanceSolver:
         collision_events = []
         
         for region in contact_regions:
+#            # Limit start and stop samples by fractured (do not exist after fracture frame) and shard (do not exist before fracture frame) existence
+#            start_samples, stop_samples = _adjust_for_fracture_shard(frames[-1], frames[0], sample_rate, sfps, config_objs[0], config_objs[1])
+#            start_idx = np.where(frames <= start_samples)[-1][-1]
+#            stop_idx = np.where(frames >= stop_samples)[-1][0]
+#            frames = frames[start_idx:stop_idx]
             region_times = times[region['start']:region['end']]
             region_distances = distances[region['start']:region['end']]
             

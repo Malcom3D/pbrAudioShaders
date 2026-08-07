@@ -95,11 +95,10 @@ class CollisionSolver:
         distances, closest_points1, closest_points2 = distances_data
         frames = np.unique(np.sort(np.concatenate((trajectory1.get_x(), trajectory2.get_x()))))
 
-        # Limit start and stop samples by fractured (do not exist after fracture frame) and shard (do not exist before fracture frame) existence
-        start_samples, stop_samples = _adjust_for_fracture_shard(frames[-1], frames[0], sample_rate, sfps, config_objs[0], config_objs[1])
-        start_idx = np.where(frames <= start_samples)[-1][-1]
-        stop_idx = np.where(frames >= start_samples)[-1][0]
-        frames = frames[start_idx:stop_idx]
+#        # Limit start and stop samples by fractured (do not exist after fracture frame) and shard (do not exist before fracture frame) existence
+#        start_idx = np.where(frames <= start_samples)[-1][-1]
+#        stop_idx = np.where(frames >= stop_samples)[-1][0]
+#        frames = frames[start_idx:stop_idx]
         
         # Create spline interpolators
         distances_spline = CubicSpline(frames, distances, extrapolate=1)
@@ -244,7 +243,7 @@ class CollisionSolver:
         # Handle fracture and shard frames
         start_samples, stop_samples = _adjust_for_fracture_shard(stop_samples, start_samples, sample_rate, sfps, config_obj1, config_obj2)
         
-        return start_samples, stop_samples, impact_end
+        return int(start_samples), int(stop_samples), int(impact_end)
 
     def _load_distance_data(self, collision):
         """Load pre-computed distance data."""

@@ -25,9 +25,10 @@ from typing import List, Tuple, Optional
 from dataclasses import dataclass
 
 from pbrAudioCommon import EntityManager
-from pbrAudioCommon import _load_mesh, _mesh_to_obj, _compute_rayleigh_damping
 from pbrAudioCommon import ShapeType, ShapeProperties
 from pbrAudioCommon import PrimitiveGeometry
+from pbrAudioCommon import _load_mesh, _mesh_to_obj, _compute_rayleigh_damping
+from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
 from ..lib.approx2faust import Approx2Faust, ModalParameters
 
@@ -43,6 +44,10 @@ class Pym2f:
 
     def __post_init__(self):
         self.config = self.entity_manager.get('config')
+
+        set_debug(self.config.system.debug)
+        set_debug_prefix(self.__class__.__name__)
+
         bin_dir = f"{os.path.dirname(os.path.abspath(sys.modules[Pym2f.__module__].__file__))}/../bin"
         os.environ['LD_LIBRARY_PATH'] = bin_dir
         self.mesh2faust = f"{bin_dir}/{self.mesh2faust}"
