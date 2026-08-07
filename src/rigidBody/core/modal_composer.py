@@ -24,6 +24,8 @@ from dataclasses import dataclass, field
 
 from pbrAudioCommon import EntityManager
 from pbrAudioCommon import ScoreEvent, ScoreTrack
+from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
+from pbrAudioCommon import _adjust_for_fracture_shard
 
 @dataclass
 class ModalComposer:

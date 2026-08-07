@@ -48,6 +48,12 @@ class fractureEngine:
     def __post_init__(self):
         config = self.entity_manager.get('config')
 
+        fps = config.system.fps
+        fps_base = config.system.fps_base
+        subframes = config.system.subframes
+        self.sample_rate = config.system.sample_rate
+        self.sfps = (fps / fps_base) * subframes
+
         set_debug(config.system.debug)
         set_debug_prefix(self.__class__.__name__)
 
@@ -133,8 +139,8 @@ class fractureEngine:
         if not original_trajectory:
             raise ValueError(f"Trajectory for object {obj_idx} not found")
         
-        # Find fracture frame where object splits into fragments
-        fracture_frame = self._find_fracture_frame(original_trajectory, fragment_trajectories)
+        # Get fracture frame where object splits into fragments
+        fracture_frame = original_obj.fractured * self.sample_rate / self.sfps
         
         if fracture_frame is None:
             # No fracture detected
@@ -148,7 +154,7 @@ class fractureEngine:
         for coll in collisions.values():
             if isinstance(coll, CollisionData):
                 if coll.obj1_idx == obj_idx or coll.obj2_idx == obj_idx:
-                    if abs(coll.frame - fracture_frame) < 10:  # Within 10 frames of fracture
+                    if abs(coll.frame - fracture_frame) < 10:  # Within 10 samples of fracture
                         fracture_collisions.append(coll)
         
         # Get force data
@@ -159,12 +165,12 @@ class fractureEngine:
             if isinstance(force, ForceDataSequence):
                 if force.obj_idx == obj_idx or force.other_obj_idx == obj_idx:
                     if hasattr(force, 'frames') and len(force.frames) > 0:
-                        if abs(force.frames[0] - fracture_frame) < 10:
+                        if abs(force.frames[0] - fracture_frame) < 10: ########################################## to be refact force.frames[0] is the beginning of samples range
                             fracture_forces.append(force)
         
         # Create fracture events for each fragment pair
         events = []
-        
+
         for i, frag1 in enumerate(fragments):
             for j, frag2 in enumerate(fragments[i+1:], i+1):
                 # Check if these fragments separate from each other
@@ -187,40 +193,6 @@ class fractureEngine:
         
         return events
     
-    def _find_fracture_frame(self, original_traj: TrajectoryData, fragment_trajs: List[TrajectoryData]) -> Optional[float]:
-        """
-        Find the frame where the original object fractures into fragments.
-        
-        Uses velocity change and distance between fragments to detect fracture.
-        """
-        # Get time range
-        orig_frames = original_traj.get_x()
-        
-        if len(orig_frames) == 0:
-            return None
-        
-        # Find frame where fragment trajectories begin
-        fragment_start_frames = []
-        for frag_traj in fragment_trajs:
-            frames = frag_traj.get_x()
-            if len(frames) > 0:
-                fragment_start_frames.append(frames[0])
-        
-        if not fragment_start_frames:
-            return None
-        
-        # Fracture frame is when fragments first appear
-        fracture_frame = min(fragment_start_frames)
-        
-        # Verify that original object exists up to that frame
-        last_orig_frame = orig_frames[-1]
-        
-        if last_orig_frame < fracture_frame:
-            # Original disappears before fragments appear - fracture occurred
-            return last_orig_frame
-        
-        return fracture_frame
-    
     def _fragments_separate(self, frag1_idx: int, frag2_idx: int, fracture_frame: float) -> bool:
         """
         Check if two fragments separate from each other after fracture.
@@ -241,7 +213,7 @@ class fractureEngine:
             return False
         
         # Get positions just after fracture
-        post_frame = fracture_frame + 1
+        post_frame = fracture_frame + (self.sample_rate / self.sfps)
         
         try:
             pos1 = frag1_traj.get_position(post_frame)

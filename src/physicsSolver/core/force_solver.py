@@ -64,7 +64,7 @@ class ForceSolver:
                             trajectory = trajectories[t_idx]
                 frames = trajectory.get_x()
                 for c_idx in collisions.keys():
-                    if collisions[c_idx].obj1_idx  == config_obj.idx or collisions[c_idx].obj2_idx == config_obj.idx:
+                    if collisions[c_idx].obj1_idx == config_obj.idx or collisions[c_idx].obj2_idx == config_obj.idx:
                         active_collisions.append(collisions[c_idx])
 
                 full_forces_data, other_objs_idx = ([] for _ in range(2))

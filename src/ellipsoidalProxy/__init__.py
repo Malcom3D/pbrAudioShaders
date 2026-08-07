@@ -16,7 +16,7 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-__version__ = "0.0.9"
+__version__ = "0.0.10"
 __author__ = "Malcom3D"
 __description__ = "Ellipsoidal proxy generation, modal adaptation module for low importance meshes and lightweight proxy synthesizer for small meshes and debris sound synthesis"
 
