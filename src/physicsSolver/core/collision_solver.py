@@ -95,11 +95,6 @@ class CollisionSolver:
         distances, closest_points1, closest_points2 = distances_data
         frames = np.unique(np.sort(np.concatenate((trajectory1.get_x(), trajectory2.get_x()))))
 
-#        # Limit start and stop samples by fractured (do not exist after fracture frame) and shard (do not exist before fracture frame) existence
-#        start_idx = np.where(frames <= start_samples)[-1][-1]
-#        stop_idx = np.where(frames >= stop_samples)[-1][0]
-#        frames = frames[start_idx:stop_idx]
-        
         # Create spline interpolators
         distances_spline = CubicSpline(frames, distances, extrapolate=1)
         cp1_splines = [CubicSpline(frames, closest_points1[:, i], extrapolate=1) for i in range(3)]
