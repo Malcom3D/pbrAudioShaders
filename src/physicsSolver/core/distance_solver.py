@@ -165,7 +165,7 @@ class DistanceSolver:
             # Limit start and stop samples by fractured (do not exist after fracture frame) and shard (do not exist before fracture frame) existence
             start_samples = region['start'] * sample_rate / sfps
             stop_samples = region['stop'] * sample_rate / sfps
-            start_samples, stop_samples = _adjust_for_fracture_shard(stop_samples, start_samples,, sample_rate, sfps, config_objs[0], config_objs[1])
+            start_samples, stop_samples = _adjust_for_fracture_shard(stop_samples, start_samples, sample_rate, sfps, config_objs[0], config_objs[1])
             if not stop_samples - start_samples > 0:
                 break
 
