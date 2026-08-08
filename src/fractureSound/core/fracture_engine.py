@@ -21,42 +21,43 @@ import numpy as np
 from typing import List, Tuple, Any, Dict, Optional
 from dataclasses import dataclass, field
 from dask import delayed, compute
-import trimesh
-
-# Configure Dask to use more threads
-from dask import config as dask_config
-#dask_config.set(scheduler='processes', num_workers=1024)
-dask_config.set({'num_workers': 1024, 'optimization.fuse.active': True, 'optimization.fuse.max_depth': 10,})
 
 from pbrAudioCommon import EntityManager
-from pbrAudioCommon import _update_status
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
-
 from physicsSolver import TrajectoryData, CollisionData, ForceDataSequence
 
-from ..lib.fracture_data import FractureEvent, FractureType, FragmentData
+from ..lib.fracture_data import FractureEvent, FractureType
+from ..lib.fracture_detector import FractureDetector
 from ..lib.fracture_modal import FractureModalModel
 from ..lib.fracture_synth import FractureSynth
 
+
 @dataclass
 class fractureEngine:
-    """Main engine for fracture sound synthesis."""
+    """
+    Main engine for fracture sound synthesis.
+    
+    Orchestrates:
+    1. Fracture detection from trajectory data
+    2. Modal model adaptation for fragments
+    3. Fracture sound synthesis
+    """
     
     entity_manager: EntityManager
     fracture_events: List[FractureEvent] = field(default_factory=list)
     
     def __post_init__(self):
         config = self.entity_manager.get('config')
-
-        fps = config.system.fps
-        fps_base = config.system.fps_base
-        subframes = config.system.subframes
+        
         self.sample_rate = config.system.sample_rate
-        self.sfps = (fps / fps_base) * subframes
-
+        self.fps = config.system.fps
+        self.fps_base = config.system.fps_base
+        self.subframes = config.system.subframes
+        self.sfps = (self.fps / self.fps_base) * self.subframes
+        
         set_debug(config.system.debug)
         set_debug_prefix(self.__class__.__name__)
-
+        
         self.status_dir = f"{config.system.cache_path}/status/{__class__.__name__}"
         self.fracture_dir = f"{config.system.cache_path}/fracture"
         self.fracture_modal_dir = f"{config.system.cache_path}/fracture_modal"
@@ -67,7 +68,12 @@ class fractureEngine:
         os.makedirs(self.fracture_modal_dir, exist_ok=True)
         os.makedirs(self.fracture_audio_dir, exist_ok=True)
         
-        # Load existing fracture events if any
+        # Initialize components
+        self.detector = FractureDetector(self.entity_manager)
+        self.modal_model = FractureModalModel(self.entity_manager)
+        self.synth = FractureSynth(self.entity_manager)
+        
+        # Load existing fracture events
         self._load_fracture_events()
     
     def _load_fracture_events(self):
@@ -75,204 +81,144 @@ class fractureEngine:
         if os.path.exists(self.fracture_dir):
             for filename in os.listdir(self.fracture_dir):
                 if filename.endswith('.pkl'):
-                    event = FractureEvent.load(f"{self.fracture_dir}/{filename}")
-                    self.fracture_events.append(event)
+                    try:
+                        event = FractureEvent.load(f"{self.fracture_dir}/{filename}")
+                        self.fracture_events.append(event)
+                    except Exception as e:
+                        debug_print(f"Error loading fracture event {filename}: {e}")
     
-    def bake(self):
+    def bake(self) -> None:
+        """
+        Main bake function - detect fractures and synthesize sounds.
+        """
         config = self.entity_manager.get('config')
+        
+        # Process all objects with fracture configuration
         for conf_obj in config.objects:
-            if conf_obj.fractured is not False:
-                if conf_obj.shard is not False:
-                    original_obj = conf_obj.idx
-                    fragment_indices = conf_obj.shard.tolist()
-                    _ = self._detect_fracture_events(original_obj, fragment_indices)
-                    self.process_all_fractures()
+            if conf_obj.fractured is not False and conf_obj.shard is not False:
+                # This is a fractured object with shards
+                original_idx = conf_obj.idx
+                fragment_indices = conf_obj.shard.tolist()
+                
+                # Detect fracture events
+                events = self.detector.detect_fracture_events(
+                    original_idx, fragment_indices
+                )
+                
+                for event in events:
+                    self.fracture_events.append(event)
         
-    def _detect_fracture_events(self, obj_idx: int, fragment_indices: List[int]) -> List[FractureEvent]:
-        """
-        Detect fracture events by analyzing the transition from original object to fragments.
-        
-        Parameters:
-        -----------
-        obj_idx : int
-            Index of the original object before fracture
-        fragment_indices : List[int]
-            Indices of the fragments after fracture
-            
-        Returns:
-        --------
-        List[FractureEvent]
-            Detected fracture events
-        """
-        config = self.entity_manager.get('config')
-        
-        # Get original object config
-        original_obj = None
-        for obj in config.objects:
-            if obj.idx == obj_idx:
-                original_obj = obj
-                break
-        
-        if not original_obj:
-            raise ValueError(f"Object {obj_idx} not found")
-        
-        # Get fragment objects
-        fragments = []
-        for frag_idx in fragment_indices:
-            for obj in config.objects:
-                if obj.idx == frag_idx:
-                    fragments.append(obj)
-                    break
-        
-        # Get trajectories
-        trajectories = self.entity_manager.get('trajectories')
-        original_trajectory = None
-        fragment_trajectories = []
-        
-        for traj in trajectories.values():
-            if isinstance(traj, TrajectoryData):
-                if traj.obj_idx == obj_idx:
-                    original_trajectory = traj
-                elif traj.obj_idx in fragment_indices:
-                    fragment_trajectories.append(traj)
-        
-        if not original_trajectory:
-            raise ValueError(f"Trajectory for object {obj_idx} not found")
-        
-        # Get fracture frame where object splits into fragments
-        fracture_frame = original_obj.fractured * self.sample_rate / self.sfps
-        
-        if fracture_frame is None:
-            # No fracture detected
-            debug_print('No fracture detected for', original_obj.name)
-            return []
-        
-        # Get collision data at fracture time
-        collisions = self.entity_manager.get('collisions')
-        fracture_collisions = []
-        
-        for coll in collisions.values():
-            if isinstance(coll, CollisionData):
-                if coll.obj1_idx == obj_idx or coll.obj2_idx == obj_idx:
-                    if abs(coll.frame - fracture_frame) < 10:  # Within 10 samples of fracture
-                        fracture_collisions.append(coll)
-        
-        # Get force data
-        forces = self.entity_manager.get('forces')
-        fracture_forces = []
-        
-        for force in forces.values():
-            if isinstance(force, ForceDataSequence):
-                if force.obj_idx == obj_idx or force.other_obj_idx == obj_idx:
-                    if hasattr(force, 'frames') and len(force.frames) > 0:
-                        if abs(force.frames[0] - fracture_frame) < 10: ########################################## to be refact force.frames[0] is the beginning of samples range
-                            fracture_forces.append(force)
-        
-        # Create fracture events for each fragment pair
-        events = []
-
-        for i, frag1 in enumerate(fragments):
-            for j, frag2 in enumerate(fragments[i+1:], i+1):
-                # Check if these fragments separate from each other
-                if self._fragments_separate(frag1.idx, frag2.idx, fracture_frame):
-                    event = FractureEvent(
-                        fracture_type=FractureType.SHATTER,
-                        frame=fracture_frame,
-                        original_obj_idx=obj_idx,
-                        fragment1_idx=frag1.idx,
-                        fragment2_idx=frag2.idx,
-                        collisions=fracture_collisions,
-                        forces=fracture_forces
-                    )
-                    events.append(event)
-        
-        # Save events
-        for i, event in enumerate(events):
-            event.save(f"{self.fracture_dir}/event_{i:05d}.pkl")
-            self.fracture_events.append(event)
-        
-        return events
+        # Process all fracture events
+        if self.fracture_events:
+            self._process_fracture_events()
     
-    def _fragments_separate(self, frag1_idx: int, frag2_idx: int, fracture_frame: float) -> bool:
+    def _process_fracture_events(self):
         """
-        Check if two fragments separate from each other after fracture.
+        Process all fracture events in parallel.
         """
-        trajectories = self.entity_manager.get('trajectories')
+        debug_print(f"Processing {len(self.fracture_events)} fracture events")
         
-        frag1_traj = None
-        frag2_traj = None
-        
-        for traj in trajectories.values():
-            if isinstance(traj, TrajectoryData):
-                if traj.obj_idx == frag1_idx:
-                    frag1_traj = traj
-                elif traj.obj_idx == frag2_idx:
-                    frag2_traj = traj
-        
-        if not frag1_traj or not frag2_traj:
-            return False
-        
-        # Get positions just after fracture
-        post_frame = fracture_frame + (self.sample_rate / self.sfps)
-        
-        try:
-            pos1 = frag1_traj.get_position(post_frame)
-            pos2 = frag2_traj.get_position(post_frame)
-            
-            # Check distance
-            distance = np.linalg.norm(pos1 - pos2)
-            
-            # If distance is significant, fragments separate
-            return distance > 0.01  # 1 cm threshold
-        except:
-            return False
-    
-    def _prebake_fracture_modal(self, event: FractureEvent, fragment_idx: int):
-        """
-        Pre-bake modal models for fracture fragments.
-        
-        This creates modified modal models based on the original object's
-        modal properties and the fracture pattern.
-        """
-        fmm = FractureModalModel(self.entity_manager)
-        fmm.compute(event, fragment_idx)
-    
-    def _bake_fracture_sound(self, event: FractureEvent):
-        """
-        Bake fracture sound for a fracture event.
-        
-        This synthesizes the sound of the fracture itself.
-        """
-        fs = FractureSynth(self.entity_manager)
-        fs.compute(event)
-    
-    def process_all_fractures(self):
-        """
-        Process all fracture events in parallel using Dask.
-        """
-        # Pre-bake modal models for all fragments
+        # Tasks for modal model computation
         modal_tasks = []
         for event in self.fracture_events:
-            # Get fragment indices
-            fragments = [event.fragment1_idx, event.fragment2_idx]
-            for frag_idx in fragments:
-                modal_tasks.append(self._delayed_prebake_fracture_modal(event, frag_idx))
+            for frag_idx in event.fragment_indices:
+                modal_tasks.append(
+                    self._delayed_compute_modal(event, frag_idx)
+                )
         
         if modal_tasks:
             compute(*modal_tasks)
+            debug_print(f"Computed modal models for {len(modal_tasks)} fragments")
         
-        # Bake fracture sounds
-        sound_tasks = [self._delayed_bake_fracture_sound(event) for event in self.fracture_events]
+        # Tasks for sound synthesis
+        sound_tasks = []
+        for event in self.fracture_events:
+            sound_tasks.append(
+                self._delayed_synthesize(event)
+            )
         
         if sound_tasks:
             compute(*sound_tasks)
+            debug_print(f"Synthesized sounds for {len(sound_tasks)} fracture events")
     
     @delayed
-    def _delayed_prebake_fracture_modal(self, event: FractureEvent, fragment_idx: int):
-        """Delayed wrapper for prebake_fracture_modal."""
-        self._prebake_fracture_modal(event, fragment_idx)
+    def _delayed_compute_modal(self, event: FractureEvent, fragment_idx: int):
+        """Delayed computation of modal model."""
+        self.modal_model.compute(event, fragment_idx)
     
     @delayed
-    def _delayed_bake_fracture_sound(self, event: FractureEvent):
-        """Delayed wrapper for bake_fracture_sound."""
-        self._bake_fracture_sound(event)
+    def _delayed_synthesize(self, event: FractureEvent):
+        """Delayed synthesis of fracture sound."""
+        self.synth.compute(event)
+    
+    def detect_fractures(self) -> List[FractureEvent]:
+        """
+        Detect fracture events from configuration.
+        
+        Returns:
+        --------
+        List of detected fracture events
+        """
+        config = self.entity_manager.get('config')
+        events = []
+        
+        for conf_obj in config.objects:
+            if conf_obj.fractured is not False and conf_obj.shard is not False:
+                original_idx = conf_obj.idx
+                fragment_indices = conf_obj.shard.tolist()
+                
+                detected = self.detector.detect_fracture_events(
+                    original_idx, fragment_indices
+                )
+                events.extend(detected)
+        
+        return events
+    
+    def synthesize_fracture(self, event: FractureEvent) -> Dict[str, np.ndarray]:
+        """
+        Synthesize sound for a single fracture event.
+        
+        Parameters:
+        -----------
+        event : FractureEvent
+            The fracture event to synthesize
+            
+        Returns:
+        --------
+        Dict with audio tracks
+        """
+        # Compute modal models for fragments if not already done
+        for frag_idx in event.fragment_indices:
+            self.modal_model.compute(event, frag_idx)
+        
+        # Synthesize fracture sound
+        return self.synth.compute(event)
+    
+    def get_fracture_events(self, original_obj_idx: int = None) -> List[FractureEvent]:
+        """
+        Get fracture events, optionally filtered by object index.
+        
+        Parameters:
+        -----------
+        original_obj_idx : int, optional
+            Filter by original object index
+            
+        Returns:
+        --------
+        List of fracture events
+        """
+        if original_obj_idx is not None:
+            return [e for e in self.fracture_events 
+                   if e.original_obj_idx == original_obj_idx]
+        return self.fracture_events
+    
+    def clear_events(self):
+        """Clear all fracture events."""
+        self.fracture_events = []
+        
+        # Clear saved files
+        for filename in os.listdir(self.fracture_dir):
+            if filename.endswith('.pkl'):
+                os.remove(f"{self.fracture_dir}/{filename}")
+        
+        debug_print("Cleared all fracture events")

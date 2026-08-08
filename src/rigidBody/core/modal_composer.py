@@ -73,7 +73,7 @@ class ModalComposer:
         for event_track in score_track.events:
             obj2_idx = event_track.coll_obj
 
-            # Check if objects are fractured and fractured own shard: do not exist at the same time
+            # Check if objects are fractured and fractured own shard: cannot exist at the same time
             config_obj1 = config_obj
             for conf_obj in config.objects:
                 if conf_obj.idx == obj2_idx:
@@ -87,6 +87,8 @@ class ModalComposer:
                     continue
             # Limit start and stop samples by fractured (do not exist after fracture frame) and shard (do not exist before fracture frame) existence
             start_samples, stop_samples = _adjust_for_fracture_shard(event_track.start_sample, event_track.stop_sample, sample_rate, sfps, config_obj1, config_obj2)
+            debug_print('event_track.start_sample', event_track.start_sample, 'event_track.stop_sample', event_track.stop_sample, 'start_samples', start_samples, 'stop_samples', stop_samples)
+            debug_print('event_track.type', event_track.type.shape, 'coupling_strength', coupling_strength.shape)
             if (stop_samples - start_samples) < 1:
                 continue
 
