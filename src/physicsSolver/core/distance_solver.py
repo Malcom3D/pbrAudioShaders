@@ -33,6 +33,7 @@ from pbrAudioCommon import EntityManager
 from pbrAudioCommon import Config, ObjectConfig
 from pbrAudioCommon import _load_pose, _load_mesh
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
+from pbrAudioCommon import _adjust_for_fracture_shard
 
 from ..lib.collision_data import CollisionData, CollisionType
 
@@ -139,10 +140,10 @@ class DistanceSolver:
         debug_print(f"Adaptive threshold for {config_objs[0].name} and {config_objs[1].name}: {threshold}")
         
         # Step 2.0: Identify fractured and fractured's shard (cannot exist at the same time)
-        is_fracture_shard = None
-        if config_objs[0].shard is not False:
+        is_fracture_shard = False
+        if config_objs[0].fractured is not False:
             is_fracture_shard = True if config_objs[1].idx in config_objs[0].shard else False
-        if config_objs[1].shard is not False:
+        if config_objs[1].fractured is not False:
             is_fracture_shard = True if config_objs[0].idx in config_objs[1].shard else False
 
         # Step 2.1: Identify existance regions (where objs exist)
@@ -151,12 +152,12 @@ class DistanceSolver:
         # Step 2.2: Identify contact regions (where distance <= threshold)
         contact_mask = distances <= threshold
         
-        # Step 2.2: Apply existance regions
-        if start_samples >= stop_samples or (is_fracture_shard is not None and is_fracture_shard):
+        # Step 2.3: Apply existance regions
+        if start_samples >= stop_samples or is_fracture_shard:
             contact_mask[:] = False
         else:
-            start_idx = np.where(times == start_samples)[0]
-            stop_idx = np.where(times == stop_samples)[0] + 1
+            start_idx = int(np.where(times == start_samples)[0])
+            stop_idx = int(np.where(times == stop_samples)[0] + 1)
             contact_mask[:start_idx] = False
             contact_mask[stop_idx:] = False
 
