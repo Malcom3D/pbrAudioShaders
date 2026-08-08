@@ -81,7 +81,7 @@ class DistanceSolver:
         # Filter frames: keep only those where both objects are active
         active_frames = []
         for f in frames:
-            if is_object_active_at_frame(config_objs[0], f) and is_object_active_at_frame(config_objs[1], f):
+            if _is_object_active_at_frame(config_objs[0], f) and is_object_active_at_frame(config_objs[1], f):
                 active_frames.append(f)
         frames = np.array(active_frames)
         if frames.shape[0] == 0:

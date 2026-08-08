@@ -264,7 +264,7 @@ class ForceSolver:
             other_trajectory = other_trajectories[idx]
             other_config_obj = other_config_objs[idx]
 
-            if not is_object_active_at_frame(other_config_obj, frame):
+            if not _is_object_active_at_frame(other_config_obj, frame):
                 continue  # skip this collision for this frame
 
             # Get positions and velocities before and after collision

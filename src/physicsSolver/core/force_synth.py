@@ -119,7 +119,7 @@ class ForceSynth:
                         for conf_obj in config.objects:
                             if conf_obj.idx == other_obj_idx:
                                 other_config_obj = conf_obj 
-                        if not is_object_active_at_frame(other_config_obj, sample_idx):
+                        if not _is_object_active_at_frame(other_config_obj, sample_idx):
                             continue  # skip this collision at this sample
                         for f_idx in forces.keys():
                             if forces[f_idx].obj_idx == obj_idx and forces[f_idx].other_obj_idx == other_obj_idx:
