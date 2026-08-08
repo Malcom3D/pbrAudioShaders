@@ -163,9 +163,6 @@ class ForceSolver:
 
                     force_data_sequence = ForceDataSequence(frames=forces_frames, obj_idx=obj_idx, other_obj_idx=other_obj_idx, restitution=restitution, relative_velocity=relative_velocity, normal_velocity=normal_velocity, normal_force=normal_force, tangential_force=tangential_force, tangential_velocity=tangential_velocity, normal_force_magnitude=normal_force_magnitude, tangential_force_magnitude=tangential_force_magnitude, stochastic_normal_force=stochastic_normal_force, stochastic_tangential_force=stochastic_tangential_force, contact_type=contact_type, contact_point=contact_point, contact_radius=contact_radius, rolling_radius=rolling_radius, impact_duration=impact_duration, contact_pressure=contact_pressure, penetration_depth=penetration_depth, coupling_strength=coupling_strength)
 
-#                    force_data_sequence.save(f"{self.output_dir}/{obj_idx:05d}_{other_obj_idx:05d}.pkl")
-#                    force_idx = len(self.entity_manager.get('forces')) + 1
-#                    self.entity_manager.register('forces', force_data_sequence, force_idx)
                     _ = self.entity_manager.register('forces', force_data_sequence)
 
     def _calculate_forces(self, frame: float, obj_idx: int, config_obj: Any, trajectory: Any, sfps: int, sample_rate: int) -> Optional[List[ForceData]]:
