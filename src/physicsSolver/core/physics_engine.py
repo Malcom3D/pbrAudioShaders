@@ -108,6 +108,7 @@ class physicsEngine:
         self._force()
         self._collision()
         self._force_synth()
+        self._post_process()
         self._save()
 
     def _proxy(self):
@@ -193,6 +194,12 @@ class physicsEngine:
         tasks_force_synth = [self.force_synth(obj_idx) for obj_idx in self.obj_dyn]
         results_force_synth = compute(*tasks_force_synth)
         self.progress = _update_status(f"{self.status_dir}/bake", self.progress + self.progress_ratio)
+
+    def _post_process(self):
+        config = self.entity_manager.get('config')
+        if config.system.enable_denoiser:
+            pp = AudioForcePostProcessEngine(self.entity_manager)
+            pp.process()
 
     def _save(self):
         # Ensure directory exists
