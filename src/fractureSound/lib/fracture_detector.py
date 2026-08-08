@@ -43,7 +43,7 @@ class FractureDetector:
     entity_manager: EntityManager
    
     # Detection parameters
-    velocity_threshold: float = 0.1  # Minimum velocity change for fracture detection (m/s)
+    velocity_threshold: float = 0.01  # Minimum velocity change for fracture detection (m/s)
     energy_threshold: float = 0.01   # Minimum energy release for fracture (J)
     time_window: float = 0.02        # Time window for fracture detection (seconds)
    
@@ -125,12 +125,7 @@ class FractureDetector:
         forces = self.entity_manager.get('forces')
 
         # Find the exact fracture moment by analyzing trajectories
-        fracture_moment = self._find_fracture_moment(
-            original_trajectory,
-            fragment_trajectories,
-            fracture_sample,
-            fragment_indices
-        )
+        fracture_moment = self._find_fracture_moment(original_trajectory, fragment_trajectories, fracture_sample, fragment_indices)
 
         if fracture_moment is None:
             debug_print(f"Could not determine fracture moment for {original_obj.name}")
@@ -259,10 +254,7 @@ class FractureDetector:
 
         return [event]
 
-    def _find_fracture_moment(self, original_trajectory: TrajectoryData,
-                               fragment_trajectories: Dict[int, TrajectoryData],
-                               approx_frame: float,
-                               fragment_indices: List[int]) -> Optional[float]:
+    def _find_fracture_moment(self, original_trajectory: TrajectoryData, fragment_trajectories: Dict[int, TrajectoryData], approx_frame: float, fragment_indices: List[int]) -> Optional[float]:
         """
         Find the exact fracture moment by analyzing trajectory data.
 
@@ -271,12 +263,18 @@ class FractureDetector:
         - Find the moment where the original object trajectory diverges from fragments
         """
         # Get time range around approximate fracture
-        time_range = 0.02  # 20ms window
-        start_time = max(0, approx_frame - time_range * self.sfps)
-        end_time = approx_frame + time_range * self.sfps
+        time_range = self.time_window * self.sample_rate # default to 20ms window
+        start_time = max(0, approx_frame - time_range)
+        end_time = approx_frame + time_range
+
+        # Round to int time values
+        time_range = int(time_range)
+        start_time = int(np.floor(start_time))
+        end_time = int(np.ceil(end_time))
+        samples_range = end_time - start_time
 
         # Sample trajectories in this range
-        times = np.linspace(start_time, end_time, 200)
+        times = np.linspace(start_time, end_time, samples_range)
 
         # Get positions of original object
         original_positions = np.array([original_trajectory.get_position(t) for t in times])

@@ -101,9 +101,7 @@ class fractureEngine:
                 fragment_indices = conf_obj.shard.tolist()
                 
                 # Detect fracture events
-                events = self.detector.detect_fracture_events(
-                    original_idx, fragment_indices
-                )
+                events = self.detector.detect_fracture_events(original_idx, fragment_indices)
                 
                 for event in events:
                     self.fracture_events.append(event)
