@@ -73,25 +73,6 @@ class ModalComposer:
         for event_track in score_track.events:
             obj2_idx = event_track.coll_obj
 
-            # Check if objects are fractured and fractured own shard: cannot exist at the same time
-            config_obj1 = config_obj
-            for conf_obj in config.objects:
-                if conf_obj.idx == obj2_idx:
-                    config_obj2 = conf_obj
-
-            if config_obj1.fractured is not False and config_obj1.shard is not False:
-                if config_obj2.idx in config_obj1.shard:
-                    continue
-            elif config_obj2.fractured is not False and config_obj2.shard is not False:
-                if config_obj1.idx in config_obj2.shard:
-                    continue
-            # Limit start and stop samples by fractured (do not exist after fracture frame) and shard (do not exist before fracture frame) existence
-            start_samples, stop_samples = _adjust_for_fracture_shard(event_track.start_sample, event_track.stop_sample, sample_rate, sfps, config_obj1, config_obj2)
-            debug_print('event_track.start_sample', event_track.start_sample, 'event_track.stop_sample', event_track.stop_sample, 'start_samples', start_samples, 'stop_samples', stop_samples)
-            debug_print('event_track.type', event_track.type.shape, 'coupling_strength', coupling_strength.shape)
-            if (stop_samples - start_samples) < 1:
-                continue
-
             # init zeros array
             final_type = np.zeros_like(event_track.type)
             final_vertex_ids = np.full(event_track.vertex_ids.shape, np.bool_(False), dtype=np.bool_)
@@ -120,29 +101,6 @@ class ModalComposer:
                     final_vertex_ids[mixed_mask.reshape(-1,)] = event_track.vertex_ids[mixed_mask.reshape(-1,)]
                     final_force[mixed_mask] = np.divide(force[event_type][mixed_mask], n_vertex_ids[mixed_mask.reshape(-1,)], out=np.zeros_like(force[event_type][mixed_mask]), where=n_vertex_ids[mixed_mask.reshape(-1,)] != 0)
 
-            # Handle fracture limited samples range
-            if not start_samples == event_track.start_sample or not stop_samples == event_track.stop_sample:
-                # limit array
-                limited_final_type = final_type[start_samples:stop_samples]
-                limited_final_vertex_ids = final_vertex_ids[start_samples:stop_samples]
-                limited_final_contact_area = final_contact_area[start_samples:stop_samples]
-                limited_final_force = final_force[start_samples:stop_samples]
-                limited_final_coupling_data = final_coupling_data[start_samples:stop_samples]
-
-                # init zeros array
-                final_type = np.zeros_like(event_track.type)
-                final_vertex_ids = np.full(event_track.vertex_ids.shape, np.bool_(False), dtype=np.bool_)
-                final_contact_area = np.zeros_like(event_track.contact_area)
-                final_force = np.zeros_like(coupling_strength)
-                final_coupling_data = np.zeros_like(coupling_strength)
-
-                # rebuild final array
-                final_type[start_samples:stop_samples] = limited_final_type
-                final_vertex_ids[start_samples:stop_samples] = limited_final_vertex_ids
-                final_contact_area[start_samples:stop_samples] = limited_final_contact_area
-                final_force[start_samples:stop_samples] = limited_final_force
-                final_coupling_data[start_samples:stop_samples] = limited_final_coupling_data
-
             final_vertex_ids = blosc2.asarray(final_vertex_ids, cparams=cparams, dparams=dparams)
             score_track_final.add_event(ScoreEvent(coll_obj=obj2_idx, start_sample=event_track.start_sample, stop_sample=event_track.stop_sample, type=final_type, vertex_ids=final_vertex_ids, contact_area=final_contact_area, force=final_force, coupling_data=final_coupling_data))
 
@@ -159,29 +117,6 @@ class ModalComposer:
                 final_contact_area[mixed_mask] = event_track.contact_area[mixed_mask]
                 final_vertex_ids[mixed_mask.reshape(-1,)] = event_track.vertex_ids[mixed_mask.reshape(-1,)]
                 final_force[mixed_mask] = np.divide(force[event_type][mixed_mask], n_vertex_ids[mixed_mask.reshape(-1,)], out=np.zeros_like(force[event_type][mixed_mask]), where=n_vertex_ids[mixed_mask.reshape(-1,)] != 0)
-
-            # Handle fracture limited samples range
-            if not start_samples == event_track.start_sample or not stop_samples == event_track.stop_sample:
-                # limit array
-                limited_final_type = final_type[start_samples:stop_samples]
-                limited_final_vertex_ids = final_vertex_ids[start_samples:stop_samples]
-                limited_final_contact_area = final_contact_area[start_samples:stop_samples]
-                limited_final_force = final_force[start_samples:stop_samples]
-                limited_final_coupling_data = final_coupling_data[start_samples:stop_samples]
-
-                # init zeros array
-                final_type = np.zeros_like(event_track.type)
-                final_vertex_ids = np.full(event_track.vertex_ids.shape, np.bool_(False), dtype=np.bool_)
-                final_contact_area = np.zeros_like(event_track.contact_area)
-                final_force = np.zeros_like(coupling_strength)
-                final_coupling_data = np.zeros_like(coupling_strength)
-
-                # rebuild final array
-                final_type[start_samples:stop_samples] = limited_final_type
-                final_vertex_ids[start_samples:stop_samples] = limited_final_vertex_ids
-                final_contact_area[start_samples:stop_samples] = limited_final_contact_area
-                final_force[start_samples:stop_samples] = limited_final_force
-                final_coupling_data[start_samples:stop_samples] = limited_final_coupling_data
 
             final_vertex_ids = blosc2.asarray(final_vertex_ids, cparams=cparams, dparams=dparams)
             score_track_final.add_event(ScoreEvent(coll_obj=obj2_idx, start_sample=event_track.start_sample, stop_sample=event_track.stop_sample, type=final_type, vertex_ids=final_vertex_ids, contact_area=final_contact_area, force=final_force, coupling_data=final_coupling_data))
