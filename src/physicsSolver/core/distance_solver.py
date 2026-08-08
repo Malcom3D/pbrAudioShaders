@@ -33,7 +33,6 @@ from pbrAudioCommon import EntityManager
 from pbrAudioCommon import Config, ObjectConfig
 from pbrAudioCommon import _load_pose, _load_mesh
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
-from pbrAudioCommon import _is_object_active_at_frame
 
 from ..lib.collision_data import CollisionData, CollisionType
 
@@ -78,15 +77,6 @@ class DistanceSolver:
 
         frames = np.unique(np.sort(np.concatenate((frames[0], frames[1]))))
 
-        # Filter frames: keep only those where both objects are active
-        active_frames = []
-        for f in frames:
-            if _is_object_active_at_frame(config_objs[0], f) and _is_object_active_at_frame(config_objs[1], f):
-                active_frames.append(f)
-        frames = np.array(active_frames)
-        if frames.shape[0] == 0:
-            return
-
         if config_objs[1].connected is not False and objs_idx[0] in config_objs[1].connected[:,0] and config_objs[0].connected is not False and objs_idx[1] in config_objs[0].connected[:,0]:
             frame = sample_rate / sfps
             distance, closest_points = self._distance(config_objs=config_objs, trajectory1=trajectory1, trajectory2=trajectory2, frame=frame, sfps=sfps, sample_rate=sample_rate, collision_margin=collision_margin, samples_per_object=samples_per_object)
@@ -98,8 +88,6 @@ class DistanceSolver:
 
             collision_type = CollisionType.CONNECTED
             collision_data = CollisionData(type=collision_type, obj1_idx=objs_idx[0], obj2_idx=objs_idx[1], frame=float('inf'))
-#            collision_idx = len(self.entity_manager.get('collisions')) + 1
-#            self.entity_manager.register('collisions', collision_data, collision_idx)
             _ = self.entity_manager.register('collisions', collision_data)
 
         if not config_objs[0].static or not config_objs[1].static:
@@ -113,11 +101,7 @@ class DistanceSolver:
             distances = np.array(distances)
             closest_point1 = np.array(closest_point1)
             closest_point2 = np.array(closest_point2)
-#            if config_objs[1].connected is not False and objs_idx[0] in config_objs[1].connected[:,0] and config_objs[0].connected is not False and objs_idx[1] in config_objs[0].connected[:,0]:
-#                collision_type = CollisionType.CONNECTED
-#                collision_events = [CollisionData(type=collision_type, obj1_idx=objs_idx[0], obj2_idx=objs_idx[1], frame=float('inf'))]
-#                filename = f"{self.output_dir}/connected_{objs_idx[0]}_{objs_idx[1]}.npz"
-#            else:
+
             # Analyze distances to detect collisions and contacts
             collision_events = self._analyze_distances(distances=distances, times=frames, config_objs=config_objs, collision_margin=collision_margin, sfps=sfps, sample_rate=sample_rate)
             filename = f"{self.output_dir}/{objs_idx[0]}_{objs_idx[1]}.npz"
@@ -125,8 +109,6 @@ class DistanceSolver:
             np.savez_compressed(filename, distances, closest_point1, closest_point2)
 
             for collision_data in collision_events:
-#                collision_idx = len(self.entity_manager.get('collisions')) + 1
-#                self.entity_manager.register('collisions', collision_data, collision_idx)
                 _ = self.entity_manager.register('collisions', collision_data)
 
     def _analyze_distances(self, distances: np.ndarray, times: np.ndarray, config_objs: List[Any], collision_margin: float, sfps: float, sample_rate: int) -> List[CollisionData]:
@@ -156,8 +138,28 @@ class DistanceSolver:
         
         debug_print(f"Adaptive threshold for {config_objs[0].name} and {config_objs[1].name}: {threshold}")
         
-        # Step 2: Identify contact regions (where distance <= threshold)
+        # Step 2.0: Identify fractured and fractured's shard (cannot exist at the same time)
+        is_fracture_shard = None
+        if config_objs[0].shard is not False:
+            is_fracture_shard = True if config_objs[1].idx in config_objs[0].shard else False
+        if config_objs[1].shard is not False:
+            is_fracture_shard = True if config_objs[0].idx in config_objs[1].shard else False
+
+        # Step 2.1: Identify existance regions (where objs exist)
+        start_samples, stop_samples = _adjust_for_fracture_shard(times[0], times[-1], sample_rate, sfps, config_objs[0], config_objs[1])
+
+        # Step 2.2: Identify contact regions (where distance <= threshold)
         contact_mask = distances <= threshold
+        
+        # Step 2.2: Apply existance regions
+        if start_samples >= stop_samples or (is_fracture_shard is not None and is_fracture_shard):
+            contact_mask[:] = False
+        else
+            start_idx = np.where(times == start_samples)[0]
+            stop_idx = np.where(times == stop_samples)[0] + 1
+            contact_mask[:start_idx] = False
+            contact_mask[stop_idx:] = False
+
         contact_regions = self._find_contact_regions(contact_mask, times)
         
         # Step 3: Classify contact regions as impacts or continuous contacts

@@ -81,7 +81,7 @@ class ForceSynth:
 
         fracture_frame = None
         if not config_obj.fractured == False:
-            fracture_frame = config_obj.fractured - 1
+            fracture_frame = config_obj.fractured
             fracture_frame *= sample_rate / sfps
 
         is_shard_frame = None
@@ -106,7 +106,7 @@ class ForceSynth:
 
         synthesized_track = self._create_empty_tracks(total_samples)
         for sample_idx in frames:
-            if (fracture_frame == None or sample_idx <= fracture_frame) and (is_shard_frame == None or is_shard_frame <= sample_idx):
+            if (fracture_frame == None or sample_idx < fracture_frame) and (is_shard_frame == None or is_shard_frame <= sample_idx):
 #                # Synthesize non-collision forces (air resistance, etc etc.)
 #                for f_idx in forces.keys():
 #                    if forces[f_idx].obj_idx == obj_idx:
@@ -119,8 +119,6 @@ class ForceSynth:
                         for conf_obj in config.objects:
                             if conf_obj.idx == other_obj_idx:
                                 other_config_obj = conf_obj 
-                        if not _is_object_active_at_frame(other_config_obj, sample_idx):
-                            continue  # skip this collision at this sample
                         for f_idx in forces.keys():
                             if forces[f_idx].obj_idx == obj_idx and forces[f_idx].other_obj_idx == other_obj_idx:
                                 force = forces[f_idx]
