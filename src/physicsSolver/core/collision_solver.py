@@ -117,7 +117,20 @@ class CollisionSolver:
         
         vertex1_id_list = []
         vertex2_id_list = []
-        
+
+        start1, end1 = get_active_interval(config_obj1, total_samples, sample_rate, sfps)
+        start2, end2 = get_active_interval(config_obj2, total_samples, sample_rate, sfps)
+
+        # Intersection of active intervals
+        active_start = max(start_samples, start1, start2)
+        active_stop = min(stop_samples, end1, end2)
+
+        if active_start >= active_stop:
+            return
+        else:
+            start_samples = active_start
+            stop_samples = active_stop
+
         # Process samples
         for sample_idx in range(start_samples, stop_samples):
             collision_margin = distances_spline(sample_idx) * (1 + collision.threshold)
@@ -214,6 +227,15 @@ class CollisionSolver:
                 config_obj1.idx in config_obj2.connected[:, 0] and
                 isinstance(config_obj1.connected, np.ndarray) and 
                 config_obj2.idx in config_obj1.connected[:, 0])
+
+    def get_active_interval(obj_config, total_samples, sample_rate, sfps):
+        start = 0
+        end = total_samples
+        if obj_config.is_shard is not False:
+            start = int(obj_config.is_shard * sample_rate / sfps) + 1  # include the fracture frame
+        if obj_config.fractured is not False:
+            end = int(obj_config.fractured * sample_rate / sfps)
+        return max(0, start), min(total_samples, end)
 
     def _calculate_sample_range(self, collision, total_samples, sample_rate, sfps, config_obj1, config_obj2):
         """Calculate the sample range for collision processing."""

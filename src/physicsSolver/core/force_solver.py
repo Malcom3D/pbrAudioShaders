@@ -26,6 +26,7 @@ from typing import List, Dict, Tuple, Optional, Any
 import math
 
 from pbrAudioCommon import EntityManager
+from pbrAudioCommon import _is_object_active_at_frame
 
 from ..lib.force_data import ContactType, ForceData, ForceDataSequence
 from ..lib.contact_geometry import ContactGeometry
@@ -71,6 +72,8 @@ class ForceSolver:
                 for idx in range(len(frames)):
                     collisions, other_obj_indices, other_trajectories, other_config_objs = ([] for _ in range(4))
                     frame = frames[idx]            
+                    if not _is_object_active_at_frame(config_obj, frame):
+                        continue
                     for c_idx in range(len(active_collisions)):
                         if (active_collisions[c_idx].frame <= frame <= active_collisions[c_idx].frame + active_collisions[c_idx].frame_range):
                             collisions.append(active_collisions[c_idx])
@@ -261,10 +264,13 @@ class ForceSolver:
             other_trajectory = other_trajectories[idx]
             other_config_obj = other_config_objs[idx]
 
+            if not is_object_active_at_frame(other_config_obj, frame):
+                continue  # skip this collision for this frame
+
             # Get positions and velocities before and after collision
             frames = trajectory.get_x()
             frame_idx = np.searchsorted(frames, frame)
-        
+
             # Pre-collision (just before impact)
             frame_before = frames[frame_idx - 1]
             if frame_idx == 0:

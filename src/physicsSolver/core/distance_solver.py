@@ -33,6 +33,7 @@ from pbrAudioCommon import EntityManager
 from pbrAudioCommon import Config, ObjectConfig
 from pbrAudioCommon import _load_pose, _load_mesh
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
+from pbrAudioCommon import _is_object_active_at_frame
 
 from ..lib.collision_data import CollisionData, CollisionType
 
@@ -76,6 +77,15 @@ class DistanceSolver:
         trajectory2 = trajectory[1] if trajectory[1].obj_idx == objs_idx[1] else trajectory[0]
 
         frames = np.unique(np.sort(np.concatenate((frames[0], frames[1]))))
+
+        # Filter frames: keep only those where both objects are active
+        active_frames = []
+        for f in frames:
+            if is_object_active_at_frame(config_objs[0], f) and is_object_active_at_frame(config_objs[1], f):
+                active_frames.append(f)
+        frames = np.array(active_frames)
+        if frames.shape[0] == 0:
+            return
 
         if config_objs[1].connected is not False and objs_idx[0] in config_objs[1].connected[:,0] and config_objs[0].connected is not False and objs_idx[1] in config_objs[0].connected[:,0]:
             frame = sample_rate / sfps
