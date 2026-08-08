@@ -154,7 +154,7 @@ class DistanceSolver:
         # Step 2.2: Apply existance regions
         if start_samples >= stop_samples or (is_fracture_shard is not None and is_fracture_shard):
             contact_mask[:] = False
-        else
+        else:
             start_idx = np.where(times == start_samples)[0]
             stop_idx = np.where(times == stop_samples)[0] + 1
             contact_mask[:start_idx] = False
