@@ -33,7 +33,6 @@ from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
 from ellipsoidalProxy import ProxyMesh
 
-
 from ..core.position_solver import PositionSolver
 from ..core.rotation_solver import RotationSolver
 from ..core.vertex_solver import VertexSolver
@@ -198,6 +197,7 @@ class physicsEngine:
     def _post_process(self):
         config = self.entity_manager.get('config')
         if config.system.enable_denoiser:
+            from PostProcess import AudioForcePostProcessEngine
             pp = AudioForcePostProcessEngine(self.entity_manager)
             pp.process()
 

@@ -120,10 +120,6 @@ class FractureDetector:
             debug_print(f"No fracture frame specified for {original_obj.name}")
             return []
 
-        # Get collision and force data near fracture
-        collisions = self.entity_manager.get('collisions')
-        forces = self.entity_manager.get('forces')
-
         # Find the exact fracture moment by analyzing trajectories
         fracture_moment = self._find_fracture_moment(original_trajectory, fragment_trajectories, fracture_sample, fragment_indices)
 
@@ -135,18 +131,23 @@ class FractureDetector:
         fracture_collisions = []
         fracture_forces = []
 
+        # Get collision and force data near fracture
+        collisions = self.entity_manager.get('collisions')
+        forces = self.entity_manager.get('forces')
+
         for coll in collisions.values():
             if isinstance(coll, CollisionData):
                 if coll.obj1_idx == obj_idx or coll.obj2_idx == obj_idx:
-                    if abs(coll.frame - fracture_moment) < 0.01:  # Within 10ms
+                    if coll.frame <= fracture_moment <= coll.frame + coll.frame_range:
                         fracture_collisions.append(coll)
 
         for force in forces.values():
             if isinstance(force, ForceDataSequence):
                 if force.obj_idx == obj_idx or force.other_obj_idx == obj_idx:
-                    # Check if force data covers the fracture moment
-                    if force.frames[0] <= fracture_moment <= force.frames[-1]:
-                        fracture_forces.append(force)
+                    fracture_forces.append(force)
+#                    # Check if force data covers the fracture moment
+#                    if force.frames[0] <= fracture_moment <= force.frames[-1]:
+#                        fracture_forces.append(force)
 
         # Get pre-fracture state
         pre_velocity = original_trajectory.get_velocity(fracture_moment - 0.001)
@@ -310,6 +311,9 @@ class FractureDetector:
             # Fallback: use approximate frame
             fracture_moment = approx_frame
 
+###################################################################################################################
+# Use trajectory geometric approch to find the fracture moment
+###################################################################################################################
         # Refine using velocity discontinuity
         # Get velocities before and after
         pre_vel = original_trajectory.get_velocity(fracture_moment - 0.005)
@@ -322,11 +326,7 @@ class FractureDetector:
         # Otherwise, use the approximate frame
         return approx_frame
 
-    def _classify_fracture_type(self, original_obj: Any, fragments: List[Any],
-                                 pre_velocity: np.ndarray,
-                                 fragment_velocities: List[np.ndarray],
-                                 fracture_moment: float,
-                                 collisions: List[CollisionData]) -> FractureType:
+    def _classify_fracture_type(self, original_obj: Any, fragments: List[Any], pre_velocity: np.ndarray, fragment_velocities: List[np.ndarray], fracture_moment: float, collisions: List[CollisionData]) -> FractureType:
         """
         Classify the fracture type based on trajectory and force data.
 
@@ -373,12 +373,7 @@ class FractureDetector:
         # Default: crack
         return FractureType.CRACK
 
-    def _compute_fracture_energy(self, original_obj: Any, fragments: List[Any],
-                                  pre_velocity: np.ndarray,
-                                  fragment_velocities: List[np.ndarray],
-                                  collisions: List[CollisionData],
-                                  forces: List[ForceDataSequence],
-                                  fracture_moment: float) -> float:
+    def _compute_fracture_energy(self, original_obj: Any, fragments: List[Any], pre_velocity: np.ndarray, fragment_velocities: List[np.ndarray], collisions: List[CollisionData], forces: List[ForceDataSequence], fracture_moment: float) -> float:
         """
         Compute the energy released during fracture.
 
@@ -486,8 +481,7 @@ class FractureDetector:
             debug_print(f"Error estimating crack length: {e}")
             return 0.1
 
-    def _get_force_at_time(self, force_sequences: List[ForceDataSequence],
-                           obj_idx: int, time: float) -> np.ndarray:
+    def _get_force_at_time(self, force_sequences: List[ForceDataSequence], obj_idx: int, time: float) -> np.ndarray:
         """Get force vector at a specific time from force data sequences."""
         for force_seq in force_sequences:
             if force_seq.obj_idx == obj_idx or force_seq.other_obj_idx == obj_idx:

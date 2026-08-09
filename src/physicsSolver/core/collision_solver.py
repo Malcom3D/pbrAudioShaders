@@ -225,8 +225,21 @@ class CollisionSolver:
         if collision.type.value == 'contact':
             stop_samples = int(collision.frame + collision.frame_range + collision.impulse_range)
         stop_samples = min(stop_samples, total_samples)
-        
-        return start_samples, stop_samples, impact_end
+
+        # handle fracture: fractured limit stop_samples, is_shard limit start_samples
+        if config_obj1.fractured is not False or config_obj2.fractured is not False:
+            fracture1 = config_obj1.fractured if config_obj1.fractured is not False else stop_samples
+            fracture2 = config_obj2.fractured if config_obj2.fractured is not False else stop_samples
+            stop_limit = min(fracture1, fracture2) * sample_rate / sfps
+            stop_samples = min(stop_limit, stop_samples)
+            impact_end = stop_samples
+        if config_obj1.is_shard is not False or config_obj2.is_shard is not False:
+            shard1 = config_obj1.is_shard if config_obj1.is_shard is not False else start_samples
+            shard2 = config_obj2.is_shard if config_obj2.is_shard is not False else start_samples
+            start_limit = max(shard1, shard2) * sample_rate / sfps
+            start_samples = min(start_limit, start_samples)
+
+        return int(start_samples), int(stop_samples), int(impact_end)
 
     def _load_distance_data(self, collision):
         """Load pre-computed distance data."""
