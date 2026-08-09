@@ -101,7 +101,8 @@ class fractureEngine:
                 fragment_indices = conf_obj.shard.tolist()
                 
                 # Detect fracture events
-                events = self.detector.detect_fracture_events(original_idx, fragment_indices)
+                events = self.detect_fractures()
+#                events = self.detector.detect_fracture_events(original_idx, fragment_indices)
                 
                 for event in events:
                     self.fracture_events.append(event)
@@ -120,9 +121,7 @@ class fractureEngine:
         modal_tasks = []
         for event in self.fracture_events:
             for frag_idx in event.fragment_indices:
-                modal_tasks.append(
-                    self._delayed_compute_modal(event, frag_idx)
-                )
+                modal_tasks.append(self._delayed_compute_modal(event, frag_idx))
         
         if modal_tasks:
             compute(*modal_tasks)
@@ -131,9 +130,7 @@ class fractureEngine:
         # Tasks for sound synthesis
         sound_tasks = []
         for event in self.fracture_events:
-            sound_tasks.append(
-                self._delayed_synthesize(event)
-            )
+            sound_tasks.append(self._delayed_synthesize(event))
         
         if sound_tasks:
             compute(*sound_tasks)
@@ -165,9 +162,7 @@ class fractureEngine:
                 original_idx = conf_obj.idx
                 fragment_indices = conf_obj.shard.tolist()
                 
-                detected = self.detector.detect_fracture_events(
-                    original_idx, fragment_indices
-                )
+                detected = self.detector.detect_fracture_events(original_idx, fragment_indices)
                 events.extend(detected)
         
         return events

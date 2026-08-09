@@ -112,34 +112,16 @@ class FractureModalModel:
         modal_data = _parse_lib(original_lib)
         
         # Apply frequency modifications based on fragment size
-        modified_frequencies = self._modify_frequencies(
-            modal_data['frequencies'], 
-            fragment_data, 
-            event
-        )
+        modified_frequencies = self._modify_frequencies(modal_data['frequencies'], fragment_data, event)
         
         # Apply damping modifications
-        modified_t60s = self._modify_damping(
-            modal_data['t60s'], 
-            fragment_data, 
-            event
-        )
+        modified_t60s = self._modify_damping(modal_data['t60s'], fragment_data, event)
         
         # Apply gain modifications (mode shapes affected by new boundaries)
-        modified_gains = self._modify_gains(
-            modal_data['gains'], 
-            fragment_data, 
-            event
-        )
+        modified_gains = self._modify_gains(modal_data['gains'], fragment_data, event)
         
         # Create modified modal model
-        self._write_fracture_lib(
-            lib_file, 
-            fragment_obj.name, 
-            modified_frequencies, 
-            modified_t60s, 
-            modified_gains
-        )
+        self._write_fracture_lib(lib_file, fragment_obj.name, modified_frequencies, modified_t60s, modified_gains)
         
         debug_print(f"Created fracture modal model for {fragment_obj.name}")
         
@@ -194,9 +176,7 @@ class FractureModalModel:
         
         return None
     
-    def _modify_frequencies(self, original_freqs: np.ndarray, 
-                            fragment: FragmentData, 
-                            event: FractureEvent) -> np.ndarray:
+    def _modify_frequencies(self, original_freqs: np.ndarray, fragment: FragmentData, event: FractureEvent) -> np.ndarray:
         """
         Modify modal frequencies based on fragment size and shape.
         

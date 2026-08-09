@@ -447,8 +447,7 @@ class FractureDetector:
 
         return max(total_energy, 0.01)  # Ensure minimum energy
 
-    def _estimate_crack_length(self, original_obj: Any, fragments: List[Any],
-                                fracture_moment: float) -> float:
+    def _estimate_crack_length(self, original_obj: Any, fragments: List[Any], fracture_moment: float) -> float:
         """Estimate the crack length from fragment geometry."""
         try:
             # Get original mesh at fracture moment
