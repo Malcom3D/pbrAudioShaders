@@ -261,7 +261,7 @@ class FractureDetector:
 
         return [event]
 
-    def _find_fracture_moments_geometric(self, original_trajectory: TrajectoryData, fragment_trajectories: Dict[int, TrajectoryData], fracture_sample_approx: float, fragments: List[Any], fragments: List[Any], original_obj: Any) -> Optional[Dict[str, float]]:
+    def _find_fracture_moments_geometric(self, original_trajectory: TrajectoryData, fragment_trajectories: Dict[int, TrajectoryData], fracture_sample_approx: float, fragments: List[Any], original_obj: Any) -> Optional[Dict[str, float]]:
         """
         Find exact fracture begin and end moments using geometric analysis.
         
