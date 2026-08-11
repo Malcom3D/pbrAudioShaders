@@ -16,7 +16,6 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# pbrAudioShaders/src/fractureSound/lib/fracture_synth.py
 """
 Fracture sound synthesis implementation.
 
@@ -38,7 +37,6 @@ from pbrAudioCommon import _parse_lib
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
 from .fracture_data import FractureEvent, FractureType, FragmentData
-
 
 @dataclass
 class FractureSynth:
@@ -122,8 +120,7 @@ class FractureSynth:
         
         return audio
     
-    def _synthesize_shatter(self, event: FractureEvent, 
-                            fragment_objs: List[Any]) -> Dict[str, np.ndarray]:
+    def _synthesize_shatter(self, event: FractureEvent, fragment_objs: List[Any]) -> Dict[str, np.ndarray]:
         """
         Synthesize shatter fracture sound.
         
@@ -295,8 +292,7 @@ class FractureSynth:
         
         return {'crack': output}
     
-    def _synthesize_snap(self, event: FractureEvent, 
-                         fragment_objs: List[Any]) -> Dict[str, np.ndarray]:
+    def _synthesize_snap(self, event: FractureEvent, fragment_objs: List[Any]) -> Dict[str, np.ndarray]:
         """
         Synthesize snap fracture sound.
         
@@ -364,8 +360,7 @@ class FractureSynth:
         
         return {'snap': output}
     
-    def _generate_poisson_grains(self, density: float, duration: float,
-                                  sample_rate: int, power_law: float = 1.0) -> np.ndarray:
+    def _generate_poisson_grains(self, density: float, duration: float, sample_rate: int, power_law: float = 1.0) -> np.ndarray:
         """
         Generate grain times with Poisson-like distribution.
         
@@ -392,9 +387,7 @@ class FractureSynth:
         
         return grain_samples
     
-    def _generate_log_normal_events(self, n_events: int, duration: float,
-                                     sample_rate: int, shape: float, 
-                                     scale: float) -> np.ndarray:
+    def _generate_log_normal_events(self, n_events: int, duration: float, sample_rate: int, shape: float, scale: float) -> np.ndarray:
         """
         Generate event times with log-normal distribution for crack.
         """
@@ -420,9 +413,7 @@ class FractureSynth:
         
         return event_samples
     
-    def _generate_grain(self, modal_data: Dict, duration: int,
-                         amplitude: float, damping: float,
-                         fragment_size: float) -> np.ndarray:
+    def _generate_grain(self, modal_data: Dict, duration: int, amplitude: float, damping: float, fragment_size: float) -> np.ndarray:
         """
         Generate a single grain for shatter synthesis.
         """
@@ -451,9 +442,7 @@ class FractureSynth:
         
         return grain
     
-    def _generate_crack_event(self, base_freq: float, duration: float,
-                               amplitude: float, damping: float,
-                               young_modulus: float) -> np.ndarray:
+    def _generate_crack_event(self, base_freq: float, duration: float, amplitude: float, damping: float, young_modulus: float) -> np.ndarray:
         """
         Generate a single crack event.
         """
@@ -485,9 +474,7 @@ class FractureSynth:
         
         return filtered
     
-    def _generate_fragment_ringdown(self, modal_data: Dict, duration: float,
-                                     fracture_energy: float, fragment_size: float,
-                                     damping: float) -> np.ndarray:
+    def _generate_fragment_ringdown(self, modal_data: Dict, duration: float, fracture_energy: float, fragment_size: float, damping: float) -> np.ndarray:
         """
         Generate fragment ringdown for snap fracture.
         
@@ -534,8 +521,7 @@ class FractureSynth:
         
         return output
     
-    def _generate_nucleation_tick(self, amplitude: float, duration: float,
-                                   damping: float) -> np.ndarray:
+    def _generate_nucleation_tick(self, amplitude: float, duration: float, damping: float) -> np.ndarray:
         """
         Generate high-frequency nucleation tick for snap.
         """
@@ -559,8 +545,7 @@ class FractureSynth:
         
         return tick
     
-    def _generate_crackle_noise(self, n_samples: int, density: float,
-                                 amplitude: float, damping: float) -> np.ndarray:
+    def _generate_crackle_noise(self, n_samples: int, density: float, amplitude: float, damping: float) -> np.ndarray:
         """
         Generate crackling noise for shatter and crack.
         """
@@ -592,9 +577,7 @@ class FractureSynth:
         
         return output
     
-    def _apply_modal_filter(self, excitation: np.ndarray, frequencies: np.ndarray,
-                            gains: np.ndarray, t60s: np.ndarray,
-                            sample_rate: int, damping: float) -> np.ndarray:
+    def _apply_modal_filter(self, excitation: np.ndarray, frequencies: np.ndarray, gains: np.ndarray, t60s: np.ndarray, sample_rate: int, damping: float) -> np.ndarray:
         """
         Apply modal filter to excitation signal.
         """
@@ -635,8 +618,7 @@ class FractureSynth:
         
         return output
     
-    def _get_fragment_modal(self, event: FractureEvent, 
-                            fragment_obj: Any) -> Optional[Dict]:
+    def _get_fragment_modal(self, event: FractureEvent, fragment_obj: Any) -> Optional[Dict]:
         """
         Get modal model for a fragment.
         """
@@ -690,8 +672,7 @@ class FractureSynth:
         decay = np.exp(-t / 0.3)
         return attack * decay
     
-    def _save_fracture_audio(self, event: FractureEvent, 
-                             audio: Dict[str, np.ndarray]):
+    def _save_fracture_audio(self, event: FractureEvent, audio: Dict[str, np.ndarray]):
         """
         Save fracture audio to files.
         """

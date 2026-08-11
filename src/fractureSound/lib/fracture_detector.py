@@ -169,9 +169,9 @@ class FractureDetector:
                     fracture_forces.append(force)
 
         # Get pre-fracture state (at fracture_begin)
-        pre_velocity = original_trajectory.get_velocity(fracture_begin - 0.001)
-        pre_angular_velocity = original_trajectory.get_angular_velocity(fracture_begin - 0.001)
-        pre_force = self._get_force_at_time(fracture_forces, obj_idx, fracture_begin - 0.001)
+        pre_velocity = original_trajectory.get_velocity(fracture_begin - 10)
+        pre_angular_velocity = original_trajectory.get_angular_velocity(fracture_begin - 10)
+        pre_force = self._get_force_at_time(fracture_forces, obj_idx, fracture_begin - 10)
 
         # Get material properties
         young_modulus = original_obj.acoustic_shader.young_modulus if original_obj.acoustic_shader else 1e9
@@ -187,8 +187,8 @@ class FractureDetector:
             traj = fragment_trajectories.get(frag.idx)
             if traj is not None:
                 # Get velocity just after fracture (at fracture_end)
-                vel = traj.get_velocity(fracture_end + 0.001)
-                ang_vel = traj.get_angular_velocity(fracture_end + 0.001)
+                vel = traj.get_velocity(fracture_end + 10)
+                ang_vel = traj.get_angular_velocity(fracture_end + 10)
                 fragment_velocities.append(vel)
                 fragment_angular_velocities.append(ang_vel)
 
@@ -217,26 +217,11 @@ class FractureDetector:
                 )
                 fragment_data_list.append(fragment_data)
 
-        # Classify fracture type
-        fracture_type = self._classify_fracture_type(
-            original_obj,
-            fragments,
-            pre_velocity,
-            fragment_velocities,
-            fracture_begin,
-            fracture_collisions
-        )
-
         # Compute fracture energy
-        fracture_energy = self._compute_fracture_energy(
-            original_obj,
-            fragments,
-            pre_velocity,
-            fragment_velocities,
-            fracture_collisions,
-            fracture_forces,
-            fracture_begin
-        )
+        fracture_energy = self._compute_fracture_energy(original_obj, fragments, pre_velocity, fragment_velocities, fracture_collisions, fracture_forces, fracture_begin)
+
+        # Classify fracture type
+        fracture_type = self._classify_fracture_type(original_obj, fragments, pre_velocity, fragment_velocities, fracture_begin, fracture_end, fracture_energy, fracture_collisions)
 
         # Estimate crack length
         crack_length = self._estimate_crack_length(original_obj, fragments, fracture_begin)
@@ -287,9 +272,9 @@ class FractureDetector:
         Returns:
             Dict with 'begin' and 'end' sample indices
         """
-        # Get original object's mesh at fracture_approx for bounding box
-        original_vertices = original_trajectory.get_vertices(fracture_sample_approx)
-        original_bbox = self._compute_bounding_box(original_vertices)
+#        # Get original object's mesh at fracture_approx for bounding box
+#        original_vertices = original_trajectory.get_vertices(fracture_sample_approx)
+#        original_bbox = self._compute_bounding_box(original_vertices)
         
         # Get shard vertices at shard_start frame
         shard_bboxes = {}
@@ -300,8 +285,8 @@ class FractureDetector:
                 shard_bboxes[frag.idx] = self._compute_bounding_box(vertices)
         
         # Search range for fracture moments
-        search_start = max(0, fracture_sample_approx - int(1.5 * self.sfps * self.sample_rate))
-        search_end = min(original_trajectory.get_x()[-1], fracture_sample_approx + int(self.sfps * self.sample_rate))
+        search_start = max(0, fracture_sample_approx - int(self.sample_rate / self.sfps))
+        search_end = min(original_trajectory.get_x()[-1], fracture_sample_approx)
         
         # Sample the time range for analysis
         sample_times = np.arange(search_start, search_end, max(1, int(self.sampling_interval * self.sample_rate)))
@@ -329,7 +314,7 @@ class FractureDetector:
         divergence_scores = np.array(divergence_scores, dtype=object)
         times = divergence_scores[:, 0].astype(float)
         scores = divergence_scores[:, 1].astype(float)
-        
+
         # Find the moment where divergence starts increasing
         # Use derivative analysis
         if len(scores) > 3:
@@ -350,7 +335,7 @@ class FractureDetector:
                 # Fallback: use the approximate fracture sample
                 fracture_begin = fracture_sample_approx
         else:
-            fracture_begin = fracture_sample_approx
+            fracture_begin = fracture_sample_approx - int(0.1 * self.sample_rate)
         
         # Find fracture end: when shards are fully separated and original object is gone
         # Look for the moment when the original object's bounding box no longer
@@ -363,14 +348,11 @@ class FractureDetector:
                 break
         
         if fracture_end is None:
-            fracture_end = fracture_sample_approx + int(0.1 * self.sample_rate)
+            fracture_end = fracture_sample_approx
         
         # Refine using sub-sample interpolation
         fracture_begin = self._refine_fracture_moment(original_trajectory=original_trajectory, fragment_trajectories=fragment_trajectories, approx_begin=fracture_begin, approx_end=fracture_end, fragments=fragments)
-        return {
-            'begin': fracture_begin,
-            'end': fracture_end
-        }
+        return {'begin': fracture_begin, 'end': fracture_end}
 
     def _compute_bounding_box(self, vertices: np.ndarray) -> Dict[str, np.ndarray]:
         """
@@ -380,81 +362,71 @@ class FractureDetector:
             Dict with 'min', 'max', 'center', 'extents'
         """
         if len(vertices) == 0:
-            return {
-                'min': np.zeros(3),
-                'max': np.zeros(3),
-                'center': np.zeros(3),
-                'extents': np.zeros(3)
-            }
-        
+            return {'min': np.zeros(3), 'max': np.zeros(3), 'center': np.zeros(3), 'extents': np.zeros(3)}
+
         min_coords = np.min(vertices, axis=0)
         max_coords = np.max(vertices, axis=0)
         center = (min_coords + max_coords) / 2
         extents = max_coords - min_coords
         
-        return {
-            'min': min_coords,
-            'max': max_coords,
-            'center': center,
-            'extents': extents
-        }
+        return {'min': min_coords, 'max': max_coords, 'center': center, 'extents': extents}
 
     def _compute_bbox_divergence(self, original_bbox: Dict[str, np.ndarray], shard_bboxes: Dict[int, Dict[str, np.ndarray]] ) -> float:
         """
         Compute divergence score between original and shard bounding boxes.
-        
+
         Score measures how much the shards have separated from the original.
         Returns 0 when shards are contained in the original, 1 when fully separated.
         """
         if len(shard_bboxes) == 0:
             return 0.0
-        
+
         # Compute the union of shard bounding boxes
         shard_min = np.array([float('inf'), float('inf'), float('inf')])
         shard_max = np.array([float('-inf'), float('-inf'), float('-inf')])
-        
+
         for bbox in shard_bboxes.values():
             shard_min = np.minimum(shard_min, bbox['min'])
             shard_max = np.maximum(shard_max, bbox['max'])
-        
+
         shard_center = (shard_min + shard_max) / 2
         shard_extents = shard_max - shard_min
-        
+
         # Original extents
         orig_center = original_bbox['center']
         orig_extents = original_bbox['extents']
-        
+
         # Compute center distance relative to extents
         center_distance = np.linalg.norm(shard_center - orig_center)
         extents_scale = np.linalg.norm(orig_extents) + 1e-10
-        
+
         # Compute containment: how much of shard extents are outside original
         overlap = np.minimum(shard_max, original_bbox['max']) - np.maximum(shard_min, original_bbox['min'])
-        overlap = np.maximum(overlap, 0)
+        overlap = np.maximum(overlap, 0) # abs(overlap) ??
         overlap_volume = np.prod(overlap)
-        
+
         shard_volume = np.prod(shard_extents) if np.all(shard_extents > 0) else 1e-10
         original_volume = np.prod(orig_extents) if np.all(orig_extents > 0) else 1e-10
-        
+
         # Divergence score components
         # 1. Center displacement
         center_divergence = center_distance / (extents_scale + 1e-10)
         center_divergence = np.clip(center_divergence, 0, 1)
-        
+
         # 2. Containment loss
         if shard_volume > 0:
             containment_loss = 1 - (overlap_volume / shard_volume)
             containment_loss = np.clip(containment_loss, 0, 1)
         else:
             containment_loss = 0
-        
+
         # 3. Extents change
         extents_change = np.linalg.norm(shard_extents - orig_extents) / (extents_scale + 1e-10)
         extents_change = np.clip(extents_change, 0, 1)
-        
+
         # Combined score
         divergence = 0.5 * center_divergence + 0.3 * containment_loss + 0.2 * extents_change
-        
+
         return float(np.clip(divergence, 0, 1))
 
     def _refine_fracture_moment(self, original_trajectory: TrajectoryData, fragment_trajectories: Dict[int, TrajectoryData], approx_begin: float, approx_end: float, fragments: List[Any]) -> float:
@@ -499,12 +471,7 @@ class FractureDetector:
         
         return approx_begin
 
-    def _estimate_crack_velocity(
-        self,
-        fracture_begin: float,
-        fracture_end: float,
-        original_obj: Any
-    ) -> float:
+    def _estimate_crack_velocity(self, fracture_begin: float, fracture_end: float, original_obj: Any) -> float:
         """
         Estimate crack velocity from fracture duration and object size.
         """
@@ -537,7 +504,7 @@ class FractureDetector:
                     pass
         return np.zeros(3)
 
-    def _classify_fracture_type(self, original_obj: Any, fragments: List[Any], pre_velocity: np.ndarray, fragment_velocities: List[np.ndarray], fracture_moment: float, collisions: List[CollisionData]) -> FractureType:
+    def _classify_fracture_type(self, original_obj: Any, fragments: List[Any], pre_velocity: np.ndarray, fragment_velocities: List[np.ndarray], fracture_begin: float, fracture_end: float, fracture_energy: float, collisions: List[CollisionData]) -> FractureType:
         """Classify the fracture type based on trajectory and force data."""
         n_fragments = len(fragments)
 
@@ -548,6 +515,9 @@ class FractureDetector:
             if avg_velocity > pre_speed * 1.5 and avg_velocity > 1.0:
                 return FractureType.SHATTER
 
+            if fracture_end - fracture_begin < (0.100 * self.sample_rate): # Failure Speed < 100ms
+                return FractureType.SHATTER
+
         if n_fragments == 2 and len(fragment_velocities) >= 2:
             rel_velocity = np.linalg.norm(fragment_velocities[0] - fragment_velocities[1])
             pre_speed = np.linalg.norm(pre_velocity)
@@ -555,14 +525,19 @@ class FractureDetector:
             if rel_velocity > pre_speed * 0.5 or rel_velocity > 2.0:
                 return FractureType.SNAP
 
+            if (0.005 * self.sample_rate) > fracture_end - fracture_begin < (0.030 * self.sample_rate): # Failure Speed > 5ms and < 30ms
+                return FractureType.SNAP
+
         if n_fragments <= 2:
-            if len(collisions) > 0:
-                total_energy = 0
-                for coll in collisions:
-                    if hasattr(coll, 'impulse_range') and coll.impulse_range:
-                        total_energy += coll.impulse_range * 0.001
-                if total_energy < 0.1:
-                    return FractureType.CRACK
+#            if len(collisions) > 0:
+#                total_energy = 0
+#                for coll in collisions:
+#                    if hasattr(coll, 'impulse_range') and coll.impulse_range:
+#                        total_energy += coll.impulse_range * 0.001 # ToDo: compute energy in place of 0.001
+            if fracture_energy >= 0.01:
+                return FractureType.CRACK
+            if fracture_end - fracture_begin < (0.005 * self.sample_rate): # Failure Speed < 5ms
+                return FractureType.CRACK
 
         return FractureType.CRACK
 
@@ -615,7 +590,7 @@ class FractureDetector:
             failure_stress = 1e6
 
         young_modulus = original_obj.acoustic_shader.young_modulus if original_obj.acoustic_shader else 1e9
-        stressed_volume = 0.0001
+        stressed_volume = 0.0001  # ToDo: how to compute the stressed volume?
         elastic_energy = (failure_stress**2 * stressed_volume) / (2 * young_modulus)
         total_energy += elastic_energy
 

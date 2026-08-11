@@ -16,7 +16,6 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# pbrAudioShaders/src/fractureSound/lib/fracture_modal.py
 """
 Modal model adaptation for fracture fragments.
 """
@@ -211,9 +210,7 @@ class FractureModalModel:
         
         return modified_freqs
     
-    def _modify_damping(self, original_t60s: np.ndarray, 
-                        fragment: FragmentData, 
-                        event: FractureEvent) -> np.ndarray:
+    def _modify_damping(self, original_t60s: np.ndarray, fragment: FragmentData, event: FractureEvent) -> np.ndarray:
         """
         Modify damping (T60) based on new boundaries and radiation.
         
@@ -246,9 +243,7 @@ class FractureModalModel:
         
         return modified_t60s
     
-    def _modify_gains(self, original_gains: List[np.ndarray], 
-                      fragment: FragmentData, 
-                      event: FractureEvent) -> List[np.ndarray]:
+    def _modify_gains(self, original_gains: List[np.ndarray], fragment: FragmentData, event: FractureEvent) -> List[np.ndarray]:
         """
         Modify modal gains based on new mode shapes.
         
@@ -319,9 +314,7 @@ class FractureModalModel:
             return np.max(distances)
         return 0.05  # Default
     
-    def _write_fracture_lib(self, filename: str, obj_name: str, 
-                           frequencies: np.ndarray, t60s: np.ndarray, 
-                           gains: List[np.ndarray]):
+    def _write_fracture_lib(self, filename: str, obj_name: str, frequencies: np.ndarray, t60s: np.ndarray, gains: List[np.ndarray]):
         """
         Write fracture modal model in Faust .lib format.
         """
