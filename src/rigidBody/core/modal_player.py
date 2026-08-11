@@ -289,7 +289,7 @@ class ModalPlayer:
             return
 
         # Normalize track to between -1.0 and +1.0
-        if suffix = 'rigidbody':
+        if suffix == 'rigidbody':
             track /= np.max(abs(track))
 
 #        # Maximize a normalized track from (-1.0, +1.0) to (float32.max and float32.min)
