@@ -288,8 +288,9 @@ class ModalPlayer:
             debug_print(f"Track {suffix} synth track for {config_obj.name} is empty, skipping")
             return
 
-#        # Normalize track to between -1.0 and +1.0
-#        track /= np.max(abs(track))
+        # Normalize track to between -1.0 and +1.0
+        if suffix = 'rigidbody':
+            track /= np.max(abs(track))
 
 #        # Maximize a normalized track from (-1.0, +1.0) to (float32.max and float32.min)
 #        dtype_max = np.finfo(np.float32).max

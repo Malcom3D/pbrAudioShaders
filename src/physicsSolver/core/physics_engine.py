@@ -197,7 +197,7 @@ class physicsEngine:
     def _post_process(self):
         config = self.entity_manager.get('config')
         if config.system.enable_denoiser:
-            from PostProcess import AudioForcePostProcessEngine
+            from postProcess import AudioForcePostProcessEngine
             pp = AudioForcePostProcessEngine(self.entity_manager)
             pp.process()
 
