@@ -19,6 +19,7 @@
 # fractureSound/lib/fracture_detector.py
 
 import os
+import math
 import numpy as np
 import trimesh
 from typing import List, Tuple, Dict, Optional, Any
@@ -578,16 +579,16 @@ class FractureDetector:
         collision_energy = 0.0
         for coll in collisions:
             if hasattr(coll, 'distances') and coll.distances is not None:
-                if isinstance(coll.distances, np.ndarray):
-                    penetration_energy = np.sum(np.abs(coll.distances)) * 10.0
-                    collision_energy += penetration_energy
+                penetration_energy = np.sum(np.abs(coll.distances)) * 10.0
+                collision_energy += penetration_energy
         total_energy += collision_energy
 
         # 3. Stored elastic energy
         if hasattr(original_obj.acoustic_shader, 'failure_stress'):
             failure_stress = original_obj.acoustic_shader.failure_stress
         else:
-            failure_stress = 1e6
+            mat = original_obj.acoustic_shader
+            failure_stress = self._compute_failure_stress(mat.young_modulus, mat.poisson_ratio, mat.roughness)
 
         young_modulus = original_obj.acoustic_shader.young_modulus if original_obj.acoustic_shader else 1e9
         stressed_volume = 0.0001  # ToDo: how to compute the stressed volume?
@@ -595,6 +596,28 @@ class FractureDetector:
         total_energy += elastic_energy
 
         return max(total_energy, 0.01)
+
+    def _compute_failure_stress(self, young_modulus: float, poisson_ratio: float, roughness: float = None):
+        """
+        Approximate the failure stress (Pa) from material physical parameters.
+        The failure stress is the maximum stress a material can withstand before fracture.
+        """
+        if poisson_ratio < 0.2:
+            failure_strain = 0.001      # very brittle
+        elif poisson_ratio < 0.3:
+            failure_strain = 0.003      # brittle
+        elif poisson_ratio < 0.4:
+            failure_strain = 0.01       # moderate ductility
+        else:
+            failure_strain = 0.05       # ductile (e.g., rubber-like)
+
+        # Clamp roughness to [0, 1] and apply a linear scale factor 1.0–1.5
+        roughness_factor = 1.0 + 0.5 * max(0.0, min(1.0, roughness))
+        failure_strain *= roughness_factor
+
+        # Failure stress = E * failure_strain
+        # ToDo Add friction to adjust for shear failure
+        return young_modulus * failure_strain
 
     def _estimate_crack_length(self, original_obj: Any, fragments: List[Any], fracture_moment: float) -> float:
         """Estimate the crack length from fragment geometry."""
