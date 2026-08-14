@@ -64,7 +64,7 @@ class FractureSynth:
         set_debug(config.system.debug)
         set_debug_prefix(self.__class__.__name__)
         
-        self.sample_rate = config.system.sample_rate
+        self.sample_rate = int(config.system.sample_rate)
         self.fragment_modal_path = f"{config.system.cache_path}/fracture_modal"
         self.fracture_audio_dir = f"{config.system.cache_path}/fracture_audio"
         os.makedirs(self.fracture_audio_dir, exist_ok=True)
@@ -80,7 +80,7 @@ class FractureSynth:
             bands.append((freqs[i], freqs[i+1]))
         return bands
     
-    def compute(self, event: FractureEvent) -> Dict[str, np.ndarray]:
+    def compute(self, event: FractureEvent, total_samples: int) -> Dict[str, np.ndarray]:
         """
         Compute fracture sound for a fracture event.
         
@@ -116,7 +116,7 @@ class FractureSynth:
         
         # Save audio
         if audio is not None:
-            self._save_fracture_audio(event, audio)
+            self._save_fracture_audio(event, audio, total_samples)
         
         return audio
     
@@ -672,7 +672,7 @@ class FractureSynth:
         decay = np.exp(-t / 0.3)
         return attack * decay
     
-    def _save_fracture_audio(self, event: FractureEvent, audio: Dict[str, np.ndarray]):
+    def _save_fracture_audio(self, event: FractureEvent, audio: Dict[str, np.ndarray], total_samples: int):
         """
         Save fracture audio to files.
         """
@@ -686,10 +686,17 @@ class FractureSynth:
             max_val = np.max(np.abs(data))
             if max_val > 0:
                 data = data / max_val * 0.9
+
+            # Pad data track to total_samples length
+            data_start = int(event.frame)
+            data_stop = (data.shape[0] + data_start) - total_samples
+            data_stop = - data_stop if data_stop > 0 else None
+            data_track = np.zeros(total_samples)
+            data_track[data_start:] = data[:data_stop]
             
             # Save
-            filename = f"{self.fracture_audio_dir}/{base_name}_{name}.wav"
-            sf.write(filename, data, self.sample_rate, subtype='FLOAT')
+            filename = f"{self.fracture_audio_dir}/{base_name}_{name}.raw"
+            sf.write(filename, data_track, self.sample_rate, subtype='FLOAT')
             debug_print(f"Saved {name} fracture audio to {filename}")
         
         # Save metadata

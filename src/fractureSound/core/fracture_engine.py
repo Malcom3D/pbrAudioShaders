@@ -57,6 +57,10 @@ class fractureEngine:
         
         set_debug(config.system.debug)
         set_debug_prefix(self.__class__.__name__)
+
+        self.collisions_dir = f"{config.system.cache_path}/collisions"
+        self.trajectories_dir = f"{config.system.cache_path}/trajectories"
+        self.forces_dir = f"{config.system.cache_path}/forces_data"
         
         self.status_dir = f"{config.system.cache_path}/status/{__class__.__name__}"
         self.fracture_dir = f"{config.system.cache_path}/fracture"
@@ -73,9 +77,58 @@ class fractureEngine:
         self.modal_model = FractureModalModel(self.entity_manager)
         self.synth = FractureSynth(self.entity_manager)
         
+        # Load existing trajectories
+        self._load_trajectories()
+        self.total_samples = self._set_total_samples()
+
+        # Load existing collisions
+        self._load_collisions()
+
+        # Load existing forces
+        self._load_forces()
+
         # Load existing fracture events
         self._load_fracture_events()
+
+    def _load_trajectories(self):
+        """Load previously computed trajectories"""
+        trajectories = self.entity_manager.get('trajectories')
+        if len(trajectories) == 0:
+            if os.path.exists(f"{self.trajectories_dir}") and not len(os.listdir(f"{self.trajectories_dir}")) == 0:
+                for filename in os.listdir(f"{self.trajectories_dir}"):
+                    trajectory = None
+                    if filename.endswith('.pkl') and os.path.isfile(f"{self.trajectories_dir}/corrected/{filename}"):
+                        trajectory = TrajectoryData.load(f"{self.trajectories_dir}/corrected/{filename}")
+                    elif filename.endswith('.pkl') and not os.path.isfile(f"{self.trajectories_dir}/corrected/{filename}"):
+                        trajectory = TrajectoryData.load(f"{self.trajectories_dir}/{filename}")
+                    if trajectory is not None:
+                        _ = self.entity_manager.register('trajectories', trajectory)
+
+    def _set_total_samples(self):
+        trajectories = self.entity_manager.get('trajectories')
+        for t_idx in trajectories.keys():
+            if not trajectories[t_idx].static:
+                trajectory = trajectories[t_idx]
+                return int(trajectory.get_x()[-1])
     
+    def _load_collisions(self):
+        collisions = self.entity_manager.get('collisions')
+        if len(collisions) == 0:
+            if os.path.exists(f"{self.collisions_dir}") and not len(os.listdir(f"{self.collisions_dir}")) == 0:
+                for filename in os.listdir(f"{self.collisions_dir}"):
+                    if filename.endswith('.pkl'):
+                        collisions = CollisionData.load(f"{self.collisions_dir}/{filename}")
+                        _ = self.entity_manager.register('collisions', collisions)
+
+    def _load_forces(self):
+        forces = self.entity_manager.get('forces')
+        if len(forces) == 0:
+            if os.path.exists(f"{self.forces_dir}") and not len(os.listdir(f"{self.forces_dir}")) == 0:
+                for filename in os.listdir(f"{self.forces_dir}"):
+                    if filename.endswith('.pkl'):
+                        forces = ForceDataSequence.load(f"{self.forces_dir}/{filename}")
+                        _ = self.entity_manager.register('forces', forces)
+
     def _load_fracture_events(self):
         """Load previously computed fracture events."""
         if os.path.exists(self.fracture_dir):
@@ -98,7 +151,7 @@ class fractureEngine:
             if conf_obj.fractured is not False and conf_obj.shard is not False:
                 # This is a fractured object with shards
                 original_idx = conf_obj.idx
-                fragment_indices = conf_obj.shard.tolist()
+                fragment_indices = conf_obj.shard
                 
                 # Detect fracture events
                 events = self.detect_fractures()
@@ -144,7 +197,7 @@ class fractureEngine:
     @delayed
     def _delayed_synthesize(self, event: FractureEvent):
         """Delayed synthesis of fracture sound."""
-        self.synth.compute(event)
+        self.synth.compute(event, self.total_samples)
     
     def detect_fractures(self) -> List[FractureEvent]:
         """
@@ -160,7 +213,7 @@ class fractureEngine:
         for conf_obj in config.objects:
             if conf_obj.fractured is not False and conf_obj.shard is not False:
                 original_idx = conf_obj.idx
-                fragment_indices = conf_obj.shard.tolist()
+                fragment_indices = conf_obj.shard
                 
                 detected = self.detector.detect_fracture_events(original_idx, fragment_indices)
                 events.extend(detected)
@@ -185,7 +238,7 @@ class fractureEngine:
             self.modal_model.compute(event, frag_idx)
         
         # Synthesize fracture sound
-        return self.synth.compute(event)
+        return self.synth.compute(event, self.total_samples)
     
     def get_fracture_events(self, original_obj_idx: int = None) -> List[FractureEvent]:
         """
