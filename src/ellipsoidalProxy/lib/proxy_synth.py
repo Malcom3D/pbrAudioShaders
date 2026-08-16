@@ -176,9 +176,9 @@ class ProxySynth:
                 processed = self._convolve_with_ir(excitation, size_scale, contact_type)
                 debug_print('Apply IR convolution', config_obj.name, processed.shape, np.count_nonzero(processed))
                 
-                # Apply equalization
-                processed = self.equalizer.apply_equalization(processed, contact_type)
-                debug_print('Apply equalization', config_obj.name, processed.shape, np.count_nonzero(processed))
+#                # Apply equalization
+#                processed = self.equalizer.apply_equalization(processed, contact_type)
+#                debug_print('Apply equalization', config_obj.name, processed.shape, np.count_nonzero(processed))
                 
                 processed_tracks[track_name] = processed
         
