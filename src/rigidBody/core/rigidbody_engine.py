@@ -155,7 +155,7 @@ class rigidBodyEngine:
         results_modal = compute(*tasks_modal)
         self.progress = _update_status(f"{self.status_dir}/prebake", 30)
 
-        tasks_proxy = [self.prebake_proxy(obj_idx, self.total_samples) for obj_idx in self.obj_dyn + self.obj_static]
+        tasks_proxy = [self.prebake_proxy(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
         results_proxy = compute(*tasks_proxy)
         self.progress = _update_status(f"{self.status_dir}/prebake", 45)
 
@@ -166,7 +166,7 @@ class rigidBodyEngine:
             _ = self.entity_manager.register('score_tracks', score_track_final)
 
         collisions = self.entity_manager.get('collisions')
-        tasks_composer = [self.prebake_composer(config_obj.idx) for config_obj in config.objects]
+        tasks_composer = [self.prebake_composer(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
         results_composer = compute(*tasks_composer)
         self.progress = _update_status(f"{self.status_dir}/prebake", 90)
 
@@ -235,7 +235,7 @@ class rigidBodyEngine:
         # ProxySynth
         if not len(self.obj_proxy_synth) == 0:
             proxy_engine = ProxyEngine(self.entity_manager)
-            tasks_proxy_synth = [proxy_engine.compute(obj_idx) for obj_idx in self.obj_proxy_synth]
+            tasks_proxy_synth = [proxy_engine.compute(obj_idx, self.total_samples) for obj_idx in self.obj_proxy_synth]
             results_proxy_synth = compute(*tasks_proxy_synth)
 
         self.progress = _update_status(f"{self.status_dir}/bake", 90)

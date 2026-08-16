@@ -91,7 +91,8 @@ class ProxySynth:
     def _precompute_ir_ffts(self):
         """Pre-compute FFT of all IRs for faster convolution."""
         n_sizes = self.ir_table.n_size_steps
-        n_types = 6  # no-contact, impact, sliding, scraping, rolling, static
+#        n_types = 6  # no-contact, impact, sliding, scraping, rolling, static
+        n_types = 4  # impact, sliding, scraping, rolling
         n_bands = self.ir_table.n_frequency_bands
         
         # Pre-compute FFTs: (n_sizes, n_types, n_bands, fft_size/2+1)
@@ -100,6 +101,7 @@ class ProxySynth:
         for size_idx in range(n_sizes):
             for type_idx in range(n_types):
                 for band_idx in range(n_bands):
+                    debug_print('size_idx', size_idx, 'type_idx', type_idx, 'band_idx', band_idx)
                     ir = self.ir_table.ir_table[size_idx, type_idx, band_idx]
                     # Pad to FFT size
                     padded = np.zeros(self.fft_size)
@@ -176,10 +178,10 @@ class ProxySynth:
                 
                 # Apply equalization
                 processed = self.equalizer.apply_equalization(processed, contact_type)
+                debug_print('Apply equalization', config_obj.name, processed.shape, np.count_nonzero(processed))
                 if np.count_nonzero(processed) == 0:
                     processed = np.zeros(total_samples, dtype=np.float32)
                     debug_print('EQ Processed is all zeros', config_obj.name, processed.shape)
-                debug_print('Apply equalization', config_obj.name, processed.shape, np.count_nonzero(processed))
                 
                 processed_tracks[track_name] = processed
         

@@ -27,6 +27,7 @@ from pbrAudioCommon import EntityManager
 from pbrAudioCommon import ShapeType, ShapeProperties
 from pbrAudioCommon import PrimitiveGeometry
 from pbrAudioCommon import _compute_rayleigh_damping, _load_mesh
+from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
 @dataclass
 class ProxyIRTable:
@@ -61,6 +62,9 @@ class ProxyIRTable:
         config = self.entity_manager.get('config')
         self.sample_rate = config.system.sample_rate
         
+        set_debug(config.system.debug)
+        set_debug_prefix(self.__class__.__name__)
+
         # Compute frequency bands (logarithmic spacing)
         nyquist = self.sample_rate / 2
         self.freq_bands = np.logspace(np.log10(20), np.log10(nyquist), self.n_frequency_bands + 1)
