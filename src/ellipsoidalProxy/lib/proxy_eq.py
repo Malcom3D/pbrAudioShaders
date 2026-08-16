@@ -69,26 +69,24 @@ class ProxyEqualizer:
         
         # Sliding: emphasize mid frequencies
         sliding_curve = np.ones(n_freqs)
-        sliding_curve[freqs < 3000] *= 0.5
+        sliding_curve[freqs < 3000] *= 0.1
         sliding_curve[freqs > 9000] *= np.exp(-(freqs[freqs > 9000] - 9000) / 8000)
         self.eq_curves[1] = sliding_curve
         
         # Scraping: emphasize high frequencies
         scraping_curve = np.ones(n_freqs)
-        scraping_curve[freqs < 2000] *= np.exp(-(2000 - freqs[freqs < 2000]) / 300)
-        scraping_curve[freqs > 10000] *= 1.5
+        scraping_curve[freqs < 2000] *= np.exp(-(2000 - freqs[freqs < 2000]) / 3000)
+        scraping_curve[freqs > 10000] *= 0.1
         self.eq_curves[2] = scraping_curve
         
         # Rolling: emphasize high frequencies
         rolling_curve = np.ones(n_freqs)
-        rolling_curve[freqs < 5000] *= np.exp(-(5000 - freqs[freqs < 5000]) / 3000)
-        rolling_curve[freqs > 6500] *= 1.5
+        rolling_curve[freqs < 6500] *= np.exp(-(6500 - freqs[freqs < 6500]) / 3000)
         self.eq_curves[3] = rolling_curve
 
         # Rolling sound: emphasize low frequencies
         rolling_sound_curve = np.ones(n_freqs)
-        rolling_sound_curve[freqs < 1000] *= 1.5
-        rolling_sound_curve[freqs > 2000] *= np.exp(-(freqs[freqs > 2000] - 2000) / 8000)
+        rolling_sound_curve[freqs > 1500] *= np.exp(-(freqs[freqs > 1500] - 1500) / 8000)
         self.eq_curves[4] = rolling_sound_curve
 
     def apply_equalization(self, audio: np.ndarray, contact_type: int, force: np.ndarray = None) -> np.ndarray:

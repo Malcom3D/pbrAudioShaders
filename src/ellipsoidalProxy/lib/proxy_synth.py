@@ -201,12 +201,12 @@ class ProxySynth:
                     processed_tracks[track_name] /= max_val * 0.9
             if track_name == 'rolling':
                 # Reduce Volume
-                processed_tracks[track_name] *= 0.5
+                processed_tracks[track_name] *= 0.01
             if track_name in ['sliding', 'scraping']:
                 # Reduce Volume
                 processed_tracks[track_name] *= 0.0075
             if track_name == 'rolling_sound':
-                processed_tracks[track_name] *= 5
+                processed_tracks[track_name] *= 2.5
 
             mixed += processed_tracks[track_name]
         
