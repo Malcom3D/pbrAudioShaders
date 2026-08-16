@@ -210,27 +210,104 @@ class ProxyEqualizer:
         return output
     
     def _apply_static_eq(self, audio: np.ndarray, eq_curve: np.ndarray) -> np.ndarray:
-        """Apply static EQ to entire signal."""
+        """
+        Apply static EQ to entire signal using overlap-add for long signals.
+    
+        Parameters:
+        -----------
+        audio : np.ndarray
+            Input audio signal
+        eq_curve : np.ndarray
+            Frequency-domain EQ curve (n_fft/2 + 1)
+    
+        Returns:
+        --------
+        np.ndarray : Equalized audio
+        """
         n_samples = audio.shape[0]
+    
+        # If signal is shorter than FFT size, process directly
+        if n_samples <= self.fft_size:
+            return self._apply_static_eq_block(audio, eq_curve)
+    
+        # For longer signals, use overlap-add
+        output = np.zeros(n_samples + self.fft_size, dtype=np.float32)
+    
+        # Process in blocks with 50% overlap
+        hop_size = self.fft_size // 2
+    
+        for start in range(0, n_samples, hop_size):
+            end = min(start + self.fft_size, n_samples)
+            block_len = end - start
         
-        # Pad to FFT size
-        padded = np.zeros(self.fft_size)
-        padded[:min(n_samples, self.fft_size)] = audio[:min(n_samples, self.fft_size)]
+            # Extract block and pad if necessary
+            block = np.zeros(self.fft_size, dtype=np.float32)
+            block[:block_len] = audio[start:end]
         
-        # FFT
-        audio_fft = np.fft.rfft(padded)
+            # Apply window to reduce artifacts
+            windowed = block * self._window
         
-        # Apply EQ
-        audio_fft *= eq_curve
+            # FFT
+            block_fft = np.fft.rfft(windowed)
         
-        # Inverse FFT
-        output = np.fft.irfft(audio_fft, n=self.fft_size)
+            # Apply EQ curve
+            block_fft *= eq_curve
         
+            # Inverse FFT
+            result = np.fft.irfft(block_fft, n=self.fft_size)
+        
+            # Apply window again (for overlap-add)
+            result *= self._window
+        
+            # Overlap-add to output
+            output[start:start + self.fft_size] += result
+    
         # Trim to original length
         output = output[:n_samples]
-        
-        return output
     
+        return output
+
+    def _apply_static_eq_block(self, audio: np.ndarray, eq_curve: np.ndarray) -> np.ndarray:
+        """
+        Apply static EQ to a single block (shorter than FFT size).
+    
+        Parameters:
+        -----------
+        audio : np.ndarray
+            Input audio block
+        eq_curve : np.ndarray
+            Frequency-domain EQ curve (n_fft/2 + 1)
+    
+        Returns:
+        --------
+        np.ndarray : Equalized audio
+        """
+        n_samples = audio.shape[0]
+    
+        # Pad to FFT size
+        padded = np.zeros(self.fft_size, dtype=np.float32)
+        padded[:min(n_samples, self.fft_size)] = audio[:min(n_samples, self.fft_size)]
+    
+        # Apply window
+        windowed = padded * self._window
+    
+        # FFT
+        audio_fft = np.fft.rfft(windowed)
+    
+        # Apply EQ
+        audio_fft *= eq_curve
+    
+        # Inverse FFT
+        result = np.fft.irfft(audio_fft, n=self.fft_size)
+    
+        # Apply window again
+        result *= self._window
+    
+        # Trim to original length
+        output = result[:n_samples]
+    
+        return output
+
     def update_eq_curve(self, contact_type: int, curve: np.ndarray) -> None:
         """Update EQ curve for a contact type."""
         self.eq_curves[contact_type] = curve
