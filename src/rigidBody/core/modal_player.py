@@ -267,6 +267,7 @@ class ModalPlayer:
 
     def save_synth_tracks(self):
         config = self.entity_manager.get('config')
+        set_debug_prefix(self.__class__.__name__)
         self.save_synth_track(self.rigidbody_synth_track, 'rigidbody')
         self.save_synth_track(self.resonance_synth_track, 'resonance')
         self.save_synth_track(self.sliding_synth_track, 'sliding')

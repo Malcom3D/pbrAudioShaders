@@ -166,32 +166,51 @@ class ProxySynth:
                 debug_print('Get the excitation signal', config_obj.name, excitation.shape, np.count_nonzero(excitation))
                 
                 # Trim or pad to total_samples
-                if len(excitation) < total_samples:
+                if excitation.shape[0] < total_samples:
                     excitation = np.pad(excitation, (0, total_samples - len(excitation)))
-                elif len(excitation) > total_samples:
+                elif excitation.shape[0] > total_samples:
                     excitation = excitation[:total_samples]
                 debug_print('Trim or pad to total_samples', config_obj.name, excitation.shape, np.count_nonzero(excitation))
                 
+            if not track_name == 'rolling_sound':
                 # Apply IR convolution
                 processed = self._convolve_with_ir(excitation, size_scale, contact_type)
                 debug_print('Apply IR convolution', config_obj.name, processed.shape, np.count_nonzero(processed))
                 
                 # Apply equalization
-                processed = self.equalizer.apply_equalization(processed, contact_type)
+                processed = self.equalizer.apply_equalization(processed, contact_type, excitation)
                 debug_print('Apply equalization', config_obj.name, processed.shape, np.count_nonzero(processed))
-                
+                processed_tracks[track_name] = processed
+
+            else:
+                # Add noise enrichment tracks
+                processed = self._apply_force_envelope(excitation, audio_tracks['rolling'])
                 processed_tracks[track_name] = processed
         
         # Mix all tracks
         mixed = np.zeros(total_samples, dtype=np.float32)
-        for track in processed_tracks.values():
-            debug_print('Mix all tracks', mixed.shape, track.shape)
-            mixed += track
+#        for track in processed_tracks.values():
+#            debug_print('Mix all tracks', mixed.shape, track.shape)
+#            mixed += track
+
+        for track_name in processed_tracks.keys():
+            if track_name == 'impact':
+                # Normalize impact
+                max_val = np.max(np.abs(processed_tracks[track_name]))
+                if max_val > 0:
+                    processed_tracks[track_name] /= max_val * 0.9
+            elif track_name == 'rolling':
+                # ToDo: use rolling_sound from audio-forces with envelope
+                pass
+            elif track_name in ['sliding', 'scraping']:
+                # Reduce Volume
+                processed_tracks[track_name] *= 0.01
+            mixed += processed_tracks[track_name]
         
         # Normalize
         max_val = np.max(np.abs(mixed))
         if max_val > 0:
-            mixed = mixed / max_val * 0.9
+            mixed /= max_val * 0.9
         
         # Save output
         self._save_audio(config_obj, mixed, processed_tracks)
@@ -201,11 +220,11 @@ class ProxySynth:
         Load audio-force tracks for an object.
         
         Returns:
-            Dictionary with keys: 'impact', 'sliding', 'scraping', 'rolling'
+            Dictionary with keys: 'impact', 'sliding', 'scraping', 'rolling', 'rolling_sound'
             or None if no tracks found.
         """
         tracks = {}
-        track_names = ['impact', 'sliding', 'scraping', 'rolling']
+        track_names = ['impact', 'sliding', 'scraping', 'rolling', 'rolling_sound']
         
         for track_name in track_names:
             track_file = f"{self.audio_force_dir}/{obj_name}_{track_name}.raw"
@@ -381,6 +400,30 @@ class ProxySynth:
         output = output[:n_samples]
         
         return output
+
+    def _apply_force_envelope(self, signal: np.ndarray, force: np.ndarray) -> np.ndarray:
+        """
+        Dynamic amplification based on force envelope.
+        """
+        # Compute force envelope
+        force_env = np.abs(force)
+        if np.max(force_env) > 0:
+            force_env = force_env / np.max(force_env)
+
+        # Smooth force envelope
+        force_env = gaussian_filter1d(force_env, sigma=5)
+
+        # Dynamic gain envelope based on force
+        # High force = more gain, low force = less gain
+        force_gain = 0.3 + 0.7 * force_env
+
+        # Smooth gain to prevent artifacts
+        total_gain = gaussian_filter1d(force_gain, sigma=3)
+
+        # Apply gain
+        output = signal * total_gain
+
+        return output
     
     def _compute_size_scale(self, config_obj: Any) -> float:
         """Compute normalized size scale (0-1) for an object."""
@@ -426,7 +469,7 @@ class ProxySynth:
         # Save individual tracks
         for track_name, track_data in tracks.items():
             if len(track_data) > 0:
-                track_file = f"{self.output_dir}/{config_obj.name}_proxy_{track_name}.wav"
+                track_file = f"{self.output_dir}/{config_obj.name}_proxy_{track_name}.raw"
                 sf.write(track_file, track_data, self.sample_rate, subtype='FLOAT')
                 debug_print(f"Saved {track_name} track to {track_file}")
         
