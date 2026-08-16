@@ -16,8 +16,6 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# src/ellipsoidalProxy/lib/proxy_synth.py
-
 import os
 import numpy as np
 from typing import Dict, List, Tuple, Optional, Any
@@ -109,7 +107,7 @@ class ProxySynth:
                     padded[:ir_len] = ir[:ir_len]
                     self._ir_ffts[size_idx, type_idx, band_idx] = np.fft.rfft(padded)
     
-    def compute(self, obj_idx: int) -> None:
+    def compute(self, obj_idx: int, total_samples: int) -> None:
         """
         Compute proxy synth for an object using audio-force tracks from ForceSynth.
         
@@ -132,6 +130,7 @@ class ProxySynth:
         
         # Get size scale for this object
         size_scale = self._compute_size_scale(config_obj)
+        debug_print('Get size scale for this object', size_scale.shape, np.count_nonzero(size_scale))
         
         # Load audio-force tracks
         audio_tracks = self._load_audio_force_tracks(config_obj.name)
@@ -141,9 +140,9 @@ class ProxySynth:
             return
         
         # Get total samples from the longest track
-        total_samples = max(len(track) for track in audio_tracks.values() if track is not None)
+        tracks_samples = max(len(track) for track in audio_tracks.values() if track is not None)
         
-        if total_samples == 0:
+        if tracks_samples == 0:
             debug_print(f"Audio-force tracks are empty for {config_obj.name}")
             return
         
@@ -162,24 +161,32 @@ class ProxySynth:
             if audio_tracks.get(track_name) is not None:
                 # Get the excitation signal
                 excitation = audio_tracks[track_name]
+                debug_print('Get the excitation signal', config_obj.name, excitation.shape, np.count_nonzero(excitation))
                 
                 # Trim or pad to total_samples
                 if len(excitation) < total_samples:
                     excitation = np.pad(excitation, (0, total_samples - len(excitation)))
                 elif len(excitation) > total_samples:
                     excitation = excitation[:total_samples]
+                debug_print('Trim or pad to total_samples', config_obj.name, excitation.shape, np.count_nonzero(excitation))
                 
                 # Apply IR convolution
                 processed = self._convolve_with_ir(excitation, size_scale, contact_type)
+                debug_print('Apply IR convolution', config_obj.name, processed.shape, np.count_nonzero(processed))
                 
                 # Apply equalization
                 processed = self.equalizer.apply_equalization(processed, contact_type)
+                if np.count_nonzero(processed) == 0:
+                    processed = np.zeros(total_samples, dtype=np.float32)
+                    debug_print('EQ Processed is all zeros', config_obj.name, processed.shape)
+                debug_print('Apply equalization', config_obj.name, processed.shape, np.count_nonzero(processed))
                 
                 processed_tracks[track_name] = processed
         
         # Mix all tracks
         mixed = np.zeros(total_samples, dtype=np.float32)
         for track in processed_tracks.values():
+            debug_print('Mix all tracks', mixed.shape, track.shape)
             mixed += track
         
         # Normalize

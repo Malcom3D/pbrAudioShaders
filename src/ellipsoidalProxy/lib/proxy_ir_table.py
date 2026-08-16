@@ -40,7 +40,6 @@ class ProxyIRTable:
     
     Uses SIMD-optimized numpy operations for fast convolution.
     """
-    
     entity_manager: EntityManager
     
     # IR parameters
@@ -70,7 +69,8 @@ class ProxyIRTable:
         self.size_steps = np.linspace(0, 1, self.n_size_steps)
         
         # Initialize IR table
-        event_types = 6 # no-contact, impact, sliding, scraping, rolling, static
+#        event_types = 6 # no-contact, impact, sliding, scraping, rolling, static
+        event_types = 4 # impact, sliding, scraping, rolling
         self.ir_table = np.zeros((self.n_size_steps, event_types, self.n_frequency_bands, self.max_ir_length), dtype=np.float32)
     
     def compute_ir_table(self, proxy_meshes: List[Any]) -> None:
@@ -103,6 +103,7 @@ class ProxyIRTable:
                 # Generate IRs for each contact type
                 for contact_type in range(4):
                     ir = self._generate_ir(modal_params=modal_params, contact_type=contact_type, size=size)
+                    debug_print('generated ir for contact_type:', contact_type, 'ir:', ir.shape, np.count_nonzero(ir)) 
                     
                     # Split into frequency bands
                     banded_ir = self._split_into_frequency_bands(ir)
@@ -400,15 +401,7 @@ class ProxyIRTable:
     
     def save(self, filepath: str) -> None:
         """Save IR table to file."""
-        np.savez_compressed(
-            filepath,
-            ir_table=self.ir_table,
-            size_steps=self.size_steps,
-            freq_bands=self.freq_bands,
-            sample_rate=self.sample_rate,
-            min_size=self.min_size,
-            max_size=self.max_size
-        )
+        np.savez_compressed(filepath, ir_table=self.ir_table, size_steps=self.size_steps, freq_bands=self.freq_bands, sample_rate=self.sample_rate, min_size=self.min_size, max_size=self.max_size)
     
     def load(self, filepath: str) -> None:
         """Load IR table from file."""

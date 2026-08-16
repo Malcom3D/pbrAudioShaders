@@ -30,7 +30,7 @@ dask_config.set({'num_workers': 1024, 'optimization.fuse.active': True, 'optimiz
 from pbrAudioCommon import EntityManager, ScoreTrack
 from pbrAudioCommon import _update_status
 from physicsSolver import ForceDataSequence, ModalVertices, CollisionData, TrajectoryData
-from ellipsoidalProxy import Modal4Proxy, ProxySynth
+from ellipsoidalProxy import Modal4Proxy, ProxySynth, ProxyEngine
 from postProcess import PostProcessEngine
 
 from ..core.mesh2modal import Mesh2Modal
@@ -155,7 +155,7 @@ class rigidBodyEngine:
         results_modal = compute(*tasks_modal)
         self.progress = _update_status(f"{self.status_dir}/prebake", 30)
 
-        tasks_proxy = [self.prebake_proxy(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
+        tasks_proxy = [self.prebake_proxy(obj_idx, self.total_samples) for obj_idx in self.obj_dyn + self.obj_static]
         results_proxy = compute(*tasks_proxy)
         self.progress = _update_status(f"{self.status_dir}/prebake", 45)
 
@@ -220,15 +220,22 @@ class rigidBodyEngine:
 #        self.players = [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
 #        tasks_player = [self.bake_player(player) for player in self.players]
 #        tasks_save = [self.bake_save(player) for player in self.players]
+        modal_obj_idx = list(set(self.obj_dyn + self.obj_static) - set(self.obj_proxy_synth))
         players = [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in modal_obj_idx]
         tasks_player = [self.bake_player(player) for player in players]
         results_player = compute(*tasks_player)
 
         self.progress = _update_status(f"{self.status_dir}/bake", 60)
 
+#        # ProxySynth
+#        if not len(self.obj_proxy_synth) == 0:
+#            tasks_proxy_synth = [self.bake_proxy_synth(obj_idx) for obj_idx in self.obj_proxy_synth]
+#            results_proxy_synth = compute(*tasks_proxy_synth)
+
         # ProxySynth
         if not len(self.obj_proxy_synth) == 0:
-            tasks_proxy_synth = [self.bake_proxy_synth(obj_idx) for obj_idx in self.obj_proxy_synth]
+            proxy_engine = ProxyEngine(self.entity_manager)
+            tasks_proxy_synth = [proxy_engine.compute(obj_idx) for obj_idx in self.obj_proxy_synth]
             results_proxy_synth = compute(*tasks_proxy_synth)
 
         self.progress = _update_status(f"{self.status_dir}/bake", 90)
@@ -275,10 +282,10 @@ class rigidBodyEngine:
     def bake_player(self, player: Any):
         player.compute()
 
-    @delayed
-    def bake_proxy_synth(self, obj_idx: int):
-        ps = ProxySynth(self.entity_manager)
-        ps.compute(obj_idx)
+#    @delayed
+#    def bake_proxy_synth(self, obj_idx: int):
+#        ps = ProxySynth(self.entity_manager)
+#        ps.compute(obj_idx, self.total_samples)
 
     @delayed
     def bake_save(self, player: Any):

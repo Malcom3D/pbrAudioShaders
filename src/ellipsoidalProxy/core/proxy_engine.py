@@ -17,6 +17,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import numpy as np
+from dask import delayed
 from typing import Tuple, Optional, List, Dict, Any
 from dataclasses import dataclass, field
 
@@ -43,23 +44,23 @@ class ProxyEngine:
     def __post_init__(self):
         config = self.entity_manager.get('config')
         
-        # Initialize IR table
-        self.ir_table = ProxyIRTable(self.entity_manager)
-        
         # Initialize proxy synth
-        self.proxy_synth = ProxySynth(entity_manager=self.entity_manager, ir_table=self.ir_table)
+        self.proxy_synth = ProxySynth(entity_manager=self.entity_manager)
     
-    def compute_ir_table(self, proxy_meshes: List[Any]) -> None:
-        """
-        Compute IR table from proxy meshes.
-        
-        Parameters:
-        -----------
-        proxy_meshes : List of proxy mesh configurations
-        """
+        # Map IR table
+        self.ir_table = self.proxy_synth.ir_table
+
+        config = self.entity_manager.get('config')
+        proxy_meshes = []
+
+        for config_obj in config.objects:
+            if config.system.enable_proxy_synth and config_obj.proxy_type in [0,1,2]:
+                proxy_meshes.append(config_obj)
+
         self.ir_table.compute_ir_table(proxy_meshes)
 
-    def compute(self, obj_idx: int) -> None:
+    @delayed
+    def compute(self, obj_idx: int, total_samples: int) -> None:
         """
         Process audio for a proxy object.
         
@@ -68,12 +69,4 @@ class ProxyEngine:
         obj_idx : int
             Object index
         """
-        self.proxy_synth.compute(obj_idx)
-    
-    def luthier(self, proxy_meshes) -> None:
-        """
-        Process all proxy objects.
-        """
-        config = self.entity_manager.get('config')
-        
-        self.compute_ir_table(proxy_meshes)
+        self.proxy_synth.compute(obj_idx, total_samples)
