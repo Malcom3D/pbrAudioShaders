@@ -22,6 +22,7 @@ from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass, field
 import soundfile as sf
 from scipy import signal
+from scipy.ndimage import gaussian_filter1d
 
 from pbrAudioCommon import EntityManager
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
