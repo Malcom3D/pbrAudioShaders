@@ -19,6 +19,8 @@
 import numpy as np
 from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass, field
+
+from pbrAudioCommon import EntityManager
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
 @dataclass
@@ -29,6 +31,7 @@ class ProxyEqualizer:
     Adjusts frequency response based on contact type and force characteristics.
     Uses SIMD-optimized FFT processing.
     """
+    entity_manager: EntityManager
     
     sample_rate: int = 48000
     fft_size: int = 4096

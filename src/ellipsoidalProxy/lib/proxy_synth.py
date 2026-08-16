@@ -75,7 +75,7 @@ class ProxySynth:
             self.ir_table = ProxyIRTable(self.entity_manager)
         
         if self.equalizer is None:
-            self.equalizer = ProxyEqualizer(sample_rate=self.sample_rate)
+            self.equalizer = ProxyEqualizer(self.entity_manager)
         
         # Set output directory
         if self.output_dir is None:
