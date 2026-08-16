@@ -19,6 +19,7 @@
 import numpy as np
 from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass, field
+from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
 @dataclass
 class ProxyEqualizer:
@@ -38,6 +39,12 @@ class ProxyEqualizer:
     eq_curves: Dict[int, np.ndarray] = field(default_factory=dict)
     
     def __post_init__(self):
+        config = self.entity_manager.get('config')
+        self.sample_rate = config.system.sample_rate
+
+        set_debug(config.system.debug)
+        set_debug_prefix(self.__class__.__name__)
+
         # Initialize default EQ curves
         self._init_default_curves()
         
@@ -91,10 +98,12 @@ class ProxyEqualizer:
         --------
         np.ndarray : Equalized audio
         """
-        n_samples = len(audio)
+        audio_values = np.count_nonzero(audio)
         
-        if n_samples == 0:
+        if audio_values == 0:
             return audio
+
+        n_samples = audio.shape[0]
         
         # Get base EQ curve for this contact type
         base_curve = self.eq_curves.get(contact_type, np.ones(self.fft_size // 2 + 1))
@@ -135,14 +144,13 @@ class ProxyEqualizer:
         
         return force_env
     
-    def _process_with_dynamic_eq(self, audio: np.ndarray, base_curve: np.ndarray,
-                                  force_env: np.ndarray) -> np.ndarray:
+    def _process_with_dynamic_eq(self, audio: np.ndarray, base_curve: np.ndarray, force_env: np.ndarray) -> np.ndarray:
         """
         Process audio with dynamic EQ based on force envelope.
         
         Uses overlap-add with time-varying frequency response.
         """
-        n_samples = len(audio)
+        n_samples = audio.shape[0]
         output = np.zeros(n_samples + self.fft_size)
         
         # Process in blocks
@@ -177,7 +185,7 @@ class ProxyEqualizer:
             # Higher force = more high-frequency content
             dynamic_curve = base_curve.copy()
             if block_force > 0.1:
-                               # Boost high frequencies with force
+                # Boost high frequencies with force
                 high_freq_boost = 1.0 + 0.5 * block_force
                 dynamic_curve[self._freqs > 2000] *= high_freq_boost
             
@@ -200,7 +208,7 @@ class ProxyEqualizer:
     
     def _apply_static_eq(self, audio: np.ndarray, eq_curve: np.ndarray) -> np.ndarray:
         """Apply static EQ to entire signal."""
-        n_samples = len(audio)
+        n_samples = audio.shape[0]
         
         # Pad to FFT size
         padded = np.zeros(self.fft_size)

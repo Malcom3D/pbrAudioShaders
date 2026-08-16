@@ -179,9 +179,6 @@ class ProxySynth:
                 # Apply equalization
                 processed = self.equalizer.apply_equalization(processed, contact_type)
                 debug_print('Apply equalization', config_obj.name, processed.shape, np.count_nonzero(processed))
-                if np.count_nonzero(processed) == 0:
-                    processed = np.zeros(total_samples, dtype=np.float32)
-                    debug_print('EQ Processed is all zeros', config_obj.name, processed.shape)
                 
                 processed_tracks[track_name] = processed
         
