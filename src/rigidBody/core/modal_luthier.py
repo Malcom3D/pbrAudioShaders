@@ -43,12 +43,22 @@ class ModalLuthier:
     def compute(self, obj_idx: int) -> None:
         config = self.entity_manager.get('config')
         sample_rate = config.system.sample_rate
-        modal_vertices = self.entity_manager.get('modal_vertices')
+
+        self.connected_buffer.add_obj(obj_idx)
 
         for conf_obj in config.objects:
             if conf_obj.idx == obj_idx:
                 config_obj = conf_obj
 
+        obj_name = config_obj.name
+        if config_obj.proxy_type is not False:
+            if config_obj.proxy_type in [0,1,2] and config.system.enable_proxy_synth:
+                debug_print('ModalLuthier: ', obj_name, 'use small proxy synth')
+                return
+            else:
+                obj_name = f"{config_obj.name}_proxy_{config_obj.proxy_type}"
+
+        modal_vertices = self.entity_manager.get('modal_vertices')
         vertex_list = np.array([])
         connected_area = 0
         for idx in modal_vertices.keys():
@@ -56,12 +66,6 @@ class ModalLuthier:
                 vertex_list = modal_vertices[idx].get_vertices()
                 if isinstance(config_obj.connected, np.ndarray):
                     connected_area = modal_vertices[idx].connected_area
-
-        self.connected_buffer.add_obj(obj_idx)
-
-        obj_name = config_obj.name
-        if config_obj.proxy_type is not False:
-            obj_name = f"{config_obj.name}_proxy_{config_obj.proxy_type}"
 
         debug_print('ModalLuthier: init ', obj_name, 'RigidBodySynth')
         rigidbody_synth = RigidBodySynth(entity_manager=self.entity_manager, obj_idx=obj_idx, modal_lib=f"{self.dsp_path}/{obj_name}.lib", vertex_list=vertex_list, sample_rate=sample_rate)

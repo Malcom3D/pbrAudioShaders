@@ -73,7 +73,7 @@ class rigidBodyEngine:
             if config_obj.proxy_type is False or config_obj.proxy_type in [3,4,5,6]:
                 self.obj_modal.append(config_obj.idx)
             elif config.system.enable_proxy_synth and config_obj.proxy_type in [0,1,2]:
-                self.obj_proxy_synth.append(config_obj)
+                self.obj_proxy_synth.append(config_obj.idx)
         for i in range(len(config.objects)):
             for j in range(i + 1, len(config.objects)):
                 self.obj_pairs.append([config.objects[i].idx, config.objects[j].idx])
@@ -213,10 +213,7 @@ class rigidBodyEngine:
         sample_counter.set_total_samples(self.total_samples)
         _ = self.entity_manager.register('sample_counter', sample_counter)
 
-        idx_proxy_synth = [obj.idx for obj in self.obj_proxy_synth]
-        modal_obj_idx = list(set(self.obj_dyn + self.obj_static) - set(idx_proxy_synth))
-
-        tasks_luthier = [self.bake_luthier(obj_idx) for obj_idx in modal_obj_idx]
+        tasks_luthier = [self.bake_luthier(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
         results_luthier = compute(*tasks_luthier)
         self.progress = _update_status(f"{self.status_dir}/bake", 10)
 
@@ -231,7 +228,7 @@ class rigidBodyEngine:
 
         # ProxySynth
         if not len(self.obj_proxy_synth) == 0:
-            tasks_proxy_synth = [self.bake_proxy_synth(obj_idx) for obj_idx in idx_proxy_synth]
+            tasks_proxy_synth = [self.bake_proxy_synth(obj_idx) for obj_idx in self.obj_proxy_synth]
             results_proxy_synth = compute(*tasks_proxy_synth)
 
         self.progress = _update_status(f"{self.status_dir}/bake", 90)
