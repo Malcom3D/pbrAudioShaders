@@ -156,7 +156,8 @@ class ProxySynth:
             'impact': 0,
             'sliding': 1,
             'scraping': 2,
-            'rolling': 3
+            'rolling': 3,
+            'rolling_sound': 4
         }
         
         for track_name, contact_type in contact_type_map.items():
@@ -194,17 +195,20 @@ class ProxySynth:
 #            mixed += track
 
         for track_name in processed_tracks.keys():
-            if track_name == 'impact':
+            if track_name in ['impact', 'rolling']:
                 # Normalize impact
                 max_val = np.max(np.abs(processed_tracks[track_name]))
                 if max_val > 0:
                     processed_tracks[track_name] /= max_val * 0.9
-            elif track_name == 'rolling':
-                # ToDo: use rolling_sound from audio-forces with envelope
-                pass
-            elif track_name in ['sliding', 'scraping']:
+            if track_name == 'rolling':
                 # Reduce Volume
-                processed_tracks[track_name] *= 0.01
+                processed_tracks[track_name] *= 0.0005
+            if track_name in ['sliding', 'scraping']:
+                # Reduce Volume
+                processed_tracks[track_name] *= 0.005
+            if track_name == 'rolling_sound':
+                pass
+
             mixed += processed_tracks[track_name]
         
         # Normalize
