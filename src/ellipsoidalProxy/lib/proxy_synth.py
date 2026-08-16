@@ -174,21 +174,19 @@ class ProxySynth:
                     excitation = excitation[:total_samples]
                 debug_print('Trim or pad to total_samples', config_obj.name, excitation.shape, np.count_nonzero(excitation))
                 
-            if not track_name == 'rolling_sound':
                 # Apply IR convolution
-                processed = self._convolve_with_ir(excitation, size_scale, contact_type)
-                debug_print('Apply IR convolution', config_obj.name, processed.shape, np.count_nonzero(processed))
+                if not track_name == 'rolling_sound':
+                    processed = self._convolve_with_ir(excitation, size_scale, contact_type)
+                    debug_print('Apply IR convolution', config_obj.name, processed.shape, np.count_nonzero(processed))
                 
                 # Apply equalization
+                if track_name == 'rolling_sound':
+                    processed = excitation
+                    excitation = audio_tracks['rolling']
                 processed = self.equalizer.apply_equalization(processed, contact_type, excitation)
                 debug_print('Apply equalization', config_obj.name, processed.shape, np.count_nonzero(processed))
                 processed_tracks[track_name] = processed
 
-            else:
-                # Add noise enrichment tracks
-                processed = self._apply_force_envelope(excitation, audio_tracks['rolling'])
-                processed_tracks[track_name] = processed
-        
         # Mix all tracks
         mixed = np.zeros(total_samples, dtype=np.float32)
 #        for track in processed_tracks.values():
@@ -203,12 +201,12 @@ class ProxySynth:
                     processed_tracks[track_name] /= max_val * 0.9
             if track_name == 'rolling':
                 # Reduce Volume
-                processed_tracks[track_name] *= 0.0005
+                processed_tracks[track_name] *= 0.5
             if track_name in ['sliding', 'scraping']:
                 # Reduce Volume
-                processed_tracks[track_name] *= 0.005
+                processed_tracks[track_name] *= 0.0075
             if track_name == 'rolling_sound':
-                pass
+                processed_tracks[track_name] *= 5
 
             mixed += processed_tracks[track_name]
         
@@ -406,30 +404,6 @@ class ProxySynth:
         
         return output
 
-    def _apply_force_envelope(self, signal: np.ndarray, force: np.ndarray) -> np.ndarray:
-        """
-        Dynamic amplification based on force envelope.
-        """
-        # Compute force envelope
-        force_env = np.abs(force)
-        if np.max(force_env) > 0:
-            force_env = force_env / np.max(force_env)
-
-        # Smooth force envelope
-        force_env = gaussian_filter1d(force_env, sigma=5)
-
-        # Dynamic gain envelope based on force
-        # High force = more gain, low force = less gain
-        force_gain = 0.3 + 0.7 * force_env
-
-        # Smooth gain to prevent artifacts
-        total_gain = gaussian_filter1d(force_gain, sigma=3)
-
-        # Apply gain
-        output = signal * total_gain
-
-        return output
-    
     def _compute_size_scale(self, config_obj: Any) -> float:
         """Compute normalized size scale (0-1) for an object."""
         from pbrAudioCommon import _load_mesh

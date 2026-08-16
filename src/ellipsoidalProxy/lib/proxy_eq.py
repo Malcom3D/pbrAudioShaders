@@ -69,20 +69,27 @@ class ProxyEqualizer:
         
         # Sliding: emphasize mid frequencies
         sliding_curve = np.ones(n_freqs)
-        sliding_curve[freqs < 200] *= 0.5
-        sliding_curve[freqs > 5000] *= np.exp(-(freqs[freqs > 5000] - 5000) / 8000)
+        sliding_curve[freqs < 3000] *= 0.5
+        sliding_curve[freqs > 9000] *= np.exp(-(freqs[freqs > 9000] - 9000) / 8000)
         self.eq_curves[1] = sliding_curve
         
         # Scraping: emphasize high frequencies
         scraping_curve = np.ones(n_freqs)
-        scraping_curve[freqs < 500] *= np.exp(-(500 - freqs[freqs < 500]) / 300)
-        scraping_curve[freqs > 8000] *= 1.5
+        scraping_curve[freqs < 2000] *= np.exp(-(2000 - freqs[freqs < 2000]) / 300)
+        scraping_curve[freqs > 10000] *= 1.5
         self.eq_curves[2] = scraping_curve
         
-        # Rolling: emphasize low frequencies
+        # Rolling: emphasize high frequencies
         rolling_curve = np.ones(n_freqs)
-        rolling_curve[freqs > 500] *= np.exp(-(freqs[freqs > 500] - 500) / 2000)
+        rolling_curve[freqs < 5000] *= np.exp(-(5000 - freqs[freqs < 5000]) / 3000)
+        rolling_curve[freqs > 6500] *= 1.5
         self.eq_curves[3] = rolling_curve
+
+        # Rolling sound: emphasize low frequencies
+        rolling_sound_curve = np.ones(n_freqs)
+        rolling_sound_curve[freqs < 1000] *= 1.5
+        rolling_sound_curve[freqs > 2000] *= np.exp(-(freqs[freqs > 2000] - 2000) / 8000)
+        self.eq_curves[4] = rolling_sound_curve
 
     def apply_equalization(self, audio: np.ndarray, contact_type: int, force: np.ndarray = None) -> np.ndarray:
         """
@@ -93,7 +100,7 @@ class ProxyEqualizer:
         audio : np.ndarray
             Input audio signal
         contact_type : int
-            Contact type (0=impact, 1=sliding, 2=scraping, 3=rolling)
+            Contact type (0=impact, 1=sliding, 2=scraping, 3=rolling, 4=rolling_sound)
         force : np.ndarray, optional
             Force signal for dynamic EQ adjustment
         
