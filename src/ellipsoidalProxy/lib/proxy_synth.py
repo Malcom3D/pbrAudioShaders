@@ -288,6 +288,8 @@ class ProxySynth:
             'scraping': 2,
             'rolling': 3,
             'rolling_sound': 4
+            'sliding_sound': 4
+            'scraping_sound': 4
         }
         
         for track_name, contact_type in contact_type_map.items():
@@ -304,12 +306,12 @@ class ProxySynth:
                 debug_print(f'Trimmed/padded excitation for {config_obj.name} - {track_name}: {excitation.shape}, non-zero: {np.count_nonzero(excitation)}')
                 
                 # Apply IR convolution
-                if track_name != 'rolling_sound':
+                if contact_type == 4:
+                    processed = excitation
+                    excitation = audio_tracks.get(track_name.replace('_sound',''), np.zeros_like(excitation))
+                else:
                     processed = self._convolve_with_ir(config_obj, excitation, size_idx, contact_type)
                     debug_print(f'After IR convolution for {config_obj.name} - {track_name}: {processed.shape}, non-zero: {np.count_nonzero(processed)}')
-                else:
-                    processed = excitation
-                    excitation = audio_tracks.get('rolling', np.zeros_like(excitation))
                 
                 # Apply equalization
                 processed = self.equalizer.apply_equalization(processed, contact_type, excitation)
@@ -333,6 +335,10 @@ class ProxySynth:
                 processed_tracks[track_name] *= 0.0075
             if track_name == 'rolling_sound':
                 processed_tracks[track_name] *= 2.5
+            if track_name == 'sliding_sound':
+                processed_tracks[track_name] *= 2.5
+            if track_name == 'scraping_sound':
+                processed_tracks[track_name] *= 2.5
 
             mixed += processed_tracks[track_name]
         
@@ -349,11 +355,11 @@ class ProxySynth:
         Load audio-force tracks for an object.
         
         Returns:
-            Dictionary with keys: 'impact', 'sliding', 'scraping', 'rolling', 'rolling_sound'
+            Dictionary with keys: 'impact', 'sliding', 'scraping', 'rolling', 'rolling_sound', 'sliding_sound', 'scraping_sound'
             or None if no tracks found.
         """
         tracks = {}
-        track_names = ['impact', 'sliding', 'scraping', 'rolling', 'rolling_sound']
+        track_names = ['impact', 'sliding', 'scraping', 'rolling', 'rolling_sound', 'sliding_sound', 'scraping_sound']
         
         for track_name in track_names:
             track_file = f"{self.audio_force_dir}/{obj_name}_{track_name}.raw"

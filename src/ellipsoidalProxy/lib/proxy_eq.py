@@ -62,9 +62,9 @@ class ProxyEqualizer:
         n_freqs = self.fft_size // 2 + 1
         freqs = np.fft.rfftfreq(self.fft_size, 1/self.sample_rate)
         
-        # Impact: emphasize low-mid frequencies
+        # Impact: emphasize from mid-low frequencies
         impact_curve = np.ones(n_freqs)
-        impact_curve[freqs > 1000] *= np.exp(-(freqs[freqs > 1000] - 1000) / 5000)
+        impact_curve[freqs > 250] *= np.exp(-(freqs[freqs > 250] - 250) / 5000)
         self.eq_curves[0] = impact_curve
         
         # Sliding: emphasize mid frequencies
@@ -86,7 +86,7 @@ class ProxyEqualizer:
 
         # Rolling sound: emphasize low frequencies
         rolling_sound_curve = np.ones(n_freqs)
-        rolling_sound_curve[freqs > 1500] *= np.exp(-(freqs[freqs > 1500] - 1500) / 8000)
+        rolling_sound_curve[freqs > 350] *= np.exp(-(freqs[freqs > 350] - 350) / 8000)
         self.eq_curves[4] = rolling_sound_curve
 
     def apply_equalization(self, audio: np.ndarray, contact_type: int, force: np.ndarray = None) -> np.ndarray:
