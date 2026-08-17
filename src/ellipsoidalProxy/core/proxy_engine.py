@@ -57,6 +57,7 @@ class ProxyEngine:
             if config.system.enable_proxy_synth and config_obj.proxy_type in [0,1,2]:
                 proxy_meshes.append(config_obj)
 
+        # Compute IR table from proxy meshes
         self.ir_table.compute_ir_table(proxy_meshes)
 
     @delayed
@@ -68,5 +69,7 @@ class ProxyEngine:
         -----------
         obj_idx : int
             Object index
+        total_samples : int
+            Total number of samples for the audio output
         """
         self.proxy_synth.compute(obj_idx, total_samples)

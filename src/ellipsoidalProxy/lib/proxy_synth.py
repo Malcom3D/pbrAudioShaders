@@ -83,33 +83,156 @@ class ProxySynth:
             self.output_dir = f"{config.system.cache_path}/proxy_audio"
         os.makedirs(self.output_dir, exist_ok=True)
         
-        # Pre-compute FFT of IRs for fast convolution
-        self._precompute_ir_ffts()
+        # Cache for IR FFTs - will be populated per object
+        self._ir_fft_cache = {}
         
         # Path to audio-force tracks
         self.audio_force_dir = f"{config.system.cache_path}/audio_force"
+        
+        # Cache for material_key lookups
+        self._material_key_cache = {}
     
-    def _precompute_ir_ffts(self):
-        """Pre-compute FFT of all IRs for faster convolution."""
-        n_sizes = self.ir_table.n_size_steps
-#        n_types = 6  # no-contact, impact, sliding, scraping, rolling, static
+    def _get_material_key(self, config_obj: Any) -> int:
+        """
+        Get material key for an object.
+        
+        The material key is used to look up the correct IR table.
+        """
+        if config_obj.idx in self._material_key_cache:
+            return self._material_key_cache[config_obj.idx]
+        
+        # Create material key from acoustic properties
+        if config_obj.acoustic_shader:
+            material_key = (
+                config_obj.acoustic_shader.young_modulus,
+                config_obj.acoustic_shader.poisson_ratio,
+                config_obj.acoustic_shader.density,
+                config_obj.acoustic_shader.damping
+            )
+        else:
+            material_key = (None, None, None, None)
+        
+        # Use a hashable key for the material
+        material_key = hash(material_key)
+        self._material_key_cache[config_obj.idx] = material_key
+        
+        return material_key
+    
+    def _get_ir(self, config_obj: Any, size_scale: float, contact_type: int) -> np.ndarray:
+        """
+        Get interpolated IR for an object.
+        
+        Parameters:
+        -----------
+        config_obj : ObjectConfig
+            Object configuration
+        size_scale : float
+            Normalized size (0-1)
+        contact_type : int
+            Contact type (0=impact, 1=sliding, 2=scraping, 3=rolling)
+            
+        Returns:
+        --------
+        np.ndarray : Interpolated IR
+        """
+        material_key = self._get_material_key(config_obj)
+        proxy_type = config_obj.proxy_type
+        
+        # Get IR from table
+        return self.ir_table.get_ir(material_key, proxy_type, size_scale)
+    
+    def _precompute_ir_ffts_for_object(self, config_obj: Any) -> None:
+        """
+        Pre-compute FFT of IRs for a specific object.
+        
+        This is called once per object to cache the IR FFTs.
+        """
+        material_key = self._get_material_key(config_obj)
+        proxy_type = config_obj.proxy_type
+        cache_key = (material_key, proxy_type)
+        
+        if cache_key in self._ir_fft_cache:
+            return
+        
+        # Get size steps for this material/shape
+        size_steps = self.ir_table.size_steps.get(cache_key)
+        if size_steps is None:
+            debug_print(f"No size steps found for cache_key {cache_key}")
+            return
+        
+        n_steps = len(size_steps)
         n_types = 4  # impact, sliding, scraping, rolling
-        n_bands = self.ir_table.n_frequency_bands
         
-        # Pre-compute FFTs: (n_sizes, n_types, n_bands, fft_size/2+1)
-        self._ir_ffts = np.zeros((n_sizes, n_types, n_bands, self.fft_size // 2 + 1), dtype=np.complex64)
+        # Pre-compute FFTs for this object
+        # Note: We assume IRs for all bands are available. 
+        # In ProxyIRTable, ir_table is indexed by (material_key, proxy_type)
+        # and each entry has shape (n_steps, max_ir_length)
+        ir_matrix = self.ir_table.ir_table.get(cache_key)
         
-        for size_idx in range(n_sizes):
+        if ir_matrix is None:
+            debug_print(f"No IR table found for cache_key {cache_key}")
+            return
+        
+        # ir_matrix shape: (n_steps, max_ir_length)
+        # For each size step and contact type, we need to compute FFT
+        # Since the IR table currently stores a single IR per size step (not per type),
+        # we use the same IR for all contact types and apply type-specific scaling later.
+        fft_shape = (n_steps, n_types, self.fft_size // 2 + 1)
+        ir_ffts = np.zeros(fft_shape, dtype=np.complex64)
+        
+        for size_idx in range(n_steps):
+            ir = ir_matrix[size_idx]
+            # Pad to FFT size
+            padded = np.zeros(self.fft_size)
+            ir_len = min(len(ir), self.fft_size)
+            padded[:ir_len] = ir[:ir_len]
+            ir_fft = np.fft.rfft(padded)
+            
+            # Use the same IR for all contact types
+            # (type-specific shaping is handled by the equalizer)
             for type_idx in range(n_types):
-                for band_idx in range(n_bands):
-                    debug_print('size_idx', size_idx, 'type_idx', type_idx, 'band_idx', band_idx)
-                    ir = self.ir_table.ir_table[size_idx, type_idx, band_idx]
-                    # Pad to FFT size
-                    padded = np.zeros(self.fft_size)
-                    ir_len = min(len(ir), self.fft_size)
-                    padded[:ir_len] = ir[:ir_len]
-                    self._ir_ffts[size_idx, type_idx, band_idx] = np.fft.rfft(padded)
+                ir_ffts[size_idx, type_idx, :] = ir_fft
+        
+        self._ir_fft_cache[cache_key] = ir_ffts
     
+    def _get_ir_fft(self, config_obj: Any, size_idx: int, contact_type: int) -> np.ndarray:
+        """
+        Get precomputed IR FFT for a specific size and contact type.
+        """
+        material_key = self._get_material_key(config_obj)
+        proxy_type = config_obj.proxy_type
+        cache_key = (material_key, proxy_type)
+        
+        if cache_key not in self._ir_fft_cache:
+            self._precompute_ir_ffts_for_object(config_obj)
+        
+        ir_ffts = self._ir_fft_cache.get(cache_key)
+        if ir_ffts is None:
+            # Return a default impulse response
+            return np.ones(self.fft_size // 2 + 1, dtype=np.complex64)
+        
+        return ir_ffts[size_idx, contact_type, :]
+    
+    def _get_size_idx(self, config_obj: Any, size_scale: float) -> int:
+        """
+        Get the size index for interpolation.
+        """
+        material_key = self._get_material_key(config_obj)
+        proxy_type = config_obj.proxy_type
+        cache_key = (material_key, proxy_type)
+        
+        size_steps = self.ir_table.size_steps.get(cache_key)
+        if size_steps is None:
+            return 0
+        
+        # Clamp size_scale
+        size_scale = np.clip(size_scale, 0, 1)
+        
+        # Find the nearest size step
+        n_steps = len(size_steps)
+        idx = int(size_scale * (n_steps - 1))
+        return min(idx, n_steps - 1)
+
     def compute(self, obj_idx: int, total_samples: int) -> None:
         """
         Compute proxy synth for an object using audio-force tracks from ForceSynth.
@@ -118,6 +241,8 @@ class ProxySynth:
         -----------
         obj_idx : int
             Object index
+        total_samples : int
+            Total number of samples for the audio output
         """
         config = self.entity_manager.get('config')
         
@@ -131,9 +256,13 @@ class ProxySynth:
         if config_obj is None or config_obj.proxy_type is False:
             return
         
+        # Precompute IR FFTs for this object
+        self._precompute_ir_ffts_for_object(config_obj)
+        
         # Get size scale for this object
         size_scale = self._compute_size_scale(config_obj)
-        debug_print('Get size scale for this object', size_scale.shape, np.count_nonzero(size_scale))
+        size_idx = self._get_size_idx(config_obj, size_scale)
+        debug_print(f'Size scale for {config_obj.name}: {size_scale:.3f}, size_idx: {size_idx}')
         
         # Load audio-force tracks
         audio_tracks = self._load_audio_force_tracks(config_obj.name)
@@ -165,33 +294,30 @@ class ProxySynth:
             if audio_tracks.get(track_name) is not None:
                 # Get the excitation signal
                 excitation = audio_tracks[track_name]
-                debug_print('Get the excitation signal', config_obj.name, excitation.shape, np.count_nonzero(excitation))
+                debug_print(f'Loading excitation signal for {config_obj.name} - {track_name}: {excitation.shape}, non-zero: {np.count_nonzero(excitation)}')
                 
                 # Trim or pad to total_samples
                 if excitation.shape[0] < total_samples:
                     excitation = np.pad(excitation, (0, total_samples - len(excitation)))
                 elif excitation.shape[0] > total_samples:
                     excitation = excitation[:total_samples]
-                debug_print('Trim or pad to total_samples', config_obj.name, excitation.shape, np.count_nonzero(excitation))
+                debug_print(f'Trimmed/padded excitation for {config_obj.name} - {track_name}: {excitation.shape}, non-zero: {np.count_nonzero(excitation)}')
                 
                 # Apply IR convolution
-                if not track_name == 'rolling_sound':
-                    processed = self._convolve_with_ir(excitation, size_scale, contact_type)
-                    debug_print('Apply IR convolution', config_obj.name, processed.shape, np.count_nonzero(processed))
+                if track_name != 'rolling_sound':
+                    processed = self._convolve_with_ir(config_obj, excitation, size_idx, contact_type)
+                    debug_print(f'After IR convolution for {config_obj.name} - {track_name}: {processed.shape}, non-zero: {np.count_nonzero(processed)}')
+                else:
+                    processed = excitation
+                    excitation = audio_tracks.get('rolling', np.zeros_like(excitation))
                 
                 # Apply equalization
-                if track_name == 'rolling_sound':
-                    processed = excitation
-                    excitation = audio_tracks['rolling']
                 processed = self.equalizer.apply_equalization(processed, contact_type, excitation)
-                debug_print('Apply equalization', config_obj.name, processed.shape, np.count_nonzero(processed))
+                debug_print(f'After equalization for {config_obj.name} - {track_name}: {processed.shape}, non-zero: {np.count_nonzero(processed)}')
                 processed_tracks[track_name] = processed
 
         # Mix all tracks
         mixed = np.zeros(total_samples, dtype=np.float32)
-#        for track in processed_tracks.values():
-#            debug_print('Mix all tracks', mixed.shape, track.shape)
-#            mixed += track
 
         for track_name in processed_tracks.keys():
             if track_name in ['impact', 'rolling']:
@@ -249,16 +375,18 @@ class ProxySynth:
         
         return tracks
     
-    def _convolve_with_ir(self, signal: np.ndarray, size_scale: float, contact_type: int) -> np.ndarray:
+    def _convolve_with_ir(self, config_obj: Any, signal: np.ndarray, size_idx: int, contact_type: int) -> np.ndarray:
         """
         Apply IR convolution to the excitation signal.
         
         Parameters:
         -----------
+        config_obj : ObjectConfig
+            Object configuration
         signal : np.ndarray
             Excitation signal (audio-force track)
-        size_scale : float
-            Normalized size (0-1)
+        size_idx : int
+            Size index for IR lookup
         contact_type : int
             Contact type (0=impact, 1=sliding, 2=scraping, 3=rolling)
         
@@ -266,37 +394,35 @@ class ProxySynth:
         --------
         np.ndarray : Convolved signal
         """
-        # Get IR for this size and contact type
-        ir = self.ir_table.get_ir(size_scale, contact_type)
+        # Get IR FFT for this size and contact type
+        ir_fft = self._get_ir_fft(config_obj, size_idx, contact_type)
         
         n_samples = len(signal)
-        n_bands = ir.shape[0]
         
         # Use overlap-add for long signals
         if n_samples > self.fft_size:
-            output = self._overlap_add_convolve(signal, ir)
+            output = self._overlap_add_convolve_fft(signal, ir_fft)
         else:
-            output = self._fft_convolve(signal, ir)
+            output = self._fft_convolve(signal, ir_fft)
         
         return output
     
-    def _fft_convolve(self, signal: np.ndarray, ir: np.ndarray) -> np.ndarray:
+    def _fft_convolve(self, signal: np.ndarray, ir_fft: np.ndarray) -> np.ndarray:
         """
-        FFT-based convolution with SIMD optimization.
+        FFT-based convolution with precomputed IR FFT.
         
         Parameters:
         -----------
         signal : np.ndarray
             Input signal
-        ir : np.ndarray
-            Impulse response (n_frequency_bands, ir_length)
+        ir_fft : np.ndarray
+            Precomputed FFT of the impulse response (complex)
         
         Returns:
         --------
         np.ndarray : Convolved signal
         """
         n_samples = len(signal)
-        n_bands = ir.shape[0]
         
         # Pad signal to FFT size
         padded_signal = np.zeros(self.fft_size)
@@ -305,53 +431,33 @@ class ProxySynth:
         # FFT of signal
         signal_fft = np.fft.rfft(padded_signal)
         
-        # Initialize output
-        output = np.zeros(self.fft_size, dtype=np.float32)
+        # Multiply in frequency domain
+        result_fft = signal_fft * ir_fft
         
-        # Convolve with each frequency band
-        for band_idx in range(n_bands):
-            # Get IR for this band
-            ir_band = ir[band_idx]
-            
-            # Pad IR
-            padded_ir = np.zeros(self.fft_size)
-            ir_len = min(len(ir_band), self.fft_size)
-            padded_ir[:ir_len] = ir_band[:ir_len]
-            
-            # FFT of IR
-            ir_fft = np.fft.rfft(padded_ir)
-            
-            # Multiply in frequency domain
-            result_fft = signal_fft * ir_fft
-            
-            # Inverse FFT
-            result = np.fft.irfft(result_fft, n=self.fft_size)
-            
-            # Add to output
-            output += result
+        # Inverse FFT
+        result = np.fft.irfft(result_fft, n=self.fft_size)
         
         # Trim to signal length
-        output = output[:n_samples]
+        output = result[:n_samples]
         
         return output
     
-    def _overlap_add_convolve(self, signal: np.ndarray, ir: np.ndarray) -> np.ndarray:
+    def _overlap_add_convolve_fft(self, signal: np.ndarray, ir_fft: np.ndarray) -> np.ndarray:
         """
-        Overlap-add convolution for long signals.
+        Overlap-add convolution for long signals using precomputed IR FFT.
         
         Parameters:
         -----------
         signal : np.ndarray
             Input signal
-        ir : np.ndarray
-            Impulse response (n_frequency_bands, ir_length)
+        ir_fft : np.ndarray
+            Precomputed FFT of the impulse response (complex)
         
         Returns:
         --------
         np.ndarray : Convolved signal
         """
         n_samples = len(signal)
-        n_bands = ir.shape[0]
         
         # Initialize output
         output = np.zeros(n_samples + self.fft_size, dtype=np.float32)
@@ -377,27 +483,14 @@ class ProxySynth:
             # FFT of block
             block_fft = np.fft.rfft(padded_block)
             
-            # Convolve with each frequency band
-            for band_idx in range(n_bands):
-                # Get IR for this band
-                ir_band = ir[band_idx]
-                
-                # Pad IR
-                padded_ir = np.zeros(self.fft_size)
-                ir_len = min(len(ir_band), self.fft_size)
-                padded_ir[:ir_len] = ir_band[:ir_len]
-                
-                # FFT of IR
-                ir_fft = np.fft.rfft(padded_ir)
-                
-                # Multiply in frequency domain
-                result_fft = block_fft * ir_fft
-                
-                # Inverse FFT
-                result = np.fft.irfft(result_fft, n=self.fft_size)
-                
-                # Overlap-add
-                output[start:start + self.fft_size] += result
+            # Multiply in frequency domain
+            result_fft = block_fft * ir_fft
+            
+            # Inverse FFT
+            result = np.fft.irfft(result_fft, n=self.fft_size)
+            
+            # Overlap-add
+            output[start:start + self.fft_size] += result
         
         # Trim to signal length
         output = output[:n_samples]
@@ -414,10 +507,18 @@ class ProxySynth:
                 max_coords = np.max(vertices, axis=0)
                 size = np.linalg.norm(max_coords - min_coords)
                 
+                # Get min/max size for this material/shape
+                material_key = self._get_material_key(config_obj)
+                proxy_type = config_obj.proxy_type
+                key = (material_key, proxy_type)
+                
+                min_size = self.ir_table.min_size.get(key, 0.0)
+                max_size = self.ir_table.max_size.get(key, 1.0)
+                
                 # Normalize to 0-1 range
-                size_range = self.ir_table.max_size - self.ir_table.min_size
+                size_range = max_size - min_size
                 if size_range > 0:
-                    size_scale = (size - self.ir_table.min_size) / size_range
+                    size_scale = (size - min_size) / size_range
                 else:
                     size_scale = 0.5
                 
@@ -448,7 +549,7 @@ class ProxySynth:
         # Save individual tracks
         for track_name, track_data in tracks.items():
             if len(track_data) > 0:
-                track_file = f"{self.output_dir}/{config_obj.name}_proxy_{track_name}.raw"
+                track_file = f"{self.output_dir}/{config_obj.name}_proxy_{track_name}.wav"
                 sf.write(track_file, track_data, self.sample_rate, subtype='FLOAT')
                 debug_print(f"Saved {track_name} track to {track_file}")
         
