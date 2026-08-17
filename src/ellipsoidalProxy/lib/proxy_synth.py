@@ -288,8 +288,8 @@ class ProxySynth:
             'scraping': 2,
             'rolling': 3,
             'rolling_sound': 4,
-            'sliding_sound': 4,
-            'scraping_sound': 4
+            'sliding_sound': 5,
+            'scraping_sound': 6
         }
         
         for track_name, contact_type in contact_type_map.items():
@@ -306,7 +306,7 @@ class ProxySynth:
                 debug_print(f'Trimmed/padded excitation for {config_obj.name} - {track_name}: {excitation.shape}, non-zero: {np.count_nonzero(excitation)}')
                 
                 # Apply IR convolution
-                if contact_type == 4:
+                if contact_type >= 4:
                     processed = excitation
                     excitation = audio_tracks.get(track_name.replace('_sound',''), np.zeros_like(excitation))
                 else:
@@ -336,9 +336,9 @@ class ProxySynth:
             if track_name == 'rolling_sound':
                 processed_tracks[track_name] *= 2.5
             if track_name == 'sliding_sound':
-                processed_tracks[track_name] *= 2.5
+                processed_tracks[track_name] *= 1.0
             if track_name == 'scraping_sound':
-                processed_tracks[track_name] *= 2.5
+                processed_tracks[track_name] *= 5
 
             mixed += processed_tracks[track_name]
         
