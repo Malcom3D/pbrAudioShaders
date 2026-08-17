@@ -287,8 +287,8 @@ class ProxySynth:
             'sliding': 1,
             'scraping': 2,
             'rolling': 3,
-            'rolling_sound': 4
-            'sliding_sound': 4
+            'rolling_sound': 4,
+            'sliding_sound': 4,
             'scraping_sound': 4
         }
         
