@@ -722,12 +722,6 @@ modesT60s = t60Scale : ba.take(nModes, ({t60_str}));
 // Mode gains (nModes x nExPos)
 modesGains = waveform{{{gain_str}}};
 
-// Frequency scaling factor
-freqScale = 1.0;
-
-// T60 scaling factor
-t60Scale = 1.0;
-
 // Process function
 process = no.process;
 """

@@ -356,11 +356,7 @@ class ProxyIRTable:
             'nModes': n_modes
         }
 
-    def _modal_params_to_ir(
-        self,
-        modal_params: Dict,
-        material_props: Dict[str, float]
-    ) -> np.ndarray:
+    def _modal_params_to_ir(self, modal_params: Dict, material_props: Dict[str, float]) -> np.ndarray:
         """
         Generate impulse response from modal parameters.
 
