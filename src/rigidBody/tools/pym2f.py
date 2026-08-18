@@ -38,7 +38,7 @@ class Pym2f:
     # Fallback parameters
     use_fallback: bool = True
     fallback_min_confidence: float = 0.3  # Minimum confidence to use fallback
-    max_fallback_attempts: int = 2
+    max_fallback_attempts: int = 6
 
     def __post_init__(self):
         self.config = self.entity_manager.get('config')
@@ -100,13 +100,32 @@ class Pym2f:
                 # First attempt: use mesh2faust
                 debug_print(f"Pym2f: Attempting mesh2faust for {config_obj.name} (attempt {attempt})")
                 success, file_names = self._try_mesh2faust(config_obj, vertices, normals, faces, obj_file, young_modulus, poisson_ratio, density, damping, minmode, maxmode, expos, output_name)
-            elif attempt == 1 and not config_obj.static:
+            elif attempt == 1:
                 try:
-                    # Second attempt: use mesh2faust with obj from random frame
+                    # Second attempt: use mesh2faust without min max modal frequency 
+                    debug_print(f"Pym2f: Attempting mesh2faust for {config_obj.name} without min-max modal frequency limit (attempt {attempt})")
+                    minmode = self.config.system.lowest_frequency
+                    maxmode = self.config.system.higher_frequency
+                    success, file_names = self._try_mesh2faust(config_obj, vertices, normals, faces, obj_file, young_modulus, poisson_ratio, density, damping, minmode, maxmode, expos, output_name)
+            elif attempt == 2 and not config_obj.static:
+                try:
+                    # Third attempt: use mesh2faust with obj from random frame
                     debug_print(f"Pym2f: Attempting mesh2faust on random frame for {config_obj.name} (attempt {attempt})")
                     rand_frame = np.random.randint(1,int(re.findall(r'\d+', filenames[-2])[-1]))
                     rand_vertices, rand_normals, rand_faces = _load_mesh(config_obj, rand_frame)
                     mesh_obj = _mesh_to_obj(rand_vertices, rand_normals, rand_faces, obj_file, config_obj.resonance)
+                    success, file_names = self._try_mesh2faust(config_obj, rand_vertices, rand_normals, rand_faces, obj_file, young_modulus, poisson_ratio, density, damping, minmode, maxmode, expos, output_name)
+                except:
+                    success = False
+            elif attempt == 3 and not config_obj.static:
+                try:
+                    # Fourth attempt: use mesh2faust with obj from random frame without min max modal frequency
+                    debug_print(f"Pym2f: Attempting mesh2faust on random frame for {config_obj.name} without min-max modal frequency limit (attempt {attempt})")
+                    rand_frame = np.random.randint(1,int(re.findall(r'\d+', filenames[-2])[-1]))
+                    rand_vertices, rand_normals, rand_faces = _load_mesh(config_obj, rand_frame)
+                    mesh_obj = _mesh_to_obj(rand_vertices, rand_normals, rand_faces, obj_file, config_obj.resonance)
+                    minmode = self.config.system.lowest_frequency
+                    maxmode = self.config.system.higher_frequency
                     success, file_names = self._try_mesh2faust(config_obj, rand_vertices, rand_normals, rand_faces, obj_file, young_modulus, poisson_ratio, density, damping, minmode, maxmode, expos, output_name)
                 except:
                     success = False
@@ -115,6 +134,10 @@ class Pym2f:
                 if self.use_fallback:
                     debug_print(f"Pym2f: Attempting fallback for {config_obj.name} (attempt {attempt})")
                     success, file_names = self._try_fallback(config_obj, vertices, faces, obj_file, young_modulus, poisson_ratio, density, damping, minmode, maxmode, expos, output_name)
+                    if not success:
+                        minmode = self.config.system.lowest_frequency
+                        maxmode = self.config.system.higher_frequency
+                        success, file_names = self._try_fallback(config_obj, vertices, faces, obj_file, young_modulus, poisson_ratio, density, damping, minmode, maxmode, expos, output_name)
             
             if success:
                 break
@@ -235,7 +258,8 @@ class Pym2f:
                 damping=damping if damping else 0.02,
                 min_freq=minmode if minmode else 20.0,
                 max_freq=maxmode if maxmode else 20000.0,
-                n_modes=config_obj.resonance_modes
+                n_modes=config_obj.resonance_modes,
+                voxel_size=voxel_size
             )
             
             resonance_content = self.approx2faust.to_faust_lib(
