@@ -16,6 +16,7 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import trimesh
 import numpy as np
 from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass, field
@@ -65,9 +66,6 @@ class Approx2Faust:
         Dict[str, Any]
             Dictionary with keys: 'frequencies', 'gains', 't60s', 'metadata'
         """
-        # Import trimesh locally (already imported in voxel class)
-        import trimesh
-        
         mesh = trimesh.Trimesh(vertices, faces=faces)
         # Voxelize the mesh
         voxel_grid = self._voxelize_mesh(mesh, voxel_size)
