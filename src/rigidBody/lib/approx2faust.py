@@ -33,11 +33,7 @@ class Approx2Faust:
     def __post_init__(self):
         pass
     
-    def compute(self, vertices: np.ndarray, faces: np.ndarray, 
-                young_modulus: float, poisson_ratio: float, 
-                density: float, damping: float, 
-                min_freq: float, max_freq: float, 
-                n_modes: int, voxel_size: float) -> Dict[str, Any]:
+    def compute(self, vertices: np.ndarray, faces: np.ndarray, young_modulus: float, poisson_ratio: float, density: float, damping: float, min_freq: float, max_freq: float, n_modes: int, voxel_size: float) -> Dict[str, Any]:
         """
         Compute approximate modal parameters for a mesh.
         

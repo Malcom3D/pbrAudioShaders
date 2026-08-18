@@ -25,8 +25,6 @@ from typing import List, Tuple, Optional
 from dataclasses import dataclass
 
 from pbrAudioCommon import EntityManager
-from pbrAudioCommon import ShapeType, ShapeProperties
-from pbrAudioCommon import PrimitiveGeometry
 from pbrAudioCommon import _load_mesh, _mesh_to_obj, _compute_rayleigh_damping
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
@@ -58,7 +56,6 @@ class Pym2f:
         os.makedirs(f"{self.cache_path}/dsp", exist_ok=True)
         
         # Initialize fallback components
-        self.primitive_geometry = PrimitiveGeometry()
         self.approx2faust = Approx2Faust()
 
     def compute(self, obj_idx: int, expos: List[int] = None) -> None:
@@ -184,24 +181,14 @@ class Pym2f:
 
     def _try_fallback(self, config_obj, vertices, faces, obj_file, young_modulus, poisson_ratio, density, damping, minmode, maxmode, expos, output_name) -> Tuple[bool, List[str]]:
         """
-        Generate approximate modal model using primitive geometry approximation.
+        Generate modal model using approximated voxel mesh geometry.
         
         Returns:
             (success, file_names)
         """
-        # Classify shape
-        shape_props = self.primitive_geometry.classify(vertices, faces)
-        
-        debug_print(f"Pym2f fallback: Classified {config_obj.name} as {shape_props.shape_type.value} "
-              f"(confidence: {shape_props.confidence:.2f})")
-        
-        # Check if classification is good enough
-        if shape_props.confidence < self.fallback_min_confidence:
-            debug_print(f"Pym2f fallback: Low confidence ({shape_props.confidence:.2f}), "
-                  f"using irregular shape approximation")
-        
         # Compute modal parameters
         n_modes = self.config.system.modal_modes
+        voxel_size = self.config.system.voxel_size
         
         modal_params = self.approx2faust.compute(
             vertices=vertices,
@@ -212,7 +199,8 @@ class Pym2f:
             damping=damping if damping else 0.02,
             min_freq=minmode if minmode else 20.0,
             max_freq=maxmode if maxmode else 20000.0,
-            n_modes=n_modes
+            n_modes=n_modes,
+            voxel_size=voxel_size
         )
         
         # Generate Faust .lib file
