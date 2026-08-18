@@ -22,7 +22,6 @@ from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass, field
 from scipy import signal
 from scipy.interpolate import RegularGridInterpolator
-from scipy.linalg import toeplitz
 
 from pbrAudioCommon import EntityManager
 from pbrAudioCommon import _parse_lib, _load_mesh
@@ -32,14 +31,15 @@ from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 @dataclass
 class ProxyIRTable:
     """
-    Precomputed Impulse Response table for proxy meshes.
-
+    Precomputed Impulse Response table for proxy meshes using Toeplitz matrix structure.
+    
     The table is indexed by:
     - Material group (based on acoustic properties)
     - Proxy shape type (pyramid=0, octahedron=1, cube=2)
     - Size scale (interpolated between min and max size)
-
-    Uses precomputed Toeplitz-like impulse response matrix from Modal4Proxy .lib files.
+    
+    Each IR is stored as a Toeplitz matrix of shape (num_modes, max_ir_length)
+    where each row corresponds to a modal frequency band.
     """
     entity_manager: EntityManager
 
@@ -52,6 +52,7 @@ class ProxyIRTable:
     size_steps: Dict[Tuple[int, int], np.ndarray] = field(default_factory=dict)
     min_size: Dict[Tuple[int, int], float] = field(default_factory=dict)
     max_size: Dict[Tuple[int, int], float] = field(default_factory=dict)
+    num_modes: Dict[Tuple[int, int], int] = field(default_factory=dict)  # Number of modes per entry
 
     # Map proxy_type to shape name
     _shape_names: Dict[int, str] = field(default_factory=lambda: {
@@ -73,8 +74,9 @@ class ProxyIRTable:
     def compute_ir_table(self, proxy_meshes: List[Any]) -> None:
         """
         Compute the IR table from proxy meshes.
-
-        Groups meshes by (material_key, proxy_type) and builds Toeplitz-like IR matrices.
+        
+        Each IR is stored as a Toeplitz matrix of shape (num_modes, max_ir_length).
+        Each row is the impulse response for a specific modal frequency band.
 
         Parameters:
         -----------
@@ -91,6 +93,8 @@ class ProxyIRTable:
         groups = self._group_by_material_and_shape(valid_meshes)
 
         for (material_key, proxy_type), meshes in groups.items():
+            debug_print(f"Building IR table for material {material_key}, shape {self._shape_names[proxy_type]}")
+
             # Compute size range for this group
             sizes = [self._compute_mesh_size(mesh) for mesh in meshes]
             self.min_size[(material_key, proxy_type)] = min(sizes)
@@ -104,8 +108,8 @@ class ProxyIRTable:
             # Get material properties from first mesh
             material_props = self._get_material_properties(meshes[0])
 
-            # Build IR table for this group
-            ir_matrix = self._build_toeplitz_ir_matrix(
+            # Build Toeplitz IR table for this group
+            ir_matrix, num_modes = self._build_toeplitz_ir_matrix(
                 meshes=meshes,
                 material_key=material_key,
                 proxy_type=proxy_type,
@@ -115,9 +119,10 @@ class ProxyIRTable:
             )
 
             self.ir_table[(material_key, proxy_type)] = ir_matrix
+            self.num_modes[(material_key, proxy_type)] = num_modes
 
-            debug_print(f"Built IR table for material {material_key}, shape {self._shape_names[proxy_type]}, "
-                       f"steps: {n_steps}, size range: {self.min_size[(material_key, proxy_type)]:.4f} - "
+            debug_print(f"Built Toeplitz IR table for material {material_key}, shape {self._shape_names[proxy_type]}, "
+                       f"steps: {n_steps}, modes: {num_modes}, size range: {self.min_size[(material_key, proxy_type)]:.4f} - "
                        f"{self.max_size[(material_key, proxy_type)]:.4f}m")
 
     def _group_by_material_and_shape(self, proxy_meshes: List[Any]) -> Dict[Tuple[int, int], List[Any]]:
@@ -222,14 +227,17 @@ class ProxyIRTable:
         material_props: Dict[str, float],
         size_steps: np.ndarray,
         n_steps: int
-    ) -> np.ndarray:
+    ) -> Tuple[np.ndarray, int]:
         """
-        Build a Toeplitz-like impulse response matrix for all modal modes.
+        Build a Toeplitz impulse response matrix.
 
-        The matrix has shape (n_steps, max_ir_length) where each row is
-        the impulse response for a specific size step.
+        The matrix has shape (num_modes, max_ir_length) where each row is
+        the impulse response for a specific modal frequency band.
 
         Uses the modal parameters from the .lib file to generate the IR.
+
+        Returns:
+            (ir_matrix, num_modes) where ir_matrix has shape (num_modes, max_ir_length)
         """
         # Collect modal parameters from all meshes in this group
         all_modal_params = []
@@ -256,13 +264,18 @@ class ProxyIRTable:
 
         if not all_modal_params:
             debug_print(f"No modal data found for group {material_key}, {proxy_type}")
-            return np.zeros((n_steps, self.max_ir_length), dtype=np.float32)
+            return np.zeros((1, self.max_ir_length), dtype=np.float32), 1
 
         # Sort by size
         all_modal_params.sort(key=lambda x: x['size'])
 
-        # Build IR for each size step using interpolation of modal parameters
-        ir_matrix = np.zeros((n_steps, self.max_ir_length), dtype=np.float32)
+        # Determine number of modes (use the maximum from all meshes)
+        num_modes = max(p['nModes'] for p in all_modal_params)
+        debug_print(f"Using {num_modes} modes for Toeplitz matrix")
+
+        # Build IR for each size step
+        # Shape: (n_steps, num_modes, max_ir_length)
+        ir_matrix = np.zeros((n_steps, num_modes, self.max_ir_length), dtype=np.float32)
 
         # Determine min and max sizes
         sizes = np.array([p['size'] for p in all_modal_params])
@@ -272,8 +285,7 @@ class ProxyIRTable:
         for step_idx, size_scale in enumerate(size_steps):
             target_size = min_s + size_scale * (max_s - min_s)
 
-            # Find nearest modal parameters
-            # Use linear interpolation between the two closest sizes
+            # Find nearest modal parameters with interpolation
             if len(all_modal_params) == 1:
                 params = all_modal_params[0]
             else:
@@ -289,20 +301,17 @@ class ProxyIRTable:
                     all_modal_params[idx2],
                     target_size,
                     sizes[idx1],
-                    sizes[idx2]
+                    sizes[idx2],
+                    num_modes
                 )
 
-            # Generate IR from modal parameters
-            ir = self._modal_params_to_ir(params, material_props)
-            ir = ir[:self.max_ir_length]
+            # Generate IR for each mode (Toeplitz matrix rows)
+            mode_irs = self._modal_params_to_toeplitz_rows(params, material_props, num_modes)
+            
+            # Store in matrix
+            ir_matrix[step_idx] = mode_irs
 
-            # Pad or truncate
-            if len(ir) < self.max_ir_length:
-                ir = np.pad(ir, (0, self.max_ir_length - len(ir)))
-
-            ir_matrix[step_idx] = ir[:self.max_ir_length]
-
-        return ir_matrix
+        return ir_matrix, num_modes
 
     def _interpolate_modal_params(
         self,
@@ -310,7 +319,8 @@ class ProxyIRTable:
         params2: Dict,
         target_size: float,
         size1: float,
-        size2: float
+        size2: float,
+        num_modes: int
     ) -> Dict:
         """
         Interpolate modal parameters between two size points.
@@ -322,74 +332,119 @@ class ProxyIRTable:
         w1 = 1.0 - (target_size - size1) / (size2 - size1)
         w2 = 1.0 - w1
 
-        # Ensure we have the same number of modes
-        n_modes1 = len(params1['frequencies'])
-        n_modes2 = len(params2['frequencies'])
-        n_modes = min(n_modes1, n_modes2)
+        # Get frequencies
+        freqs1 = params1['frequencies']
+        freqs2 = params2['frequencies']
+        
+        # Pad or truncate to num_modes
+        if len(freqs1) < num_modes:
+            freqs1 = np.pad(freqs1, (0, num_modes - len(freqs1)), mode='edge')
+        else:
+            freqs1 = freqs1[:num_modes]
+            
+        if len(freqs2) < num_modes:
+            freqs2 = np.pad(freqs2, (0, num_modes - len(freqs2)), mode='edge')
+        else:
+            freqs2 = freqs2[:num_modes]
 
         # Interpolate frequencies
-        freqs1 = params1['frequencies'][:n_modes]
-        freqs2 = params2['frequencies'][:n_modes]
         frequencies = w1 * freqs1 + w2 * freqs2
 
         # Interpolate T60s
-        t60s1 = params1['t60s'][:n_modes]
-        t60s2 = params2['t60s'][:n_modes]
+        t60s1 = params1['t60s']
+        t60s2 = params2['t60s']
+        
+        if len(t60s1) < num_modes:
+            t60s1 = np.pad(t60s1, (0, num_modes - len(t60s1)), mode='edge')
+        else:
+            t60s1 = t60s1[:num_modes]
+            
+        if len(t60s2) < num_modes:
+            t60s2 = np.pad(t60s2, (0, num_modes - len(t60s2)), mode='edge')
+        else:
+            t60s2 = t60s2[:num_modes]
+            
         t60s = w1 * t60s1 + w2 * t60s2
 
-        # Interpolate gains (per vertex)
-        n_vertices1 = len(params1['gains'][0]) if params1['gains'] else 0
-        n_vertices2 = len(params2['gains'][0]) if params2['gains'] else 0
-        n_vertices = min(n_vertices1, n_vertices2)
-
-        gains = []
-        for i in range(min(len(params1['gains']), len(params2['gains']))):
-            if i < n_modes:
-                g1 = params1['gains'][i][:n_vertices] if i < len(params1['gains']) else np.zeros(n_vertices)
-                g2 = params2['gains'][i][:n_vertices] if i < len(params2['gains']) else np.zeros(n_vertices)
-                gains.append(w1 * g1 + w2 * g2)
+        # Interpolate gains (per vertex, average over vertices)
+        gains1 = params1['gains']
+        gains2 = params2['gains']
+        
+        # Average gains across vertices for each mode
+        if gains1 and len(gains1) > 0:
+            avg_gains1 = np.array([np.mean(g) if isinstance(g, (list, np.ndarray)) else g for g in gains1])
+        else:
+            avg_gains1 = np.ones(num_modes) * 0.1
+            
+        if gains2 and len(gains2) > 0:
+            avg_gains2 = np.array([np.mean(g) if isinstance(g, (list, np.ndarray)) else g for g in gains2])
+        else:
+            avg_gains2 = np.ones(num_modes) * 0.1
+            
+        if len(avg_gains1) < num_modes:
+            avg_gains1 = np.pad(avg_gains1, (0, num_modes - len(avg_gains1)), mode='edge')
+        else:
+            avg_gains1 = avg_gains1[:num_modes]
+            
+        if len(avg_gains2) < num_modes:
+            avg_gains2 = np.pad(avg_gains2, (0, num_modes - len(avg_gains2)), mode='edge')
+        else:
+            avg_gains2 = avg_gains2[:num_modes]
+            
+        gains = w1 * avg_gains1 + w2 * avg_gains2
 
         return {
             'frequencies': frequencies,
             't60s': t60s,
             'gains': gains,
-            'nModes': n_modes
+            'nModes': num_modes
         }
 
-    def _modal_params_to_ir(self, modal_params: Dict, material_props: Dict[str, float]) -> np.ndarray:
+    def _modal_params_to_toeplitz_rows(
+        self,
+        modal_params: Dict,
+        material_props: Dict[str, float],
+        num_modes: int
+    ) -> np.ndarray:
         """
-        Generate impulse response from modal parameters.
+        Generate Toeplitz matrix rows from modal parameters.
 
-        Uses Toeplitz-like matrix approach: each mode contributes a damped sinusoid
-        that is convolved with an excitation impulse.
+        Each row is the impulse response for a specific mode.
+        The matrix has shape (num_modes, max_ir_length).
+
+        Returns:
+            np.ndarray of shape (num_modes, max_ir_length)
         """
         frequencies = modal_params['frequencies']
         t60s = modal_params['t60s']
         gains = modal_params['gains']
 
-        n_modes = len(frequencies)
-
-        if n_modes == 0:
-            return np.zeros(self.max_ir_length)
-
-        # Determine IR length based on max T60
-        max_t60 = np.max(t60s) if len(t60s) > 0 else 0.1
-        ir_length = min(int(max_t60 * self.sample_rate * 2), self.max_ir_length)
-
-        # Time axis
-        t = np.arange(ir_length) / self.sample_rate
-
-        # Initialize IR
-        ir = np.zeros(ir_length, dtype=np.float32)
+        # Ensure we have the right number of modes
+        if len(frequencies) < num_modes:
+            frequencies = np.pad(frequencies, (0, num_modes - len(frequencies)), mode='edge')
+            t60s = np.pad(t60s, (0, num_modes - len(t60s)), mode='edge')
+            if isinstance(gains, (list, np.ndarray)):
+                if len(gains) < num_modes:
+                    gains = np.pad(gains, (0, num_modes - len(gains)), mode='edge')
+        else:
+            frequencies = frequencies[:num_modes]
+            t60s = t60s[:num_modes]
+            if isinstance(gains, (list, np.ndarray)):
+                gains = gains[:num_modes]
 
         # Damping factor from material properties
         damping = material_props.get('damping', 0.02)
 
-        # Build modal contributions using Toeplitz-like structure
-        # Each mode contributes: gain * exp(-decay*t) * sin(2*pi*freq*t)
-        for i in range(n_modes):
-            freq = frequencies[i]
-            t60 = t60s[i]
+        # Initialize IR matrix (num_modes, max_ir_length)
+        ir_matrix = np.zeros((num_modes, self.max_ir_length), dtype=np.float32)
+
+        # Time axis
+        t = np.arange(self.max_ir_length) / self.sample_rate
+
+        # Build each mode's impulse response
+        for mode_idx in range(num_modes):
+            freq = frequencies[mode_idx]
+            t60 = t60s[mode_idx]
 
             if freq <= 0 or t60 <= 0:
                 continue
@@ -397,35 +452,37 @@ class ProxyIRTable:
             # Decay rate
             decay = 3 * np.log(10) / max(t60, 0.001)
 
-            # Get gains for this mode (average over vertices if multiple)
-            if i < len(gains):
-                mode_gains = gains[i]
-                if isinstance(mode_gains, (list, np.ndarray)):
-                    gain = np.mean(mode_gains)
-                else:
-                    gain = mode_gains
+            # Get gain for this mode
+            if isinstance(gains, (list, np.ndarray)) and mode_idx < len(gains):
+                gain = gains[mode_idx]
+                if isinstance(gain, (list, np.ndarray)):
+                    gain = np.mean(gain)
             else:
                 gain = 0.1
 
             # Damped sinusoid for this mode
+            # Toeplitz row: impulse response of a second-order filter
             mode_ir = gain * np.exp(-decay * t) * np.sin(2 * np.pi * freq * t)
 
-            # Add to total IR
-            ir += mode_ir
+            # Add to matrix row
+            ir_matrix[mode_idx] = mode_ir
 
         # Apply overall damping scaling
-        ir *= (1.0 - damping * 0.5)
+        ir_matrix *= (1.0 - damping * 0.5)
 
-        # Normalize
-        max_val = np.max(np.abs(ir))
-        if max_val > 0:
-            ir = ir / max_val * 0.9
+        # Normalize each row
+        for mode_idx in range(num_modes):
+            max_val = np.max(np.abs(ir_matrix[mode_idx]))
+            if max_val > 0:
+                ir_matrix[mode_idx] = ir_matrix[mode_idx] / max_val * 0.9
 
-        return ir.astype(np.float32)
+        return ir_matrix
 
     def get_ir(self, material_key: int, proxy_type: int, size_scale: float) -> np.ndarray:
         """
-        Get interpolated IR for a given material, shape, and size scale.
+        Get interpolated IR matrix for a given material, shape, and size scale.
+
+        Returns a Toeplitz matrix of shape (num_modes, max_ir_length).
 
         Parameters:
         -----------
@@ -438,13 +495,13 @@ class ProxyIRTable:
 
         Returns:
         --------
-        np.ndarray : Interpolated IR (max_ir_length)
+        np.ndarray : Interpolated IR matrix (num_modes, max_ir_length)
         """
         key = (material_key, proxy_type)
 
         if key not in self.ir_table:
             debug_print(f"IR table not found for key {key}")
-            return np.zeros(self.max_ir_length, dtype=np.float32)
+            return np.zeros((1, self.max_ir_length), dtype=np.float32)
 
         # Clamp size scale
         size_scale = np.clip(size_scale, 0, 1)
@@ -470,6 +527,11 @@ class ProxyIRTable:
 
         return ir
 
+    def get_num_modes(self, material_key: int, proxy_type: int) -> int:
+        """Get the number of modes for a given material and shape."""
+        key = (material_key, proxy_type)
+        return self.num_modes.get(key, 1)
+
     def save(self, filepath: str) -> None:
         """Save IR table to file."""
         save_data = {
@@ -477,7 +539,9 @@ class ProxyIRTable:
             'size_steps': self.size_steps,
             'min_size': self.min_size,
             'max_size': self.max_size,
-            'sample_rate': self.sample_rate
+            'num_modes': self.num_modes,
+            'sample_rate': self.sample_rate,
+            'max_ir_length': self.max_ir_length
         }
         np.savez_compressed(filepath, **save_data)
 
@@ -488,4 +552,6 @@ class ProxyIRTable:
         self.size_steps = data['size_steps'].item()
         self.min_size = data['min_size'].item()
         self.max_size = data['max_size'].item()
-        self.sample_rate = data['sample_rate']
+        self.num_modes = data['num_modes'].item()
+        self.sample_rate = int(data['sample_rate'])
+        self.max_ir_length = int(data['max_ir_length'])
