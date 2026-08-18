@@ -107,6 +107,8 @@ class Pym2f:
                     minmode = self.config.system.lowest_frequency
                     maxmode = self.config.system.higher_frequency
                     success, file_names = self._try_mesh2faust(config_obj, vertices, normals, faces, obj_file, young_modulus, poisson_ratio, density, damping, minmode, maxmode, expos, output_name)
+                except:
+                    success = False
             elif attempt == 2 and not config_obj.static:
                 try:
                     # Third attempt: use mesh2faust with obj from random frame
