@@ -470,11 +470,11 @@ class ProxyIRTable:
         # Apply overall damping scaling
         ir_matrix *= (1.0 - damping * 0.5)
 
-        # Normalize each row
-        for mode_idx in range(num_modes):
-            max_val = np.max(np.abs(ir_matrix[mode_idx]))
-            if max_val > 0:
-                ir_matrix[mode_idx] = ir_matrix[mode_idx] / max_val * 0.9
+#        # Normalize each row
+#        for mode_idx in range(num_modes):
+#            max_val = np.max(np.abs(ir_matrix[mode_idx]))
+#            if max_val > 0:
+#                ir_matrix[mode_idx] = ir_matrix[mode_idx] / max_val * 0.9
 
         return ir_matrix
 

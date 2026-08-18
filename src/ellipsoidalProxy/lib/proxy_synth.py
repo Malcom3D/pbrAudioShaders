@@ -51,6 +51,8 @@ class ProxySynth:
     
     # Processing parameters
     sample_rate: int = 48000
+    fft_size: int = 16384
+    hop_size: int = 4096
     
     # Output
     output_dir: str = None
@@ -85,8 +87,8 @@ class ProxySynth:
         # Cache for material_key lookups
         self._material_key_cache = {}
         
-        # Cache for band filters
-        self._band_filters = {}
+        # Cache for IR FFTs
+        self._ir_fft_cache = {}
     
     def _get_material_key(self, config_obj: Any) -> int:
         """
@@ -131,192 +133,54 @@ class ProxySynth:
         
         return self.ir_table.get_ir(material_key, proxy_type, size_scale)
     
-    def _get_band_filters(self, frequencies: np.ndarray) -> List[Tuple[np.ndarray, np.ndarray]]:
+    def _convolve_with_irs(self, signal: np.ndarray, ir_matrix: np.ndarray) -> np.ndarray:
         """
-        Create bandpass filters for splitting the excitation signal into
-        frequency bands corresponding to each modal frequency.
-        
-        Each band is centered around a modal frequency with bandwidth defined
-        by the adjacent modal frequencies (Voronoi-like partitioning).
+        Convolve the signal with every IR row in the Toeplitz matrix and sum the results.
+        Uses FFT for efficiency.
         
         Parameters:
-        -----------
-        frequencies : np.ndarray
-            Modal frequencies (Hz)
-        
+            signal: excitation signal (1D)
+            ir_matrix: shape (num_modes, max_ir_length)
+            
         Returns:
-        --------
-        List of (b, a) filter coefficients for each band
+            convolved signal (same length as signal)
         """
-        cache_key = tuple(frequencies)
-        if cache_key in self._band_filters:
-            return self._band_filters[cache_key]
+        if np.all(signal == 0) or ir_matrix.size == 0:
+            return np.zeros_like(signal)
         
-        num_modes = len(frequencies)
-        nyquist = self.sample_rate / 2
+        num_modes = ir_matrix.shape[0]
+        ir_len = ir_matrix.shape[1]
+        sig_len = len(signal)
         
-        # Define band edges based on modal frequencies
-        # Use Voronoi-like partitioning: each band is centered at a modal frequency
-        # with edges halfway between adjacent modal frequencies
-        band_edges = np.zeros(num_modes + 1)
+        # FFT size: power of 2 large enough for linear convolution
+        fft_size = 1 << (sig_len + ir_len - 1).bit_length()
         
-        # First edge: half-octave below the lowest modal frequency
-        if num_modes > 1:
-            # Calculate geometric mean of first two frequencies
-            band_edges[0] = frequencies[0] / np.sqrt(frequencies[1] / frequencies[0])
-        else:
-            # Only one mode: use half-octave below
-            band_edges[0] = frequencies[0] / np.sqrt(2)
-        
-        # Internal edges: halfway between adjacent modal frequencies (geometric mean)
-        for i in range(1, num_modes):
-            band_edges[i] = np.sqrt(frequencies[i-1] * frequencies[i])
-        
-        # Last edge: half-octave above the highest modal frequency
-        if num_modes > 1:
-            band_edges[-1] = frequencies[-1] * np.sqrt(frequencies[-1] / frequencies[-2])
-        else:
-            band_edges[-1] = frequencies[-1] * np.sqrt(2)
-        
-        # Clamp edges to valid range
-        band_edges = np.clip(band_edges, 1.0, nyquist * 0.99)
-        
-        # Ensure edges are monotonically increasing
-        for i in range(1, len(band_edges)):
-            if band_edges[i] <= band_edges[i-1]:
-                band_edges[i] = band_edges[i-1] * 1.01
-        
-        filters = []
-        for i in range(num_modes):
-            low = band_edges[i]
-            high = band_edges[i+1]
-            
-            # Ensure low < high
-            if low >= high:
-                low = max(1.0, low * 0.9)
-                high = min(nyquist * 0.99, high * 1.1)
-            
-            # Normalize to Nyquist
-            low_norm = low / nyquist
-            high_norm = high / nyquist
-            
-            # Ensure valid range
-            low_norm = max(0.001, min(0.999, low_norm))
-            high_norm = max(0.001, min(0.999, high_norm))
-            
-            if low_norm >= high_norm:
-                # Fallback: use a narrow band around the modal frequency
-                center_norm = frequencies[i] / nyquist
-                bw = 0.1  # 10% bandwidth
-                low_norm = max(0.001, center_norm * (1 - bw))
-                high_norm = min(0.999, center_norm * (1 + bw))
-            
-            # Design bandpass filter (4th order Butterworth)
-            b, a = butter(4, [low_norm, high_norm], btype='band')
-            filters.append((b, a))
-        
-        self._band_filters[cache_key] = filters
-        return filters
-    
-    def _split_into_bands(self, signal: np.ndarray, frequencies: np.ndarray) -> List[np.ndarray]:
-        """
-        Split an excitation signal into frequency bands based on modal frequencies.
-        
-        Parameters:
-        -----------
-        signal : np.ndarray
-            Input excitation signal
-        frequencies : np.ndarray
-            Modal frequencies (Hz)
-        
-        Returns:
-        --------
-        List of band signals, each of shape (n_samples,)
-        """
-        num_modes = len(frequencies)
-        if num_modes <= 0:
-            return [signal]
-        
-        filters = self._get_band_filters(frequencies)
-        band_signals = []
-        
-        for b, a in filters:
-            # Apply bandpass filter (zero-phase)
-            band_signal = filtfilt(b, a, signal)
-            band_signals.append(band_signal)
-        
-        return band_signals
-    
-    def _convolve_with_ir_matrix(self, band_signals: List[np.ndarray], 
-                                  ir_matrix: np.ndarray) -> np.ndarray:
-        """
-        Convolve each band signal with the corresponding IR row from the Toeplitz matrix.
-        
-        Parameters:
-        -----------
-        band_signals : List[np.ndarray]
-            List of band signals (one per mode)
-        ir_matrix : np.ndarray
-            Toeplitz matrix of shape (num_modes, max_ir_length)
-        
-        Returns:
-        --------
-        np.ndarray : Sum of convolved signals
-        """
-        num_modes = min(len(band_signals), ir_matrix.shape[0])
-        output = np.zeros_like(band_signals[0], dtype=np.float64)
-        
-        for mode_idx in range(num_modes):
-            # Get IR for this mode (row of the Toeplitz matrix)
-            ir = ir_matrix[mode_idx]
-            
-            # Get band signal
-            band_signal = band_signals[mode_idx]
-            
-            # Skip if signal is zero or IR is all zeros
-            if np.all(band_signal == 0) or np.all(ir == 0):
-                continue
-            
-            # FFT-based convolution with the IR
-            convolved = self._fft_convolve(band_signal, ir)
-            
-            # Add to output
-            output += convolved
-        
-        return output.astype(np.float32)
-
-    def _fft_convolve(self, signal: np.ndarray, ir: np.ndarray) -> np.ndarray:
-        """
-        FFT-based convolution with a single IR.
-        
-        Parameters:
-        -----------
-        signal : np.ndarray
-            Input signal
-        ir : np.ndarray
-            Impulse response
-        
-        Returns:
-        --------
-        np.ndarray : Convolved signal
-        """
-        n_signal = len(signal)
-        n_ir = len(ir)
-        
-        # Determine FFT size (next power of 2)
-        fft_size = 1 << (n_signal + n_ir - 1).bit_length()
-        
-        # FFT of signal and IR
+        # Compute FFT of the excitation once
         signal_fft = np.fft.rfft(signal, n=fft_size)
-        ir_fft = np.fft.rfft(ir, n=fft_size)
         
-        # Multiply and inverse FFT
-        result = np.fft.irfft(signal_fft * ir_fft, n=fft_size)
+        # Get or compute FFTs of IR rows (cached)
+        cache_key = id(ir_matrix)  # unique per matrix object
+        if cache_key not in self._ir_fft_cache:
+            # Compute and cache FFT for each mode
+            ir_ffts = []
+            for mode_idx in range(num_modes):
+                ir = ir_matrix[mode_idx, :]
+                # Pad to fft_size (ir is already max_ir_length, but may be shorter)
+                ir_padded = np.zeros(fft_size)
+                ir_padded[:ir_len] = ir
+                ir_ffts.append(np.fft.rfft(ir_padded))
+            self._ir_fft_cache[cache_key] = ir_ffts
+        else:
+            ir_ffts = self._ir_fft_cache[cache_key]
         
-        # Trim to expected length
-        result = result[:n_signal]
+        # Accumulate in frequency domain
+        output_fft = np.zeros(fft_size // 2 + 1, dtype=np.complex128)
+        for mode_idx in range(num_modes):
+            output_fft += signal_fft * ir_ffts[mode_idx]
         
-        return result
+        # Inverse FFT and truncate to original length
+        result = np.fft.irfft(output_fft, n=fft_size)[:sig_len]
+        return result.astype(np.float32)
 
     def _compute_size_scale(self, config_obj: Any) -> float:
         """Compute normalized size scale (0-1) for an object."""
@@ -468,15 +332,12 @@ class ProxySynth:
             elif excitation.shape[0] > total_samples:
                 excitation = excitation[:total_samples]
             
-            # Split excitation into frequency bands using modal frequencies
-            band_signals = self._split_into_bands(excitation, modal_frequencies)
-            
             # Convolve each band with the corresponding IR
             if track_name.endswith('_sound'):
                 # Sound tracks are already processed (no IR convolution)
                 processed = excitation
             else:
-                processed = self._convolve_with_ir_matrix(band_signals, ir_matrix)
+                processed = self._convolve_with_irs(excitation, ir_matrix)
                 debug_print(f'After IR convolution for {config_obj.name} - {track_name}: {processed.shape}, non-zero: {np.count_nonzero(processed)}')
                 
                 # Apply equalization
