@@ -28,7 +28,7 @@ from pbrAudioCommon import EntityManager
 from pbrAudioCommon import _load_mesh, _mesh_to_obj, _compute_rayleigh_damping
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
-from ..lib.approx2faust import Approx2Faust, ModalParameters
+from ..lib.approx2faust import Approx2Faust
 
 @dataclass
 class Pym2f:
