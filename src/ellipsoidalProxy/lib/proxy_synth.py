@@ -16,8 +16,6 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# pbrAudioShaders/src/ellipsoidalProxy/lib/proxy_synth.py
-
 import os
 import numpy as np
 from typing import Dict, List, Tuple, Optional, Any
@@ -39,9 +37,10 @@ class ProxySynth:
     """
     Lightweight physically-based synthesizer for proxy meshes.
     
-    Uses Toeplitz IR matrix from ProxyIRTable where each row corresponds to
-    a modal frequency band. The excitation signal is split into frequency bands
-    and convolved with the corresponding IR row.
+    Uses Toeplitz IR matrix from ProxyIRTable where each row corresponds to a
+    modal frequency band. The excitation signal is split into frequency bands
+    using the modal frequencies from ProxyIRTable.get_modes() and convolved
+    with the corresponding IR row.
     """
     
     entity_manager: EntityManager
@@ -132,35 +131,85 @@ class ProxySynth:
         
         return self.ir_table.get_ir(material_key, proxy_type, size_scale)
     
-    def _get_band_filters(self, num_modes: int) -> List[Tuple[np.ndarray, np.ndarray]]:
+    def _get_band_filters(self, frequencies: np.ndarray) -> List[Tuple[np.ndarray, np.ndarray]]:
         """
         Create bandpass filters for splitting the excitation signal into
-        frequency bands corresponding to each mode.
+        frequency bands corresponding to each modal frequency.
+        
+        Each band is centered around a modal frequency with bandwidth defined
+        by the adjacent modal frequencies (Voronoi-like partitioning).
+        
+        Parameters:
+        -----------
+        frequencies : np.ndarray
+            Modal frequencies (Hz)
         
         Returns:
-            List of (b, a) filter coefficients for each band
+        --------
+        List of (b, a) filter coefficients for each band
         """
-        cache_key = num_modes
+        cache_key = tuple(frequencies)
         if cache_key in self._band_filters:
             return self._band_filters[cache_key]
         
-        # Define frequency bands based on modal distribution
-        # Use logarithmic spacing from 20Hz to Nyquist
+        num_modes = len(frequencies)
         nyquist = self.sample_rate / 2
-        min_freq = 20.0
-        max_freq = nyquist * 0.95
         
-        # Create logarithmically spaced band edges
-        band_edges = np.logspace(np.log10(min_freq), np.log10(max_freq), num_modes + 1)
+        # Define band edges based on modal frequencies
+        # Use Voronoi-like partitioning: each band is centered at a modal frequency
+        # with edges halfway between adjacent modal frequencies
+        band_edges = np.zeros(num_modes + 1)
+        
+        # First edge: half-octave below the lowest modal frequency
+        if num_modes > 1:
+            # Calculate geometric mean of first two frequencies
+            band_edges[0] = frequencies[0] / np.sqrt(frequencies[1] / frequencies[0])
+        else:
+            # Only one mode: use half-octave below
+            band_edges[0] = frequencies[0] / np.sqrt(2)
+        
+        # Internal edges: halfway between adjacent modal frequencies (geometric mean)
+        for i in range(1, num_modes):
+            band_edges[i] = np.sqrt(frequencies[i-1] * frequencies[i])
+        
+        # Last edge: half-octave above the highest modal frequency
+        if num_modes > 1:
+            band_edges[-1] = frequencies[-1] * np.sqrt(frequencies[-1] / frequencies[-2])
+        else:
+            band_edges[-1] = frequencies[-1] * np.sqrt(2)
+        
+        # Clamp edges to valid range
+        band_edges = np.clip(band_edges, 1.0, nyquist * 0.99)
+        
+        # Ensure edges are monotonically increasing
+        for i in range(1, len(band_edges)):
+            if band_edges[i] <= band_edges[i-1]:
+                band_edges[i] = band_edges[i-1] * 1.01
         
         filters = []
         for i in range(num_modes):
             low = band_edges[i]
-            high = band_edges[i + 1]
+            high = band_edges[i+1]
+            
+            # Ensure low < high
+            if low >= high:
+                low = max(1.0, low * 0.9)
+                high = min(nyquist * 0.99, high * 1.1)
             
             # Normalize to Nyquist
             low_norm = low / nyquist
             high_norm = high / nyquist
+            
+            # Ensure valid range
+            low_norm = max(0.001, min(0.999, low_norm))
+            high_norm = max(0.001, min(0.999, high_norm))
+            
+            if low_norm >= high_norm:
+                # Fallback: use a narrow band around the modal frequency
+                center_norm = frequencies[i] / nyquist
+                bw = 0.1  # 10% bandwidth
+                low_norm = max(0.001, center_norm * (1 - bw))
+                high_norm = min(0.999, center_norm * (1 + bw))
             
             # Design bandpass filter (4th order Butterworth)
             b, a = butter(4, [low_norm, high_norm], btype='band')
@@ -169,27 +218,37 @@ class ProxySynth:
         self._band_filters[cache_key] = filters
         return filters
     
-    def _split_into_bands(self, signal: np.ndarray, num_modes: int) -> List[np.ndarray]:
+    def _split_into_bands(self, signal: np.ndarray, frequencies: np.ndarray) -> List[np.ndarray]:
         """
-        Split an excitation signal into frequency bands corresponding to each mode.
+        Split an excitation signal into frequency bands based on modal frequencies.
+        
+        Parameters:
+        -----------
+        signal : np.ndarray
+            Input excitation signal
+        frequencies : np.ndarray
+            Modal frequencies (Hz)
         
         Returns:
-            List of band signals, each of shape (n_samples,)
+        --------
+        List of band signals, each of shape (n_samples,)
         """
+        num_modes = len(frequencies)
         if num_modes <= 0:
             return [signal]
         
-        filters = self._get_band_filters(num_modes)
+        filters = self._get_band_filters(frequencies)
         band_signals = []
         
         for b, a in filters:
-            # Apply bandpass filter
+            # Apply bandpass filter (zero-phase)
             band_signal = filtfilt(b, a, signal)
             band_signals.append(band_signal)
         
         return band_signals
     
-    def _convolve_with_ir_matrix(self, band_signals: List[np.ndarray], ir_matrix: np.ndarray) -> np.ndarray:
+    def _convolve_with_ir_matrix(self, band_signals: List[np.ndarray], 
+                                  ir_matrix: np.ndarray) -> np.ndarray:
         """
         Convolve each band signal with the corresponding IR row from the Toeplitz matrix.
         
@@ -219,7 +278,6 @@ class ProxySynth:
                 continue
             
             # FFT-based convolution with the IR
-            # Use overlap-add for efficiency
             convolved = self._fft_convolve(band_signal, ir)
             
             # Add to output
@@ -260,12 +318,107 @@ class ProxySynth:
         
         return result
 
+    def _compute_size_scale(self, config_obj: Any) -> float:
+        """Compute normalized size scale (0-1) for an object."""
+        from pbrAudioCommon import _load_mesh
+        try:
+            vertices, _, _ = _load_mesh(config_obj, 0, use_proxy_path=True)
+            if len(vertices) > 0:
+                min_coords = np.min(vertices, axis=0)
+                max_coords = np.max(vertices, axis=0)
+                size = np.linalg.norm(max_coords - min_coords)
+                
+                # Get min/max size for this material/shape
+                material_key = self._get_material_key(config_obj)
+                proxy_type = config_obj.proxy_type
+                key = (material_key, proxy_type)
+                
+                min_size = self.ir_table.min_size.get(key, 0.0)
+                max_size = self.ir_table.max_size.get(key, 1.0)
+                
+                # Normalize to 0-1 range
+                size_range = max_size - min_size
+                if size_range > 0:
+                    size_scale = (size - min_size) / size_range
+                else:
+                    size_scale = 0.5
+                
+                return np.clip(size_scale, 0, 1)
+        except Exception as e:
+            debug_print(f"Error computing size scale: {e}")
+        
+        return 0.5  # Default
+
+    def _load_audio_force_tracks(self, obj_name: str) -> Optional[Dict[str, np.ndarray]]:
+        """
+        Load audio-force tracks for an object.
+        
+        Returns:
+            Dictionary with keys: 'impact', 'sliding', 'scraping', 'rolling', 
+            'rolling_sound', 'sliding_sound', 'scraping_sound'
+            or None if no tracks found.
+        """
+        tracks = {}
+        track_names = ['impact', 'sliding', 'scraping', 'rolling', 
+                       'rolling_sound', 'sliding_sound', 'scraping_sound']
+        
+        for track_name in track_names:
+            track_file = f"{self.audio_force_dir}/{obj_name}_{track_name}.raw"
+            
+            if os.path.exists(track_file):
+                try:
+                    track_data = np.fromfile(track_file, dtype=np.float32)
+                    if len(track_data) > 0:
+                        tracks[track_name] = track_data
+                        debug_print(f"Loaded {track_name} track: {len(track_data)} samples")
+                except Exception as e:
+                    debug_print(f"Error loading {track_name} track: {e}")
+        
+        if not tracks:
+            return None
+        
+        return tracks
+
+    def _save_audio(self, config_obj: Any, mixed: np.ndarray, 
+                    tracks: Dict[str, np.ndarray]) -> None:
+        """Save synthesized audio to files."""
+        # Save mixed audio
+        mixed_file = f"{self.output_dir}/{config_obj.name}_proxy_mixed.wav"
+        sf.write(mixed_file, mixed, self.sample_rate, subtype='FLOAT')
+        debug_print(f"Saved mixed proxy audio to {mixed_file}")
+        
+        # Save individual tracks
+        for track_name, track_data in tracks.items():
+            if len(track_data) > 0:
+                track_file = f"{self.output_dir}/{config_obj.name}_proxy_{track_name}.wav"
+                sf.write(track_file, track_data, self.sample_rate, subtype='FLOAT')
+                debug_print(f"Saved {track_name} track to {track_file}")
+        
+        # Save metadata
+        import json
+        metadata = {
+            'object_name': config_obj.name,
+            'object_idx': config_obj.idx,
+            'proxy_type': config_obj.proxy_type,
+            'sample_rate': self.sample_rate,
+            'total_samples': len(mixed),
+            'duration': len(mixed) / self.sample_rate,
+            'tracks': list(tracks.keys())
+        }
+        
+        metadata_file = f"{self.output_dir}/{config_obj.name}_proxy_metadata.json"
+        with open(metadata_file, 'w') as f:
+            json.dump(metadata, f, indent=2)
+        
+        debug_print(f"Saved metadata to {metadata_file}")
+
     def compute(self, obj_idx: int, total_samples: int) -> None:
         """
         Compute proxy synth for an object using audio-force tracks.
         
-        The excitation signal is split into frequency bands and convolved
-        with the corresponding IR rows from the Toeplitz matrix.
+        The excitation signal is split into frequency bands based on modal
+        frequencies from ProxyIRTable.get_modes() and convolved with the
+        corresponding IR rows from the Toeplitz matrix.
         """
         config = self.entity_manager.get('config')
         
@@ -279,13 +432,18 @@ class ProxySynth:
         if config_obj is None or config_obj.proxy_type is False:
             return
         
-        # Get size scale for this object
+        # Get material key and size scale
+        material_key = self._get_material_key(config_obj)
         size_scale = self._compute_size_scale(config_obj)
         debug_print(f'Size scale for {config_obj.name}: {size_scale:.3f}')
         
+        # Get modal frequencies from IR table
+        modal_frequencies = self.ir_table.get_modes(material_key, config_obj.proxy_type, size_scale)
+        num_modes = len(modal_frequencies)
+        debug_print(f'Modal frequencies for {config_obj.name}: {modal_frequencies}')
+        
         # Get IR matrix (Toeplitz matrix)
         ir_matrix = self._get_ir_matrix(config_obj, size_scale)
-        num_modes = ir_matrix.shape[0]
         debug_print(f'IR matrix shape: {ir_matrix.shape} for {config_obj.name}')
         
         # Load audio-force tracks
@@ -310,8 +468,8 @@ class ProxySynth:
             elif excitation.shape[0] > total_samples:
                 excitation = excitation[:total_samples]
             
-            # Split excitation into frequency bands
-            band_signals = self._split_into_bands(excitation, num_modes)
+            # Split excitation into frequency bands using modal frequencies
+            band_signals = self._split_into_bands(excitation, modal_frequencies)
             
             # Convolve each band with the corresponding IR
             if track_name.endswith('_sound'):
@@ -327,7 +485,11 @@ class ProxySynth:
                     'sliding': 1,
                     'scraping': 2,
                     'rolling': 3,
+                    'rolling_sound': 4,
+                    'sliding_sound': 5, 
+                    'scraping_sound': 6
                 }
+
                 contact_type = contact_type_map.get(track_name, 0)
                 processed = self.equalizer.apply_equalization(processed, contact_type, excitation)
                 debug_print(f'After equalization for {config_obj.name} - {track_name}: {processed.shape}, non-zero: {np.count_nonzero(processed)}')
@@ -365,95 +527,3 @@ class ProxySynth:
         
         # Save output
         self._save_audio(config_obj, mixed, processed_tracks)
-    
-    def _load_audio_force_tracks(self, obj_name: str) -> Optional[Dict[str, np.ndarray]]:
-        """
-        Load audio-force tracks for an object.
-        
-        Returns:
-            Dictionary with keys: 'impact', 'sliding', 'scraping', 'rolling', 
-            'rolling_sound', 'sliding_sound', 'scraping_sound'
-            or None if no tracks found.
-        """
-        tracks = {}
-        track_names = ['impact', 'sliding', 'scraping', 'rolling', 'rolling_sound', 'sliding_sound', 'scraping_sound']
-        
-        for track_name in track_names:
-            track_file = f"{self.audio_force_dir}/{obj_name}_{track_name}.raw"
-            
-            if os.path.exists(track_file):
-                try:
-                    track_data = np.fromfile(track_file, dtype=np.float32)
-                    if len(track_data) > 0:
-                        tracks[track_name] = track_data
-                        debug_print(f"Loaded {track_name} track: {len(track_data)} samples")
-                except Exception as e:
-                    debug_print(f"Error loading {track_name} track: {e}")
-        
-        if not tracks:
-            return None
-        
-        return tracks
-    
-    def _compute_size_scale(self, config_obj: Any) -> float:
-        """Compute normalized size scale (0-1) for an object."""
-        from pbrAudioCommon import _load_mesh
-        try:
-            vertices, _, _ = _load_mesh(config_obj, 0, use_proxy_path=True)
-            if len(vertices) > 0:
-                min_coords = np.min(vertices, axis=0)
-                max_coords = np.max(vertices, axis=0)
-                size = np.linalg.norm(max_coords - min_coords)
-                
-                # Get min/max size for this material/shape
-                material_key = self._get_material_key(config_obj)
-                proxy_type = config_obj.proxy_type
-                key = (material_key, proxy_type)
-                
-                min_size = self.ir_table.min_size.get(key, 0.0)
-                max_size = self.ir_table.max_size.get(key, 1.0)
-                
-                # Normalize to 0-1 range
-                size_range = max_size - min_size
-                if size_range > 0:
-                    size_scale = (size - min_size) / size_range
-                else:
-                    size_scale = 0.5
-                
-                return np.clip(size_scale, 0, 1)
-        except Exception as e:
-            debug_print(f"Error computing size scale: {e}")
-        
-        return 0.5  # Default
-    
-    def _save_audio(self, config_obj: Any, mixed: np.ndarray, tracks: Dict[str, np.ndarray]) -> None:
-        """Save synthesized audio to files."""
-        # Save mixed audio
-        mixed_file = f"{self.output_dir}/{config_obj.name}_proxy_mixed.wav"
-        sf.write(mixed_file, mixed, self.sample_rate, subtype='FLOAT')
-        debug_print(f"Saved mixed proxy audio to {mixed_file}")
-        
-        # Save individual tracks
-        for track_name, track_data in tracks.items():
-            if len(track_data) > 0:
-                track_file = f"{self.output_dir}/{config_obj.name}_proxy_{track_name}.wav"
-                sf.write(track_file, track_data, self.sample_rate, subtype='FLOAT')
-                debug_print(f"Saved {track_name} track to {track_file}")
-        
-        # Save metadata
-        import json
-        metadata = {
-            'object_name': config_obj.name,
-            'object_idx': config_obj.idx,
-            'proxy_type': config_obj.proxy_type,
-            'sample_rate': self.sample_rate,
-            'total_samples': len(mixed),
-            'duration': len(mixed) / self.sample_rate,
-            'tracks': list(tracks.keys())
-        }
-        
-        metadata_file = f"{self.output_dir}/{config_obj.name}_proxy_metadata.json"
-        with open(metadata_file, 'w') as f:
-            json.dump(metadata, f, indent=2)
-        
-        debug_print(f"Saved metadata to {metadata_file}")

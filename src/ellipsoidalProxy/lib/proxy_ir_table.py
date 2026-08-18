@@ -532,6 +532,106 @@ class ProxyIRTable:
         key = (material_key, proxy_type)
         return self.num_modes.get(key, 1)
 
+    def get_modes(self, material_key: int, proxy_type: int, size_scale: float = 0.5) -> np.ndarray:
+        """
+        Get interpolated modal frequencies for a given material and shape.
+        
+        Parameters:
+        -----------
+        material_key : int
+            Material group key
+        proxy_type : int
+            Proxy shape type (0, 1, 2)
+        size_scale : float, optional
+            Normalized size (0-1), default 0.5
+            
+        Returns:
+        --------
+        np.ndarray : Interpolated modal frequencies (Hz)
+        """
+        key = (material_key, proxy_type)
+        
+        if key not in self.ir_table:
+            debug_print(f"IR table not found for key {key}")
+            return np.array([100.0, 200.0, 300.0, 400.0, 500.0])  # Default fallback
+        
+        # Clamp size scale
+        size_scale = np.clip(size_scale, 0, 1)
+        
+        # Get size steps for this key
+        size_steps = self.size_steps.get(key)
+        if size_steps is None:
+            # No size interpolation available, return first entry
+            return self._get_frequencies_from_ir(self.ir_table[key][0])
+        
+        # Find interpolation indices
+        n_steps = len(size_steps)
+        idx = size_scale * (n_steps - 1)
+        idx_low = int(np.floor(idx))
+        idx_high = min(idx_low + 1, n_steps - 1)
+        frac = idx - idx_low
+        
+        # Get frequencies from both size steps
+        freqs_low = self._get_frequencies_from_ir(self.ir_table[key][idx_low])
+        freqs_high = self._get_frequencies_from_ir(self.ir_table[key][idx_high])
+        
+        # Linear interpolation between size steps
+        if len(freqs_low) == len(freqs_high):
+            frequencies = freqs_low * (1 - frac) + freqs_high * frac
+        else:
+            # If lengths differ, use the shorter one
+            min_len = min(len(freqs_low), len(freqs_high))
+            frequencies = freqs_low[:min_len] * (1 - frac) + freqs_high[:min_len] * frac
+        
+        return frequencies
+
+    def _get_frequencies_from_ir(self, ir_matrix: np.ndarray) -> np.ndarray:
+        """
+        Extract modal frequencies from an IR matrix row.
+        
+        Parameters:
+        -----------
+        ir_matrix : np.ndarray
+            IR matrix of shape (num_modes, max_ir_length)
+            
+        Returns:
+        --------
+        np.ndarray : Modal frequencies (Hz)
+        """
+        # The IR matrix rows correspond to modal frequency bands
+        # We need to estimate the center frequency of each band
+        num_modes = ir_matrix.shape[0]
+        
+        # Use FFT to find dominant frequency in each row
+        frequencies = np.zeros(num_modes, dtype=np.float32)
+        
+        # Sample rate is stored in the class
+        sample_rate = self.sample_rate
+        
+        for mode_idx in range(num_modes):
+            row = ir_matrix[mode_idx]
+            if np.all(row == 0):
+                # If row is all zeros, use a default frequency
+                frequencies[mode_idx] = 100.0 * (mode_idx + 1)
+                continue
+            
+            # Apply window to reduce spectral leakage
+            windowed = row * np.hanning(len(row))
+            
+            # Compute FFT
+            fft = np.fft.rfft(windowed)
+            fft_mag = np.abs(fft)
+            
+            # Find dominant frequency bin
+            # Skip DC component (index 0)
+            dominant_bin = np.argmax(fft_mag[1:]) + 1
+            
+            # Convert bin to frequency
+            freq = dominant_bin * sample_rate / len(row)
+            frequencies[mode_idx] = freq
+        
+        return frequencies
+
     def save(self, filepath: str) -> None:
         """Save IR table to file."""
         save_data = {
