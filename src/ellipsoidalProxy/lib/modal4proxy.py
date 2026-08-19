@@ -37,11 +37,11 @@ class Modal4Proxy:
 
     For proxy_type 0 (pyramid), 1 (octahedron), 2 (cube):
     - Generates an approximate modal model based on the original object's
-      acoustic material and mesh shape using (proxy_type + 2) modal modes.
+      acoustic material and mesh shape using (proxy_type + 4) modal modes.
 
     For proxy_type 3,4,5 (icosahedron with subdivisions):
     - Adapts the modal model from mesh2faust of the original mesh to the
-      proxy's mesh shape using (proxy_type + 2) modal modes.
+      proxy's mesh shape using (proxy_type + 4) modal modes.
     """
     entity_manager: EntityManager
 
@@ -81,9 +81,9 @@ class Modal4Proxy:
         # Number of modes based on proxy_type
         if proxy_type == 6:
             # For convex hull, use more modes based on vertex count
-            n_modes = max(5, min(20, config_obj.proxy_samples // 10))
+            n_modes = max(10, min(20, config_obj.proxy_samples // 10))
         else:
-            n_modes = proxy_type + 2
+            n_modes = proxy_type + 4
 
         # Load original mesh for shape analysis
         vertices, normals, faces = _load_mesh(config_obj, 0, use_proxy_path=False)
@@ -977,8 +977,6 @@ class Modal4Proxy:
         # Write the .lib file
         with open(lib_file, 'w') as f:
             f.write(lib_content)
-
-
 
         # Also save a resonance version if needed
         if config_obj.resonance:
