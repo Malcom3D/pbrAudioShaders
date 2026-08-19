@@ -16,12 +16,14 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import json
 import numpy as np
 import trimesh
 from scipy.sparse import coo_matrix, csr_matrix
 from scipy.sparse.linalg import eigsh
 from typing import Dict, List, Tuple, Optional, Any
-import json
+
+from pbrAudioCommon import ShapeType, ShapeProperties
 
 class VoxelMeshModalAnalysis:
     def __init__(self, voxel_grid, voxel_size, material_properties):
@@ -45,7 +47,7 @@ class VoxelMeshModalAnalysis:
             self.dx = self.dy = self.dz = float(voxel_size)
         else:
             self.dx, self.dy, self.dz = voxel_size
-        
+
         # Material properties
         self.E = material_properties['young_modulus']
         self.nu = material_properties['poisson_ratio']
@@ -265,8 +267,7 @@ class VoxelMeshModalAnalysis:
             return np.array([]), np.array([])
 
         # Compute eigenvalues and eigenvectors
-        # We'll always search for the lowest frequencies using shift-invert with sigma=0.
-        sigma = 0.0
+        sigma = (2 * np.pi * min_freq) ** 2
 
         # Maximum number of eigenvalues we are willing to compute (avoid excessive cost)
         max_k = min(n_dofs - 1, 1000)  # cap to avoid memory/time issues
@@ -300,7 +301,7 @@ class VoxelMeshModalAnalysis:
             eigenvectors = eigenvectors[:, idx]
         
             # Convert to frequencies (Hz)
-            frequencies = np.sqrt(np.abs(eigenvalues)) / (2 * np.pi)
+            freqs = np.sqrt(np.abs(eigenvalues)) / (2 * np.pi)
         
             # Filter by requested frequency range
             mask = (freqs >= min_freq)
@@ -336,7 +337,7 @@ class VoxelMeshModalAnalysis:
         # No fallback or still insufficient: return whatever we have in requested range
         return filtered_freqs, filtered_vectors
 
-    def interpolate_mode_shapes_to_points(self, points: np.ndarray, mode_shapes: np.ndarray) -> np.ndarray:
+    def interpolate_mode_shapes_to_points(self, points: np.ndarray, mode_shapes: np.ndarray, shape_properties: ShapeProperties) -> np.ndarray:
         """
         Interpolate modal displacement magnitudes to arbitrary points (e.g., original mesh vertices).
 
@@ -346,6 +347,8 @@ class VoxelMeshModalAnalysis:
             Coordinates of points where to evaluate mode shapes.
         mode_shapes : np.ndarray, shape (n_dofs, n_modes)
             Mode shape matrix (each column is a mode, each row is a DOF).
+        shape_properties : ShapeProperties, optional
+            Pre‑computed shape properties (avoids recomputation).
 
         Returns:
         --------
@@ -358,9 +361,6 @@ class VoxelMeshModalAnalysis:
         N = points.shape[0]
         n_modes = mode_shapes.shape[1]
         gains = np.zeros((N, n_modes), dtype=np.float64)
-
-        # Precompute node positions from index grid (only for nodes that exist)
-        # We'll use the grid to get node indices; positions are computed on the fly.
 
         for p_idx, pt in enumerate(points):
             # Compute voxel cell indices (clamp to grid)
@@ -473,16 +473,153 @@ class VoxelMeshModalAnalysis:
                 z = z0 * (1 - dk) + z1 * dk
 
                 # Magnitude (Euclidean norm)
-                magnitude = np.sqrt(x*x + y*y + z*z)
-                gains[p_idx, mode_idx] = magnitude
+                gains[p_idx, mode_idx] = np.sqrt(x*x + y*y + z*z)
+
+        # Shape‑aware stochastic fuzzy logic
+        shape_type = shape_properties.shape_type
+        confidence = shape_properties.confidence
+        centroid = shape_properties.centroid
+        bbox = shape_properties.bounding_box
+        # Compute vertex features
+        # Normalized position in bounding box (range 0..1)
+        bbox_min = bbox.min(axis=0)
+        bbox_max = bbox.max(axis=0)
+        range_ = bbox_max - bbox_min
+        range_[range_ == 0] = 1.0  # avoid division by zero
+        norm_pos = (points - bbox_min) / range_   # shape (N, 3)
+
+        # Distance from centroid (normalized by max distance)
+        dist_from_centroid = np.linalg.norm(points - centroid, axis=1)
+        max_dist = np.max(dist_from_centroid) if np.max(dist_from_centroid) > 0 else 1.0
+        norm_dist = dist_from_centroid / max_dist  # 0..1
+
+        # Shape‑specific gain adjustment factors
+        # Determine shape‑specific function
+        if shape_type == ShapeType.SPHERE:
+            # Uniform gains
+            shape_scale = np.ones(N)
+        elif shape_type == ShapeType.PLATE:
+            # Use normalized position (0..1), edge if near 0 or 1 in any dimension
+            edge_factor = np.minimum(norm_pos, 1 - norm_pos).min(axis=1)  # 0 at edge, 0.5 at center
+            # scale = 1 + 0.5 * (1 - edge_factor)  -> higher at edges
+            shape_scale = 1.0 + 0.5 * (1.0 - 2.0 * edge_factor)  # range 0.5..1.5
+        elif shape_type == ShapeType.BEAM:
+            # Use normalized position along the longest dimension
+            # Determine which axis is longest
+            extents = bbox_max - bbox_min
+            longest_axis = np.argmax(extents)
+            # position along that axis normalized 0..1
+            axis_pos = norm_pos[:, longest_axis]
+            # scale: higher at ends (like a simply supported beam)
+            shape_scale = 1.0 + 0.4 * np.sin(np.pi * axis_pos)  # 0.6..1.4
+        elif shape_type == ShapeType.CUBE:
+            # Some variation with distance from center
+            shape_scale = 1.0 + 0.2 * (1.0 - norm_dist)
+        elif shape_type == ShapeType.CYLINDER:
+            # Use distance from centroid in the two radial axes
+            # For simplicity, use norm_dist but with a sine wave
+            shape_scale = 1.0 + 0.3 * np.sin(2 * np.pi * norm_dist)
+        elif shape_type == ShapeType.CONE:
+            # Apex vs base
+            # Use normalized height (z axis)
+            # Assuming cone axis along z, use norm_pos[:,2]
+            shape_scale = 1.0 + 0.3 * (norm_pos[:, 2] - 0.5)  # base higher
+        else:
+            # Irregular: use distance from centroid with random variation
+            shape_scale = 1.0 + 0.2 * (1.0 - norm_dist)
+
+        # fixed seed for reproducibility
+        rng = np.random.default_rng(seed=42)
+
+        # Confidence‑based stochastic amplitude: low confidence -> more noise
+        noise_amplitude = 1.0 - confidence
+
+        for mode_idx in range(n_modes):
+            # Mode‑specific variation: add a random phase to the shape scale
+            mode_phase = rng.uniform(0, 2 * np.pi)
+            # Combine shape_scale with a mode‑dependent sinusoidal factor
+            mode_factor = 1.0 + 0.2 * np.sin(2 * np.pi * norm_dist + mode_phase)
+            # Apply to gains
+            gains[:, mode_idx] *= shape_scale * mode_factor
+
+            # Add stochastic noise
+            # Noise proportional to the gain magnitude and shape_scale
+            noise = rng.normal(0, noise_amplitude * np.abs(gains[:, mode_idx]))
+            gains[:, mode_idx] += noise
+
+        # Ensure gains are non‑negative
+        gains = np.maximum(gains, 0.0)
 
         return gains
 
+    def compute_stochastic_variation_factors(self, n_modes: int, min_freq: float, max_freq: float) -> Dict[str, np.ndarray]:
+        """
+        Compute stochastic variation factors for modal parameters.
 
+        Parameters
+        ----------
+        n_modes : int
+            Number of modes to generate factors for.
 
+        Returns
+        -------
+        dict
+            Dictionary with keys:
+            - 'freq_scale' : np.ndarray, shape (n_modes,)
+                Scaling factor for each mode's frequency.
+            - 'gain_scale' : np.ndarray, shape (n_modes,)
+                Scaling factor for each mode's gain (amplitude).
+            - 't60_scale' : np.ndarray, shape (n_modes,)
+                Scaling factor for each mode's T60 (decay time).
+        """
+        # Default uncertainty fractions (relative standard deviation)
+        uncertainty_fractions = {
+            'E': 0.10,
+            'nu': 0.05,
+            'rho': 0.05,
+            'alpha': 0.20,
+            'beta': 0.20
+        }
 
+        # Set random generator
+        rng = np.random.default_rng()
 
+        # Sample material properties with uncertainty
+        # Use lognormal to keep values positive
+        def sample_prop(nominal: float, frac: float, low_clip: float = 1e-12) -> float:
+            sigma = np.sqrt(np.log(1 + frac**2))
+            mu = np.log(nominal) - 0.5 * sigma**2
+            return rng.lognormal(mu, sigma)
 
+        E_sampled = sample_prop(self.E, uncertainty_fractions['E'])
+        nu_sampled = sample_prop(self.nu, uncertainty_fractions['nu'])
+        rho_sampled = sample_prop(self.rho, uncertainty_fractions['rho'])
+        alpha_sampled = sample_prop(self.alpha, uncertainty_fractions['alpha'])
+        beta_sampled = sample_prop(self.beta, uncertainty_fractions['beta'])
 
+        # Compute frequency scaling: freq ∝ sqrt(E / rho)
+        freq_scale = np.sqrt(E_sampled / rho_sampled) / np.sqrt(self.E / self.rho)
 
+        # Compute T60 scaling: T60 ∝ 1 / (damping_ratio * omega)
+        nominal_freqs = np.logspace(np.log10(min_freq), np.log10(max_freq), n_modes)
+        omega = 2 * np.pi * nominal_freqs
 
+        # Nominal damping ratio
+        xi_nom = self.alpha / (2 * omega) + self.beta * omega / 2
+        # Sampled damping ratio
+        xi_sampled = alpha_sampled / (2 * omega) + beta_sampled * omega / 2
+
+        # T60 scaling: T60 = 6.9078 / (xi * omega)  (since T60 = ln(1000)/(xi*omega))
+        # So T60_scale = (xi_nom * omega) / (xi_sampled * omega) = xi_nom / xi_sampled
+        t60_scale = xi_nom / xi_sampled
+
+        # Gain scaling: mild random factor (e.g., 1 ± 5‑10%) to account for mode‑shape variations
+        # This is not directly derived from material properties, but we add a small stochastic component.
+        gain_scale = rng.normal(1.0, 0.05, n_modes)
+        gain_scale = np.clip(gain_scale, 0.7, 1.3)
+
+        return {
+            'freq_scale': freq_scale * np.ones(n_modes),  # same for all modes (material scaling)
+            'gain_scale': gain_scale,
+            't60_scale': t60_scale
+        }

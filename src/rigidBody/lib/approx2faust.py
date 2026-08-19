@@ -23,16 +23,18 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from ..lib.voxel_mesh_modal_analysis import VoxelMeshModalAnalysis
+
 from pbrAudioCommon import _compute_rayleigh_damping
+from pbrAudioCommon import PrimitiveGeometry
 
 @dataclass
 class Approx2Faust:
     """
     Generate modal models from Voxel-based approximation of mesh.
     """
-    
     def __post_init__(self):
-        pass
+        # init primitive geometry classifier
+        self.primitive_geometry = PrimitiveGeometry()
     
     def compute(self, vertices: np.ndarray, faces: np.ndarray, young_modulus: float, poisson_ratio: float, density: float, damping: float, min_freq: float, max_freq: float, system_min_freq: float, system_max_freq: float, n_modes: int, voxel_size: float) -> Dict[str, Any]:
         """
@@ -100,8 +102,11 @@ class Approx2Faust:
                 }
             }
 
+        # Classify the shape
+        shape_props = self.primitive_geometry.classify(vertices, faces)
+
         # Interpolate mode shapes to original vertices to get position-specific gains
-        gains = modal_analysis.interpolate_mode_shapes_to_points(vertices, mode_shapes)  # shape (N_vertices, n_modes)
+        gains = modal_analysis.interpolate_mode_shapes_to_points(vertices, mode_shapes, shape_props)  # shape (N_vertices, n_modes)
 
         # Compute T60 from damping
         # For each mode, damping ratio = alpha/(2*omega) + beta*omega/2
@@ -115,7 +120,16 @@ class Approx2Faust:
         t60s = np.clip(t60s, 0.001, 100.0)
 
         # Transpose gains to shape (n_modes, n_vertices) for Faust
-        gains = gains.T  # shape (n_modes, N_vertices)
+        gains = gains.T
+
+        # Get modal stochastic variation based on material
+        stochastic_factor = modal_analysis.compute_stochastic_variation_factors(n_modes=n_modes, min_freq=min_freq, max_freq=max_freq)
+
+        frequencies *= stochastic_factor['freq_scale']
+        t60s *= stochastic_factor['t60_scale']
+        gains *= stochastic_factor['gain_scale'][:, None]
+        # Normalize gains
+        gains /= np.max(abs(gains))
 
         return {
             'frequencies': frequencies,
@@ -177,14 +191,13 @@ class Approx2Faust:
 
         return voxel_grid
 
-    def to_faust_lib(self, modal_data: Dict[str, Any], output_name: str, 
-                     min_freq: float, max_freq: float) -> str:
+    def to_faust_lib(self, modal_params: Dict[str, Any], output_name: str, min_freq: float, max_freq: float, t60_scale: float = 1) -> str:
         """
         Generate Faust .lib file content for modal synthesis
         
         Parameters:
         -----------
-        modal_data : dict
+        modal_params : dict
             Modal analysis results from compute() (must contain 'frequencies', 'gains', 't60s')
         output_name : str
             Name for the Faust output
@@ -192,16 +205,19 @@ class Approx2Faust:
             Minimum frequency for the modal model
         max_freq : float
             Maximum frequency for the modal model
+        t60_scale : float, optional
+            Scaling factor applied to the T60 values in the Faust expression.
+            Default is 1.0 (no scaling).
         
         Returns:
         --------
         str
             Faust .lib file content
         """
-        frequencies = modal_data.get('frequencies', [])
-        gains = modal_data.get('gains', [])   # shape (n_modes, n_vertices)
-        t60s = modal_data.get('t60s', [])
-        metadata = modal_data.get('metadata', {})
+        frequencies = modal_params.get('frequencies', [])
+        gains = modal_params.get('gains', [])   # shape (n_modes, n_vertices)
+        t60s = modal_params.get('t60s', [])
+        metadata = modal_params.get('metadata', {})
         
         n_modes = len(frequencies)
         n_vertices = metadata.get('n_vertices', 0) if gains.shape[1] > 0 else 0

@@ -213,7 +213,13 @@ class Pym2f:
         """
         # Compute modal parameters
         n_modes = self.config.system.modal_modes
-        voxel_size = self.config.system.voxel_size
+
+        # Estimate voxel size from extents
+        min_coords = np.min(vertices, axis=0)
+        max_coords = np.max(vertices, axis=0)
+        extents = max_coords - min_coords
+        # Use 1/20 of the largest extent, with a floor of 0.001
+        voxel_size = max(max(extents) / 20.0, 0.001)
         
         modal_params = self.approx2faust.compute(
             vertices=vertices,

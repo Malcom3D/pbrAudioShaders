@@ -22,6 +22,8 @@ from typing import List, Tuple, Optional, Any, Dict
 from dataclasses import dataclass, field
 from scipy.spatial import ConvexHull
 
+from rigidBody import Approx2Faust
+
 from pbrAudioCommon import EntityManager
 from pbrAudioCommon import _load_mesh, _parse_lib, _compute_rayleigh_damping
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
@@ -86,7 +88,7 @@ class Modal4Proxy:
         vertices, normals, faces = _load_mesh(config_obj, 0, use_proxy_path=False)
 
         # Compute proxy mesh vertices (local coordinates)
-        proxy_vertices, _ = self._get_proxy_vertices(config_obj, proxy_type)
+        proxy_vertices, proxy_faces = self._get_proxy_vertices(config_obj, proxy_type)
 
         # Generate or adapt modal model
         if proxy_type in [0, 1, 2]:
@@ -95,6 +97,7 @@ class Modal4Proxy:
                 config_obj=config_obj,
                 proxy_type=proxy_type,
                 proxy_vertices=proxy_vertices,
+                proxy_faces=proxy_faces,
                 original_vertices=vertices,
                 young_modulus=young_modulus,
                 poisson_ratio=poisson_ratio,
@@ -167,6 +170,7 @@ class Modal4Proxy:
         config_obj: Any,
         proxy_type: int,
         proxy_vertices: np.ndarray,
+        proxy_faces: np.ndarray, 
         original_vertices: np.ndarray,
         young_modulus: float,
         poisson_ratio: float,
@@ -177,12 +181,59 @@ class Modal4Proxy:
         n_modes: int
     ) -> None:
         """
-        Generate an approximate modal model for simple proxy shapes (0, 1, 2).
+        Generate an approximate modal model for simple proxy shapes (0, 1, 2),
+        using the Voxel‑based approach (Approx2Faust) or the analytical mode shapes as fall back.
 
-        Uses analytical mode shapes for pyramid (proxy_type=0), octahedron (proxy_type=1), 
-        and cube/hexahedron (proxy_type=2), scaled by material properties 
+        The analytical mode shapes for pyramid (proxy_type=0), octahedron (proxy_type=1), 
+        and cube/hexahedron (proxy_type=2) is scaled by material properties 
         and object dimensions.
         """
+        # Estimate voxel size from proxy extents
+        min_coords = np.min(proxy_vertices, axis=0)
+        max_coords = np.max(proxy_vertices, axis=0)
+        extents = max_coords - min_coords
+        # Use 1/20 of the largest extent, with a floor in config.system.voxel_size
+        voxel_size = max(max(extents) / 20.0, 0.001)
+
+        # Instantiate Approx2Faust
+        approx = Approx2Faust() 
+                
+        # Compute modal parameters using voxel approximation
+        modal_params = approx.compute(
+            vertices=proxy_vertices,
+            faces=proxy_faces,
+            young_modulus=young_modulus,
+            poisson_ratio=poisson_ratio,
+            density=density,
+            damping=damping,
+            min_freq=min_freq,
+            max_freq=max_freq,
+            system_min_freq=self.config.system.lowest_frequency,
+            system_max_freq=self.config.system.higher_frequency,
+            n_modes=n_modes,
+            voxel_size=voxel_size
+        )
+
+        if modal_params['frequencies'].shape[0] == modal_params['t60s'].shape[0] == modal_params['gains'].shape[0] == n_modes and modal_params['gains'].shape[1] == proxy_vertices.shape[0]:
+            # Generate Faust .lib content with t60_scale = 1.0 (actual T60 in seconds)
+            lib_content = approx.to_faust_lib(
+                modal_params=modal_params,
+                output_name=f"{config_obj.name}_proxy_{proxy_type}",
+                min_freq=min_freq,
+                max_freq=max_freq,
+                t60_scale=1.0
+            )
+
+            # Save the .lib file
+            cache_path = self.config.system.cache_path
+            dsp_path = f"{cache_path}/dsp"
+            os.makedirs(dsp_path, exist_ok=True)
+            lib_file = f"{dsp_path}/{config_obj.name}_proxy_{proxy_type}.lib"
+            with open(lib_file, 'w') as f:
+                f.write(lib_content)        
+            return
+
+        # Analytical mode shapes fallback
         # Compute effective radius from original mesh volume
         volume = self._compute_volume(original_vertices)
         effective_radius = (3 * volume / (4 * np.pi)) ** (1/3)
