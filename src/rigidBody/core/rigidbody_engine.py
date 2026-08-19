@@ -49,6 +49,7 @@ class rigidBodyEngine:
     obj_pairs: List[int] = field(default_factory=list)
     obj_modal: List[int] = field(default_factory=list)
     obj_proxy_synth: List[int] = field(default_factory=list)
+    total_samples: int = 1
 
     def __post_init__(self):
         config = self.entity_manager.get('config')
