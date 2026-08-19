@@ -29,9 +29,18 @@ dask_config.set({'num_workers': 1024, 'optimization.fuse.active': True, 'optimiz
 
 from pbrAudioCommon import EntityManager, ScoreTrack
 from pbrAudioCommon import _update_status
+
 #from physicsSolver import ForceDataSequence, ModalVertices, CollisionData, TrajectoryData
 #from ellipsoidalProxy import Modal4Proxy, ProxySynth, ProxyEngine
 #from postProcess import PostProcessEngine
+
+from physicsSolver.lib.force_data import ForceDataSequence
+from physicsSolver.lib.modal_vertices import ModalVertices
+from physicsSolver.lib.collision_data import CollisionData
+from physicsSolver.lib.trajectory_data import TrajectoryData
+from ellipsoidalProxy.lib.modal4proxy import Modal4Proxy
+from ellipsoidalProxy.core.proxy_engine import ProxyEngine
+from postProcess.core.post_process_engine import PostProcessEngine
 
 from ..core.mesh2modal import Mesh2Modal
 from ..core.modal_composer import ModalComposer
@@ -50,10 +59,6 @@ class rigidBodyEngine:
     obj_proxy_synth: List[int] = field(default_factory=list)
 
     def __post_init__(self):
-        from physicsSolver import ForceDataSequence, ModalVertices, CollisionData, TrajectoryData
-        from ellipsoidalProxy import Modal4Proxy, ProxySynth, ProxyEngine
-        from postProcess import PostProcessEngine
-
         config = self.entity_manager.get('config')
         self.status_dir = f"{config.system.cache_path}/status/{__class__.__name__}"
         self.collisions_dir = f"{config.system.cache_path}/collisions"
@@ -283,11 +288,6 @@ class rigidBodyEngine:
     @delayed
     def bake_player(self, player: Any):
         player.compute()
-
-#    @delayed
-#    def bake_proxy_synth(self, obj_idx: int):
-#        ps = ProxySynth(self.entity_manager)
-#        ps.compute(obj_idx, self.total_samples)
 
     @delayed
     def bake_save(self, player: Any):
