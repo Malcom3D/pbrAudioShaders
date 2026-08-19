@@ -224,6 +224,8 @@ class Pym2f:
             damping=damping if damping else 0.02,
             min_freq=minmode if minmode else 20.0,
             max_freq=maxmode if maxmode else 20000.0,
+            system_min_freq=self.config.system.lowest_frequency,
+            system_max_freq=self.config.system.higher_frequency,
             n_modes=n_modes,
             voxel_size=voxel_size
         )
@@ -260,6 +262,8 @@ class Pym2f:
                 damping=damping if damping else 0.02,
                 min_freq=minmode if minmode else 20.0,
                 max_freq=maxmode if maxmode else 20000.0,
+                system_min_freq=self.config.system.lowest_frequency,
+                system_max_freq=self.config.system.higher_frequency,
                 n_modes=config_obj.resonance_modes,
                 voxel_size=voxel_size
             )

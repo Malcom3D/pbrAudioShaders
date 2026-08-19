@@ -235,45 +235,106 @@ class VoxelMeshModalAnalysis:
         
         return D
     
-    def compute_modes(self, n_modes=10, min_freq=0, max_freq=None):
+    def compute_modes(self, n_modes=10, min_freq=0, max_freq=None, system_min_freq=None, system_max_freq=None):
         """
-        Compute modal modes (eigenvalues and eigenvectors)
+        Compute modal modes (eigenvalues and eigenvectors) with adaptive k.
+
+        Parameters:
+        -----------
+        n_modes : int
+            Desired number of modes to return.
+        min_freq, max_freq : float
+            Frequency range to filter modes (Hz). If max_freq is None, no upper bound.
+        system_min_freq, system_max_freq : float or None
+            Fallback frequency range if not enough modes are found in [min_freq, max_freq].
+            If provided, and insufficient modes are found, we will return modes within this
+            wider range instead.
+
+        Returns:
+        --------
+        frequencies : np.ndarray
+            Sorted frequencies (Hz) of the selected modes (at most n_modes).
+        eigenvectors : np.ndarray 
+            Corresponding mode shape matrix (n_dofs x n_modes).
         """
         if self.K is None or self.M is None:
             self.build_system_matrices()
         
-        # Compute eigenvalues and eigenvectors
-        if max_freq is not None:
-            sigma = (2 * np.pi * max_freq) ** 2
-        else:
-            sigma = 0
-        
-        k = min(n_modes, self.K.shape[0] - 2)
-        if k <= 0:
+        n_dofs = self.K.shape[0]
+        if n_dofs <= 1:
             return np.array([]), np.array([])
+
+        # Compute eigenvalues and eigenvectors
+        # We'll always search for the lowest frequencies using shift-invert with sigma=0.
+        sigma = 0.0
+
+        # Maximum number of eigenvalues we are willing to compute (avoid excessive cost)
+        max_k = min(n_dofs - 1, 1000)  # cap to avoid memory/time issues
+
+        # Start with a base number: at least n_modes + 20, but not more than max_k
+        k = min(max(n_modes + 20, 50), max_k)
         
-        eigenvalues, eigenvectors = eigsh(
-            self.K, 
-            k=k,
-            M=self.M,
-            sigma=sigma,
-            which='LM'
-        )
+        # Loop to increase k until we have enough modes in the desired range
+        while True:
+            # Compute k eigenvalues (lowest frequencies) 
+            try:
+                eigenvalues, eigenvectors = eigsh(
+                    self.K,
+                    k=k,
+                    M=self.M,
+                    sigma=sigma,
+                    which='LM',
+                    mode='cayley'
+                )
+            except Exception as e:
+                # If eigsh fails (e.g., not enough degrees of freedom), reduce k
+                if k > 10:
+                    k = max(k // 2, 2)
+                    continue
+                else:
+                    return np.array([]), np.array([])
+
+            # Sort by eigenvalue (ascending, since we want lowest frequencies)
+            idx = np.argsort(eigenvalues)
+            eigenvalues = eigenvalues[idx]
+            eigenvectors = eigenvectors[:, idx]
         
-        # Sort by frequency
-        idx = np.argsort(eigenvalues)
-        eigenvalues = eigenvalues[idx]
-        eigenvectors = eigenvectors[:, idx]
+            # Convert to frequencies (Hz)
+            frequencies = np.sqrt(np.abs(eigenvalues)) / (2 * np.pi)
         
-        # Convert to frequencies (Hz)
-        frequencies = np.sqrt(np.abs(eigenvalues)) / (2 * np.pi)
-        
-        # Filter by frequency range
-        mask = (frequencies >= min_freq)
-        if max_freq is not None:
-            mask &= (frequencies <= max_freq)
-        
-        return frequencies[mask], eigenvectors[:, mask]
+            # Filter by requested frequency range
+            mask = (freqs >= min_freq)
+            if max_freq is not None:
+                mask &= (freqs <= max_freq)
+
+            filtered_freqs = freqs[mask]
+            filtered_vectors = eigenvectors[:, mask]
+
+            # If we have enough modes in the requested range, take first n_modes
+            if len(filtered_freqs) >= n_modes:
+                return filtered_freqs[:n_modes], filtered_vectors[:, :n_modes]
+
+            # If we have exhausted the maximum k, break to fallback
+            if k >= max_k:
+                break
+
+            # Increase k to get more modes
+            k = min(k + 20, max_k)
+
+        # Fallback: not enough modes in requested range: use system-wide fallback range
+        if system_min_freq is not None and system_max_freq is not None:
+            mask_fallback = (freqs >= system_min_freq) & (freqs <= system_max_freq)
+            fallback_freqs = freqs[mask_fallback]
+            fallback_vectors = eigenvectors[:, mask_fallback]
+
+            if len(fallback_freqs) >= n_modes:
+                return fallback_freqs[:n_modes], fallback_vectors[:, :n_modes]
+            else:
+                # Still not enough; return what we have in fallback range
+                return fallback_freqs, fallback_vectors
+
+        # No fallback or still insufficient: return whatever we have in requested range
+        return filtered_freqs, filtered_vectors
 
     def interpolate_mode_shapes_to_points(self, points: np.ndarray, mode_shapes: np.ndarray) -> np.ndarray:
         """

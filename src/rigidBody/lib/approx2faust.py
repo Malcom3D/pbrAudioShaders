@@ -34,7 +34,7 @@ class Approx2Faust:
     def __post_init__(self):
         pass
     
-    def compute(self, vertices: np.ndarray, faces: np.ndarray, young_modulus: float, poisson_ratio: float, density: float, damping: float, min_freq: float, max_freq: float, n_modes: int, voxel_size: float) -> Dict[str, Any]:
+    def compute(self, vertices: np.ndarray, faces: np.ndarray, young_modulus: float, poisson_ratio: float, density: float, damping: float, min_freq: float, max_freq: float, system_min_freq: float, system_max_freq: float, n_modes: int, voxel_size: float) -> Dict[str, Any]:
         """
         Compute approximate modal parameters for a mesh.
         
@@ -84,7 +84,7 @@ class Approx2Faust:
         modal_analysis = VoxelMeshModalAnalysis(voxel_grid, voxel_size, material_properties)
 
         # Compute modes
-        frequencies, mode_shapes = modal_analysis.compute_modes(n_modes=n_modes, min_freq=min_freq, max_freq=max_freq)
+        frequencies, mode_shapes = modal_analysis.compute_modes(n_modes=n_modes, min_freq=min_freq, max_freq=max_freq, system_min_freq, system_max_freq)
 
         if len(frequencies) == 0:
             # Return empty results
