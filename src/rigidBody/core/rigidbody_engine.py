@@ -34,13 +34,6 @@ from physicsSolver import ForceDataSequence, ModalVertices, CollisionData, Traje
 from ellipsoidalProxy import Modal4Proxy, ProxySynth, ProxyEngine
 from postProcess import PostProcessEngine
 
-#from physicsSolver.lib.force_data import ForceDataSequence
-#from physicsSolver.lib.modal_vertices import ModalVertices
-#from physicsSolver.lib.collision_data import CollisionData
-#from physicsSolver.lib.trajectory_data import TrajectoryData
-#from ellipsoidalProxy.core.proxy_engine import ProxyEngine
-#from ellipsoidalProxy.lib.modal4proxy import Modal4Proxy
-
 from ..core.mesh2modal import Mesh2Modal
 from ..core.modal_composer import ModalComposer
 from ..core.modal_luthier import ModalLuthier
@@ -161,7 +154,6 @@ class rigidBodyEngine:
         results_modal = compute(*tasks_modal)
         self.progress = _update_status(f"{self.status_dir}/prebake", 30)
 
-#        from ellipsoidalProxy.lib.modal4proxy import Modal4Proxy
         tasks_proxy = [self.prebake_proxy(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
         results_proxy = compute(*tasks_proxy)
         self.progress = _update_status(f"{self.status_dir}/prebake", 45)
@@ -252,7 +244,6 @@ class rigidBodyEngine:
         results_save = compute(*tasks_save)
         self.progress = _update_status(f"{self.status_dir}/bake", 92)
 
-#        from postProcess.core.post_process_engine import PostProcessEngine
         post_engine = PostProcessEngine(self.entity_manager)
         post_engine.process_with_modal_player()
 
