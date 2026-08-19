@@ -94,6 +94,7 @@ class Modal4Proxy:
         # Generate or adapt modal model
         if proxy_type in [0, 1, 2]:
             # Approximate modal model for simple proxies
+            print_debug(f"Approximate modal model for {config_obj.name} proxy_type {proxy_type}")
             self._generate_approximate_modal_model(
                 config_obj=config_obj,
                 proxy_type=proxy_type,
@@ -110,6 +111,7 @@ class Modal4Proxy:
             )
         elif proxy_type in [3, 4, 5]:
             # Adapt mesh2faust modal model for subdivided icosahedron
+            print_debug(f"Adapt mesh2faust modal model for {config_obj.name} proxy_type {proxy_type}")
             self._adapt_mesh2faust_modal_model(
                 config_obj=config_obj,
                 proxy_type=proxy_type,
@@ -126,6 +128,7 @@ class Modal4Proxy:
             )
         elif proxy_type == 6:
             # Adapt mesh2faust modal model for convex hull
+            print_debug(f"Adapt mesh2faust modal model for {config_obj.name} proxy_type convex hull")
             self._adapt_mesh2faust_modal_model(
                 config_obj=config_obj,
                 proxy_type=proxy_type,
@@ -166,21 +169,7 @@ class Modal4Proxy:
 
         return proxy_vertices, proxy_faces
 
-    def _generate_approximate_modal_model(
-        self,
-        config_obj: Any,
-        proxy_type: int,
-        proxy_vertices: np.ndarray,
-        proxy_faces: np.ndarray, 
-        original_vertices: np.ndarray,
-        young_modulus: float,
-        poisson_ratio: float,
-        density: float,
-        damping: float,
-        min_freq: float,
-        max_freq: float,
-        n_modes: int
-    ) -> None:
+    def _generate_approximate_modal_model(self, config_obj: Any, proxy_type: int, proxy_vertices: np.ndarray, proxy_faces: np.ndarray, original_vertices: np.ndarray, young_modulus: float, poisson_ratio: float, density: float, damping: float, min_freq: float, max_freq: float, n_modes: int) -> None:
         """
         Generate an approximate modal model for simple proxy shapes (0, 1, 2),
         using the Voxel‑based approach (Approx2Faust) or the analytical mode shapes as fall back.
@@ -200,6 +189,7 @@ class Modal4Proxy:
         approx = Approx2Faust() 
                 
         # Compute modal parameters using voxel approximation
+        debug_print(f"Using using voxel approximation for {config_obj.name} (type {proxy_type})")
         modal_params = approx.compute(
             vertices=proxy_vertices,
             faces=proxy_faces,
