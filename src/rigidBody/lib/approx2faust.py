@@ -84,7 +84,7 @@ class Approx2Faust:
         modal_analysis = VoxelMeshModalAnalysis(voxel_grid, voxel_size, material_properties)
 
         # Compute modes
-        frequencies, mode_shapes = modal_analysis.compute_modes(n_modes=n_modes, min_freq=min_freq, max_freq=max_freq, system_min_freq, system_max_freq)
+        frequencies, mode_shapes = modal_analysis.compute_modes(n_modes=n_modes, min_freq=min_freq, max_freq=max_freq, system_min_freq=system_min_freq, system_max_freq=system_max_freq)
 
         if len(frequencies) == 0:
             # Return empty results
