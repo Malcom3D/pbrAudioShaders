@@ -231,9 +231,38 @@ class Modal4Proxy:
             lib_file = f"{dsp_path}/{config_obj.name}_proxy_{proxy_type}.lib"
             with open(lib_file, 'w') as f:
                 f.write(lib_content)        
+
+            # Handle resonance if requested
+            if config_obj.resonance:
+                resonance_modes = config_obj.resonance_modes if config_obj.resonance_modes else max(5, n_modes // 2)
+                # We can reuse the same modal_params but take first resonance_modes modes
+                res_freqs = modal_params['frequencies'][:resonance_modes]
+                res_gains = modal_params['gains'][:resonance_modes, :]
+                res_t60s = modal_params['t60s'][:resonance_modes] * 1.2  # slightly longer decay
+
+                res_params = {
+                    'frequencies': res_freqs,
+                    'gains': res_gains,
+                    't60s': res_t60s,
+                    'metadata': modal_params['metadata']
+                }
+                resonance_content = approx.to_faust_lib(
+                    modal_params=res_params,
+                    output_name=f"{config_obj.name}_proxy_{proxy_type}_resonance",
+                    min_freq=min_freq,
+                    max_freq=max_freq,
+                    t60_scale=1.0
+                )
+                resonance_file = f"{dsp_path}/{config_obj.name}_proxy_{proxy_type}_resonance.lib"
+                with open(resonance_file, 'w') as f:
+                    f.write(resonance_content)
+
+            debug_print(f"Generated proxy modal model for {config_obj.name} (type {proxy_type}) "
+                f"with {len(modal_params['frequencies'])} modes")
+
             return
 
-        # Analytical mode shapes fallback
+        debug_print(f"Using analytical mode shapes fallback for {config_obj.name} (type {proxy_type})")
         # Compute effective radius from original mesh volume
         volume = self._compute_volume(original_vertices)
         effective_radius = (3 * volume / (4 * np.pi)) ** (1/3)
@@ -1030,6 +1059,6 @@ process = no.process;
             with open(resonance_file, 'w') as f:
                 f.write(resonance_content)
 
-            debug_print(f"Modal4Proxy: Saved resonance model to {resonance_file}")
+            debug_print(f"Saved resonance model to {resonance_file}")
 
-        debug_print(f"Modal4Proxy: Saved modal model to {lib_file}")
+        debug_print(f"Saved modal model to {lib_file}")
