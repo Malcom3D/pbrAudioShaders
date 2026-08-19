@@ -29,7 +29,7 @@ dask_config.set({'num_workers': 1024, 'optimization.fuse.active': True, 'optimiz
 
 from pbrAudioCommon import EntityManager, ScoreTrack
 from pbrAudioCommon import _update_status
-from physicsSolver import ForceDataSequence, ModalVertices, CollisionData, TrajectoryData
+#from physicsSolver import ForceDataSequence, ModalVertices, CollisionData, TrajectoryData
 from ellipsoidalProxy import Modal4Proxy, ProxySynth, ProxyEngine
 from postProcess import PostProcessEngine
 
