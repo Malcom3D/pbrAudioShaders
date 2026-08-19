@@ -31,7 +31,7 @@ from pbrAudioCommon import EntityManager, ScoreTrack
 from pbrAudioCommon import _update_status
 #from physicsSolver import ForceDataSequence, ModalVertices, CollisionData, TrajectoryData
 #from ellipsoidalProxy import Modal4Proxy, ProxySynth, ProxyEngine
-from postProcess import PostProcessEngine
+#from postProcess import PostProcessEngine
 
 from ..core.mesh2modal import Mesh2Modal
 from ..core.modal_composer import ModalComposer
@@ -52,6 +52,7 @@ class rigidBodyEngine:
     def __post_init__(self):
         from physicsSolver import ForceDataSequence, ModalVertices, CollisionData, TrajectoryData
         from ellipsoidalProxy import Modal4Proxy, ProxySynth, ProxyEngine
+        from postProcess import PostProcessEngine
 
         config = self.entity_manager.get('config')
         self.status_dir = f"{config.system.cache_path}/status/{__class__.__name__}"
