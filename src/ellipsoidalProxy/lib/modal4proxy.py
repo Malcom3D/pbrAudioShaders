@@ -969,7 +969,7 @@ class Modal4Proxy:
         }
         proxy_name = proxy_names.get(proxy_type, "unknown")
 
-        generator = = self.__class__.__name__
+        generator = self.__class__.__name__
         header = f"Adapted modal model for {config_obj.name} (proxy)"
 
         lib_content = _generate_lib(header=header, generator=generator, output_name=output_name, n_modes=n_modes, n_vertices=n_vertices, min_freq=min_freq, max_freq=max_freq, freq_str=freq_str, t60_str=t60_str, gain_waveform=gain_waveform, young_modulus=young_modulus, poisson_ratio=poisson_ratio, density=density)
