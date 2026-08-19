@@ -22,7 +22,8 @@ from typing import List, Tuple, Optional, Any, Dict
 from dataclasses import dataclass, field
 from scipy.spatial import ConvexHull
 
-from rigidBody.lib.approx2faust import Approx2Faust
+#from rigidBody.lib.approx2faust import Approx2Faust
+from pbrAudioCommon import Approx2Faust
 
 from pbrAudioCommon import EntityManager
 from pbrAudioCommon import _load_mesh, _parse_lib, _compute_rayleigh_damping

@@ -39,7 +39,6 @@ from physicsSolver.lib.modal_vertices import ModalVertices
 from physicsSolver.lib.collision_data import CollisionData
 from physicsSolver.lib.trajectory_data import TrajectoryData
 from ellipsoidalProxy.core.proxy_engine import ProxyEngine
-from postProcess.core.post_process_engine import PostProcessEngine
 
 from ..core.mesh2modal import Mesh2Modal
 from ..core.modal_composer import ModalComposer
@@ -252,6 +251,7 @@ class rigidBodyEngine:
         results_save = compute(*tasks_save)
         self.progress = _update_status(f"{self.status_dir}/bake", 92)
 
+        from postProcess.core.post_process_engine import PostProcessEngine
         post_engine = PostProcessEngine(self.entity_manager)
         post_engine.process_with_modal_player()
 

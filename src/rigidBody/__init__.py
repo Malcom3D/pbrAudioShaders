@@ -33,7 +33,6 @@ from .core.mesh2modal import Mesh2Modal
 from .lib.rigidbody_synth import RigidBodySynth
 from .lib.modal_bank import ModalBank
 from .lib.resonance_synth import ResonanceSynth
-from .lib.approx2faust import Approx2Faust
 
 from .core.modal_composer import ModalComposer
 from .core.modal_luthier import ModalLuthier
@@ -43,7 +42,6 @@ from .lib.sample_counter import SampleCounter
 
 __all__ = [
      'Pym2f',
-     'Approx2Faust',
      'FaustRender',
      'rigidBodyEngine',
      'ModalComposer',
