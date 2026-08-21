@@ -46,6 +46,7 @@ class ProxyMesh:
     entity_manager: EntityManager
 
     def __post_init(self):
+        config = self.entity_manager.get('config')
         set_debug(config.system.debug)
         set_debug_prefix(self.__class__.__name__)
 
@@ -111,7 +112,7 @@ class ProxyMesh:
         proxy_vertices_local_0, proxy_faces_0 = self._generate_proxy_mesh(proxy_type=config_obj.proxy_type, extents=extents_0, center=center_local_0)
 
         # Build KD-tree for first frame's original vertices
-        tree_original_0 = cKDTree(vertices_local_0 - center_local_0)
+        tree_original_0 = cKDTree(vertices_local_0)
 
         # For each proxy vertex, find the nearest original vertex
 
@@ -119,7 +120,7 @@ class ProxyMesh:
         proxy_vertex_mapping = []
         for pv in proxy_vertices_local_0:
             # Normalize proxy vertex to match original vertex search space
-            pv_normalized = pv - center_local_0
+            pv_normalized = pv
             _, idx = tree_original_0.query(pv_normalized)
             proxy_vertex_mapping.append(idx)
 
@@ -151,7 +152,7 @@ class ProxyMesh:
             # Now re-index proxy vertices to maintain consistency
             # For each proxy vertex, find the corresponding original vertex
             # using the mapping established from the first frame
-            proxy_tree = cKDTree(proxy_vertices_local - center_local)
+            proxy_tree = cKDTree(proxy_vertices_local)
             
             reindexed_proxy_vertices = np.zeros_like(proxy_vertices_local)
             for i, orig_idx in enumerate(proxy_vertex_mapping):
