@@ -78,18 +78,18 @@ class Modal4Proxy:
         min_freq = config_obj.acoustic_shader.low_frequency
         max_freq = config_obj.acoustic_shader.high_frequency
 
-        # Number of modes based on proxy_type
-        if proxy_type == 6:
-            # For convex hull, use more modes based on vertex count
-            n_modes = max(10, min(20, config_obj.proxy_samples // 10))
-        else:
-            n_modes = proxy_type + 4
-
         # Load original mesh for shape analysis
         vertices, normals, faces = _load_mesh(config_obj, 0, use_proxy_path=False)
 
         # Compute proxy mesh vertices (local coordinates)
         proxy_vertices, proxy_faces = self._get_proxy_vertices(config_obj, proxy_type)
+
+        # Number of modes based on proxy_type
+        if proxy_type == 6:
+            # For convex hull, use more modes based on vertex count
+            n_modes = max(10, min(20, proxy_vertices.shape[0] // 10))
+        else:
+            n_modes = proxy_type + 4
 
         # Generate or adapt modal model
         if proxy_type in [0, 1, 2]:
@@ -155,14 +155,14 @@ class Modal4Proxy:
         Returns:
             Tuple of (vertices, faces) in local coordinates
         """
-        # Load original mesh to get extents
-        vertices, normals, faces = _load_mesh(config_obj, 0, use_proxy_path=False)
-
-        # Compute bounding box extents
-        min_coords = np.min(vertices, axis=0)
-        max_coords = np.max(vertices, axis=0)
-        extents = max_coords - min_coords
-        center_local = (min_coords + max_coords) / 2
+#        # Load original mesh to get extents
+#        vertices, normals, faces = _load_mesh(config_obj, 0, use_proxy_path=False)
+#
+#        # Compute bounding box extents
+#        min_coords = np.min(vertices, axis=0)
+#        max_coords = np.max(vertices, axis=0)
+#        extents = max_coords - min_coords
+#        center_local = (min_coords + max_coords) / 2
 
         # Load proxy vertices
         proxy_vertices, proxy_normals, proxy_faces = _load_mesh(config_obj, 0, use_proxy_path=True)

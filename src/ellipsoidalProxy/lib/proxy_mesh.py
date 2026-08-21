@@ -38,7 +38,7 @@ class ProxyMesh:
     - 1: 6-vertex octahedron (axis-aligned, 6 vertices at extents)
     - 2: 8-vertex hexahedron/cube (axis-aligned, 8 vertices at corners)
     - 3,4,5: icosahedron with subdivision of (proxy_type - 3)
-    - 6: convex hull mesh with proxy_samples number of vertices (axis-aligned)
+    - 6: convex hull mesh with min_detail_size limit (axis-aligned)
 
     The proxy mesh vertices maintain consistent indexing across frames
     by mapping to the original mesh's extremal vertices.
@@ -191,7 +191,7 @@ class ProxyMesh:
         Args:
             vertices: Original mesh vertices
             faces: Original mesh faces
-            config_obj: Object configuration containing proxy_samples
+            config_obj: Object configuration containing min_detail_size
 
         Returns:
             Tuple of (vertices, faces) for the convex hull proxy
