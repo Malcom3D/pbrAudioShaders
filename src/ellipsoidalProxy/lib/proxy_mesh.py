@@ -135,7 +135,6 @@ class ProxyMesh:
 
             # Transform vertices to local coordinates
             R = Rotation.from_euler('XYZ', rotation_euler).as_matrix()
-#            vertices_local = (R.T @ (vertices - position).T).T
             vertices_local = (R.T @ (vertices).T).T
 
             # Compute bounding box extents in local coordinates
@@ -163,7 +162,7 @@ class ProxyMesh:
             proxy_normals = self._compute_vertex_normals(reindexed_proxy_vertices, proxy_faces)
 
             # Transform proxy back to world coordinates
-            proxy_vertices_world = (R @ reindexed_proxy_vertices.T).T #+ position
+            proxy_vertices_world = (R @ reindexed_proxy_vertices.T).T
             proxy_normals_world = (R @ proxy_normals.T).T
 
             # Save proxy mesh
