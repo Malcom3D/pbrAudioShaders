@@ -115,13 +115,10 @@ class ProxyMesh:
         tree_original_0 = cKDTree(vertices_local_0)
 
         # For each proxy vertex, find the nearest original vertex
-
         # This establishes the consistent vertex mapping
         proxy_vertex_mapping = []
         for pv in proxy_vertices_local_0:
-            # Normalize proxy vertex to match original vertex search space
-            pv_normalized = pv
-            _, idx = tree_original_0.query(pv_normalized)
+            _, idx = tree_original_0.query(pv)
             proxy_vertex_mapping.append(idx)
 
         # Process each frame
@@ -138,7 +135,8 @@ class ProxyMesh:
 
             # Transform vertices to local coordinates
             R = Rotation.from_euler('XYZ', rotation_euler).as_matrix()
-            vertices_local = (R.T @ (vertices - position).T).T
+#            vertices_local = (R.T @ (vertices - position).T).T
+            vertices_local = (R.T @ (vertices).T).T
 
             # Compute bounding box extents in local coordinates
             min_coords = np.min(vertices_local, axis=0)
@@ -165,7 +163,7 @@ class ProxyMesh:
             proxy_normals = self._compute_vertex_normals(reindexed_proxy_vertices, proxy_faces)
 
             # Transform proxy back to world coordinates
-            proxy_vertices_world = (R @ reindexed_proxy_vertices.T).T + position
+            proxy_vertices_world = (R @ reindexed_proxy_vertices.T).T #+ position
             proxy_normals_world = (R @ proxy_normals.T).T
 
             # Save proxy mesh
