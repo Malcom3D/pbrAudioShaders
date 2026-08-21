@@ -70,7 +70,7 @@ class rigidBodyEngine:
                 self.obj_dyn.append(config_obj.idx)
             if config_obj.static and not config_obj.idx in obj_static:
                 self.obj_static.append(config_obj.idx)
-            if config_obj.proxy_type is False or config_obj.proxy_type in [3,4,5,6]:
+            if config_obj.proxy_type is False or config_obj.proxy_type in [3,4,5]:
                 self.obj_modal.append(config_obj.idx)
             elif config.system.enable_proxy_synth and config_obj.proxy_type in [0,1,2]:
                 self.obj_proxy_synth.append(config_obj.idx)

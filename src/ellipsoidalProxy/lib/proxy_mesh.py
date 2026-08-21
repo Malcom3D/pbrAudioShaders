@@ -39,7 +39,6 @@ class ProxyMesh:
     - 1: 6-vertex octahedron (axis-aligned, 6 vertices at extents)
     - 2: 8-vertex hexahedron/cube (axis-aligned, 8 vertices at corners)
     - 3,4,5: icosahedron with subdivision of (proxy_type - 3)
-    - 6: convex hull mesh with min_detail_size limit (axis-aligned)
 
     The proxy mesh vertices maintain consistent indexing across frames
     by mapping to the original mesh's extremal vertices.
@@ -109,11 +108,7 @@ class ProxyMesh:
         center_local_0 = (min_coords_0 + max_coords_0) / 2
 
         # Generate proxy vertices for first frame (reference)
-        if config_obj.proxy_type == 6:
-            # Convex hull proxy - use the mesh_to_convex_hull function
-            proxy_vertices_local_0, proxy_faces_0 = self._generate_convex_hull_proxy(vertices=vertices_local_0, faces=faces_0, config_obj=config_obj)
-        else:
-            proxy_vertices_local_0, proxy_faces_0 = self._generate_proxy_mesh(proxy_type=config_obj.proxy_type, extents=extents_0, center=center_local_0)
+        proxy_vertices_local_0, proxy_faces_0 = self._generate_proxy_mesh(proxy_type=config_obj.proxy_type, extents=extents_0, center=center_local_0)
 
         # Build KD-tree for first frame's original vertices
         tree_original_0 = cKDTree(vertices_local_0 - center_local_0)
@@ -151,13 +146,7 @@ class ProxyMesh:
             center_local = (min_coords + max_coords) / 2
 
             # Generate proxy mesh based on proxy_type
-            if config_obj.proxy_type == 6:
-#                proxy_vertices_local, proxy_faces = self._generate_convex_hull_proxy(vertices=vertices_local, faces=faces, config_obj=config_obj)
-                rigid_transform = self._compute_rigid_transform(initial_position=position_0, initial_rotation=R0, final_position=position, final_rotation=R)
-                proxy_vertices_local = self._apply_rigid_transform(vertices=proxy_vertices_local_0, transformation_matrix=rigid_transform)
-                proxy_faces = proxy_faces_0
-            else:
-                proxy_vertices_local, proxy_faces = self._generate_proxy_mesh(proxy_type=config_obj.proxy_type, extents=extents, center=center_local)
+            proxy_vertices_local, proxy_faces = self._generate_proxy_mesh(proxy_type=config_obj.proxy_type, extents=extents, center=center_local)
 
             # Now re-index proxy vertices to maintain consistency
             # For each proxy vertex, find the corresponding original vertex
@@ -168,7 +157,7 @@ class ProxyMesh:
             for i, orig_idx in enumerate(proxy_vertex_mapping):
                 # Use the original vertex position as the proxy vertex
                 # This ensures consistent indexing across frames
-                _, idx = proxy_tree.query(orig_idx, k=1)
+                _, idx = proxy_tree.query(vertices_local[orig_idx], k=1)
                 reindexed_proxy_vertices[i] = proxy_vertices_local[idx]
 
             # Compute normals for the proxy
@@ -186,128 +175,13 @@ class ProxyMesh:
 
         debug_print(f"Created {n_frames} proxy frames for {config_obj.name} at {obj_proxy_path}")
 
-    def compute_rigid_transform(initial_position: np.ndarray, initial_rotation: np.ndarray, final_position: np.ndarray, final_rotation: np.ndarray) -> np.ndarray:
-        """
-        Compute the rigid transformation matrix between two mesh poses.
-    
-        Parameters:
-        -----------
-        initial_position : array-like (3,)
-            Initial position (translation) of the mesh
-        initial_rotation : array-like (3,3) matrix
-            Initial rotation of the mesh
-        final_position : array-like (3,)
-            Final position (translation) of the mesh
-        final_rotation : array-like (3,3) matrix
-            Final rotation of the mesh
-    
-        Returns:
-        --------
-        transformation_matrix : numpy.ndarray (4,4)
-            4x4 rigid transformation matrix
-        """
-
-        # Compute relative rotation: R = R_final * R_initial^T
-        R_relative = final_rotation @ initial_rotation.T
-
-        # Compute relative translation: t = t_final - R * t_initial
-        t_relative = final_position - R_relative @ initial_position
-
-        # Build 4x4 transformation matrix
-        transformation_matrix = np.eye(4)
-        transformation_matrix[:3, :3] = R_relative
-        transformation_matrix[:3, 3] = t_relative
-    
-        return transformation_matrix
-
-    def _apply_rigid_transform(vertices: np.ndarray, transformation_matrix: np.ndarray) -> np.ndarray:
-        """
-        Apply a rigid transformation to mesh vertices.
-    
-        Parameters:
-        -----------
-        vertices : array-like (N, 3)
-            Array of vertex coordinates
-        transformation_matrix : numpy.ndarray (4,4)
-            4x4 rigid transformation matrix
-    
-        Returns:
-        --------
-        transformed_vertices : numpy.ndarray (N, 3)
-            Transformed vertex coordinates
-        """
-        # Convert vertices to numpy array
-        vertices = np.array(vertices, dtype=float)
-    
-        # Check input shape
-        if vertices.ndim == 1:
-            vertices = vertices.reshape(1, -1)
-    
-        # Convert to homogeneous coordinates
-        homogeneous_vertices = np.hstack([vertices, np.ones((vertices.shape[0], 1))])
-    
-        # Apply transformation
-        transformed_homogeneous = (transformation_matrix @ homogeneous_vertices.T).T
-    
-        # Convert back to 3D coordinates
-        transformed_vertices = transformed_homogeneous[:, :3]
-    
-        return transformed_vertices
-
-    def _generate_convex_hull_proxy(self, vertices: np.ndarray, faces: np.ndarray, config_obj: Any) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Generate a convex hull proxy mesh from the original mesh.
-
-        Args:
-            vertices: Original mesh vertices
-            faces: Original mesh faces
-            config_obj: Object configuration containing min_detail_size
-
-        Returns:
-            Tuple of (vertices, faces) for the convex hull proxy
-        """
-        # Create trimesh object
-        mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
-
-        # Sample the mesh surface
-        sampled_mesh, face_indices = trimesh.sample.sample_surface_even(mesh, count=mesh.vertices.shape[0], radius=config_obj.min_detail_size)
-
-        # Create submesh from sampled faces
-        remesh = mesh.submesh([face_indices])[0]
-
-        # Compute convex hull
-        convmesh = remesh.convex_hull
-
-        # Validate and fix the convex hull
-        if not convmesh.is_watertight or not convmesh.is_winding_consistent or not convmesh.is_volume or convmesh.is_empty or not convmesh.is_convex:
-            remesh.fix_normals()
-            remesh.fill_holes()
-            if not convmesh.is_watertight or not convmesh.is_winding_consistent or not convmesh.is_volume or convmesh.is_empty or not convmesh.is_convex:
-                debug_print(f"Warning: Convex hull for {config_obj.name} is not valid, using fallback")
-                # Fallback to proxy_type 5 (Icosahedron with subdivision 2)
-                vertices, faces = self._create_icosahedron(subdivisions=2)
-                # Compute bounding box in local coordinates
-                min_coords = np.min(mesh.vertices, axis=0)
-                max_coords = np.max(mesh.vertices, axis=0)
-                half_extents = (max_coords - min_coords) / 2.0
-                center = (min_coords + max_coords) / 2
-                vertices = vertices * half_extents[np.newaxis, :] + center
-
-        convmesh.process(validate=True)
-
-        # Extract vertices and faces
-        proxy_vertices = convmesh.vertices
-        proxy_faces = convmesh.faces
-
-        return proxy_vertices, proxy_faces
-
     def _generate_proxy_mesh(self, proxy_type: int, extents: np.ndarray, center: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
         Generate a proxy mesh based on proxy_type, scaled to fit extents.
 
         Args:
             proxy_type: 0=4-vertex pyramid, 1=6-vertex octahedron, 
-                        2=8-vertex cube, 3,4,5=icosahedron, 6=ConvexHull
+                        2=8-vertex cube, 3,4,5=icosahedron
             extents: (dx, dy, dz) bounding box extents
             center: Center of the bounding box in local coordinates
 

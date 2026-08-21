@@ -85,11 +85,7 @@ class Modal4Proxy:
         proxy_vertices, proxy_faces = self._get_proxy_vertices(config_obj, proxy_type)
 
         # Number of modes based on proxy_type
-        if proxy_type == 6:
-            # For convex hull, use more modes based on vertex count
-            n_modes = max(10, min(20, proxy_vertices.shape[0] // 10))
-        else:
-            n_modes = proxy_type + 4
+        n_modes = proxy_type + 4
 
         # Generate or adapt modal model
         if proxy_type in [0, 1, 2]:
@@ -112,23 +108,6 @@ class Modal4Proxy:
         elif proxy_type in [3, 4, 5]:
             # Adapt mesh2faust modal model for subdivided icosahedron
             debug_print(f"Adapt mesh2faust modal model for {config_obj.name} proxy_type {proxy_type}")
-            self._adapt_mesh2faust_modal_model(
-                config_obj=config_obj,
-                proxy_type=proxy_type,
-                proxy_vertices=proxy_vertices,
-                original_vertices=vertices,
-                original_faces=faces,
-                young_modulus=young_modulus,
-                poisson_ratio=poisson_ratio,
-                density=density,
-                damping=damping,
-                min_freq=min_freq,
-                max_freq=max_freq,
-                n_modes=n_modes
-            )
-        elif proxy_type == 6:
-            # Adapt mesh2faust modal model for convex hull
-            debug_print(f"Adapt mesh2faust modal model for {config_obj.name} proxy_type convex hull")
             self._adapt_mesh2faust_modal_model(
                 config_obj=config_obj,
                 proxy_type=proxy_type,
