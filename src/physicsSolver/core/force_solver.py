@@ -326,13 +326,13 @@ class ForceSolver:
             faces = trajectory.get_faces()
             mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
             mesh.density = config_obj.acoustic_shader.density
-            mass = mesh.mass
+            mass = mesh.mass if mesh.mass > 9e-5 else 0.0001
         
             other_vertices = other_trajectory.get_vertices(frame)
             other_faces = other_trajectory.get_faces()
             other_mesh = trimesh.Trimesh(vertices=other_vertices, faces=other_faces)
             other_mesh.density = other_config_obj.acoustic_shader.density
-            other_mass = other_mesh.mass
+            other_mass = other_mesh.mass if other_mesh.mass > 9e-5 else 0.0001
         
             # Reduced mass for collision
             reduced_mass = (mass * other_mass) / (mass + other_mass)

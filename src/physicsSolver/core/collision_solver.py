@@ -20,7 +20,6 @@ import os
 import blosc2
 import trimesh
 import numpy as np
-from numba import jit, prange
 from scipy.spatial import cKDTree
 from scipy.interpolate import CubicSpline
 from typing import Any, List, Tuple, Dict, Optional
@@ -318,7 +317,6 @@ class CollisionSolver:
             tmp_vertex_ids2 = score_vertex_ids2[sample_idx]
             tmp_vertex_ids2[vertices2_idx] = True
             score_vertex_ids2[sample_idx] = tmp_vertex_ids2
-
 
     def _finalize_score_tracks(self, score_track1, score_track2, config_obj1, config_obj2, start_sample, stop_sample,score_type1, score_type2, score_vertex_ids1, score_vertex_ids2, score_contact_area1, score_contact_area2):
         """Add events to to score tracks."""

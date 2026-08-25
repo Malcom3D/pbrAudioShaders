@@ -260,10 +260,16 @@ class ForceSynth:
         relative_velocity = np.linalg.norm(relative_velocity)
         normal_force_magnitude = force.get_normal_force_magnitude(sample_idx)
 
-        vertices1 = trajectory.get_vertices(sample_idx)
-        vertices2 = other_trajectory.get_vertices(sample_idx)
         omega1 = trajectory.get_angular_velocity(sample_idx)
         omega2 = other_trajectory.get_angular_velocity(sample_idx)
+
+        # Get geometries
+        vertices1 = trajectory.get_vertices(sample_idx)
+        vertices2 = other_trajectory.get_vertices(sample_idx)
+        normals1 = trajectory.get_normals(sample_idx)
+        normals2 = other_trajectory.get_normals(sample_idx)
+        faces1 = trajectory.get_faces()
+        faces2 = other_trajectory.get_faces()
 
         # Get material properties
         roughness1 = config_obj.acoustic_shader.roughness
@@ -273,7 +279,7 @@ class ForceSynth:
 
         # Analyzes mixed contact HertzianContact lib.
         hertzian_contact = HertzianContact(self.entity_manager)
-        mixed_factor = hertzian_contact.get_mixed_factor(relative_velocity, tangential_velocity, normal_force_magnitude, tangential_force_magnitude, omega1, omega2, roughness1, roughness2, friction1, friction2, vertices1, vertices2)
+        mixed_factor = hertzian_contact.get_mixed_factor(relative_velocity, tangential_velocity, normal_force_magnitude, tangential_force_magnitude, omega1, omega2, roughness1, roughness2, friction1, friction2, vertices1, vertices2, normals1, normals2, faces1, faces2)
         if mixed_factor['static_factor'] == 1:
             tmp_config_obj = config_obj
             config_obj = other_config_obj

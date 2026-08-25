@@ -22,7 +22,7 @@ import trimesh
 import numpy as np
 from typing import Dict, Tuple, Optional, Any
 from dataclasses import dataclass
-from scipy.spatial import ConvexHull
+#from scipy.spatial import ConvexHull
 
 from pbrAudioCommon import EntityManager
 
@@ -98,8 +98,8 @@ class HertzianContact:
         faces2 = trajectory2.get_faces()
         
         # Compute effective radius using convex hull approximation
-        R1 = self._compute_effective_radius(vertices1)
-        R2 = self._compute_effective_radius(vertices2)
+        R1 = self._compute_effective_radius(vertices1, normals1, faces1)
+        R2 = self._compute_effective_radius(vertices2, normals2, faces2)
 
         # Effective radius for two spheres in contact
         if R1 is not None and R2 is not None:
@@ -122,6 +122,9 @@ class HertzianContact:
         mass1 = abs(mesh1.mass)
         mass2 = abs(mesh2.mass)
         # verify and limit too small masses to 0.1gr
+        mass1 = mass1 if mass1 > 9e-5 else 0.0001
+        mass2 = mass2 if mass2 > 9e-5 else 0.0001
+
 #        if mesh1.is_volume:
 #            mass1 = mesh1.mass if mesh1.mass < 9e-5 else 0.0001
 #        else:
@@ -182,7 +185,7 @@ class HertzianContact:
             'contact_type': ContactType.IMPACT
         }
 
-    def _compute_effective_radius(self, vertices: np.ndarray) -> Optional[float]:
+    def _compute_effective_radius(self, vertices: np.ndarray, normals: np.ndarray, faces: np.ndarray) -> Optional[float]:
         """
         Compute effective radius of curvature using convex hull approximation.
         
@@ -198,26 +201,32 @@ class HertzianContact:
         if len(vertices) < 4:
             return None
         
-        # Compute convex hull
-        hull = ConvexHull(vertices)
+        try:
+            # Compute convex hull
+#            hull = ConvexHull(vertices)
+            mesh = trimesh.Trimesh(vertices=vertices, vertex_normals=normals, faces=faces)
+            hull = mesh.convex_hull
             
-        # Get hull vertices
-        hull_vertices = vertices[hull.vertices]
+            # Get hull vertices
+#            hull_vertices = vertices[hull.vertices]
+            hull_vertices = hull.vertices
             
-        # Compute centroid
-        centroid = np.mean(hull_vertices, axis=0)
+            # Compute centroid
+            centroid = np.mean(hull_vertices, axis=0)
             
-        # Compute distances from centroid to hull vertices
-        distances = np.linalg.norm(hull_vertices - centroid, axis=1)
+            # Compute distances from centroid to hull vertices
+            distances = np.linalg.norm(hull_vertices - centroid, axis=1)
             
-        # Effective radius as average distance
-        R_eff = np.mean(distances)
+            # Effective radius as average distance
+            R_eff = np.mean(distances)
             
-        # Alternative: Use bounding sphere approximation
-        # max_distance = np.max(distances)
-        # R_eff = max_distance
+            # Alternative: Use bounding sphere approximation
+            # max_distance = np.max(distances)
+            # R_eff = max_distance
             
-        return float(R_eff)
+            return float(R_eff)
+        except:
+            return None
 
     def compute_continuous_contact(self, force_data: Any, obj1_idx: int, obj2_idx: int, sample_idx: float, frame_range: int) -> Dict[str, Any]:
         """
@@ -281,10 +290,14 @@ class HertzianContact:
         # Get geometries
         vertices1 = trajectory1.get_vertices(sample_idx)
         vertices2 = trajectory2.get_vertices(sample_idx)
+        normals1 = trajectory1.get_normals(sample_idx)
+        normals2 = trajectory2.get_normals(sample_idx)
+        faces1 = trajectory1.get_faces()
+        faces2 = trajectory2.get_faces()
         
         # Compute effective radius
-        R1 = self._compute_effective_radius(vertices1)
-        R2 = self._compute_effective_radius(vertices2)
+        R1 = self._compute_effective_radius(vertices1, normals1, faces1)
+        R2 = self._compute_effective_radius(vertices2, normals2, faces2)
         
         if R1 is not None and R2 is not None:
             R_eff = (R1 * R2) / (R1 + R2)
@@ -543,14 +556,19 @@ class HertzianContact:
 
         return ContactType.STATIC
 
-    def get_mixed_factor(self, relative_velocity: float, tangential_velocity: float, normal_force: float, tangential_force: float, omega1: np.ndarray, omega2: np.ndarray, roughness1: float, roughness2: float, friction1: float, friction2: float, vertices1: np.ndarray, vertices2: np.ndarray) -> Dict[str, float]:
+    def get_mixed_factor(self, relative_velocity: float, tangential_velocity: float, normal_force: float, tangential_force: float, omega1: np.ndarray, omega2: np.ndarray, roughness1: float, roughness2: float, friction1: float, friction2: float, vertices1: np.ndarray, vertices2: np.ndarray, normals1: np.ndarray, normals2: np.ndarray, faces1: np.ndarray, faces2: np.ndarray) -> Dict[str, float]:
         """
         Compute detailed mixed contact factors for simultaneous contact types.
         Returns normalized factors (0-1) indicating the proportion of each contact type.
         """
         # Calculate effective radii
-        R1 = self._compute_effective_radius(vertices1)
-        R2 = self._compute_effective_radius(vertices2)
+        R1 = self._compute_effective_radius(vertices1, normals1, faces1)
+        R2 = self._compute_effective_radius(vertices2, normals2, faces2)
+
+        if R1 is None:
+            R1 = 0.01
+        if R2 is None:
+            R2 = 0.01
     
         # Initialize factors
         factors = {

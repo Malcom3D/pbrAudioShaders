@@ -20,7 +20,6 @@ import os
 import numpy as np
 import numba as nb
 from scipy.spatial import cKDTree
-from scipy.interpolate import CubicSpline
 from typing import Any, List, Tuple, Dict, Optional
 from dataclasses import dataclass, field
 
@@ -147,9 +146,7 @@ def _pyramid_collision_numba(vertices: np.ndarray, faces: np.ndarray, contact_po
     return unique_vertices, face_area
 
 @nb.njit(parallel=True, fastmath=True, cache=True)
-def _octahedron_collision_numba(vertices: np.ndarray, faces: np.ndarray,
-                                contact_point: np.ndarray, center: np.ndarray,
-                                collision_margin: float) -> Tuple[np.ndarray, float]:
+def _octahedron_collision_numba(vertices: np.ndarray, faces: np.ndarray, contact_point: np.ndarray, center: np.ndarray, collision_margin: float) -> Tuple[np.ndarray, float]:
     """
     Fast octahedron collision detection using sign-based face selection.
     Octahedron has 6 vertices and 8 faces.
@@ -218,9 +215,7 @@ def _octahedron_collision_numba(vertices: np.ndarray, faces: np.ndarray,
     return unique_vertices, face_area
 
 @nb.njit(parallel=True, fastmath=True, cache=True)
-def _cube_collision_numba(vertices: np.ndarray, faces: np.ndarray,
-                          contact_point: np.ndarray, center: np.ndarray,
-                          collision_margin: float) -> Tuple[np.ndarray, float]:
+def _cube_collision_numba(vertices: np.ndarray, faces: np.ndarray, contact_point: np.ndarray, center: np.ndarray, collision_margin: float) -> Tuple[np.ndarray, float]:
     """
     Fast cube collision detection using axis-aligned bounding box.
     Cube has 8 vertices and 6 faces (12 triangles).
