@@ -20,7 +20,7 @@ import os
 import pickle
 import numpy as np
 from enum import IntEnum
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, Union
 from dataclasses import dataclass, field
 from scipy.interpolate import CubicSpline
 
@@ -67,106 +67,150 @@ class ForceDataSequence:
     frames: np.ndarray  # interpolated frame number
     obj_idx: int
     other_obj_idx: int
-    restitution: CubicSpline
-    relative_velocity: Tuple[CubicSpline, CubicSpline, CubicSpline]
-    normal_velocity: Tuple[CubicSpline, CubicSpline, CubicSpline]
-    normal_force: Tuple[CubicSpline, CubicSpline, CubicSpline]
-    tangential_force: Tuple[CubicSpline, CubicSpline, CubicSpline]
-    tangential_velocity: Tuple[CubicSpline, CubicSpline, CubicSpline]
-    normal_force_magnitude: CubicSpline
-    tangential_force_magnitude: CubicSpline
-    stochastic_normal_force: Optional[Tuple[CubicSpline, CubicSpline, CubicSpline]]            # = None
-    stochastic_tangential_force: Optional[Tuple[CubicSpline, CubicSpline, CubicSpline]]        # = None
+    restitution: Union[CubicSpline, np.ndarray]
+    relative_velocity: Union[Tuple[CubicSpline, CubicSpline, CubicSpline], np.ndarray]
+    normal_velocity: Union[Tuple[CubicSpline, CubicSpline, CubicSpline], np.ndarray]
+    normal_force: Union[Tuple[CubicSpline, CubicSpline, CubicSpline], np.ndarray]
+    tangential_force: Union[Tuple[CubicSpline, CubicSpline, CubicSpline], np.ndarray]
+    tangential_velocity: Union[Tuple[CubicSpline, CubicSpline, CubicSpline], np.ndarray]
+    normal_force_magnitude: Union[CubicSpline, np.ndarray]
+    tangential_force_magnitude: Union[CubicSpline, np.ndarray]
+    stochastic_normal_force: Union[Tuple[CubicSpline, CubicSpline, CubicSpline], np.ndarray]            # = None
+    stochastic_tangential_force: Union[Tuple[CubicSpline, CubicSpline, CubicSpline], np.ndarray]        # = None
     contact_type: np.ndarray # array of ContactType enum value
-    contact_point: Tuple[CubicSplineWithNaN, CubicSplineWithNaN, CubicSplineWithNaN]
-    contact_radius: CubicSplineWithNaN
-    rolling_radius: CubicSplineWithNaN
+    contact_point: Union[Tuple[CubicSplineWithNaN, CubicSplineWithNaN, CubicSplineWithNaN], np.ndarray]
+    contact_radius: Union[CubicSplineWithNaN, np.ndarray]
+    rolling_radius: Union[CubicSplineWithNaN, np.ndarray]
     impact_duration: np.ndarray
-    contact_pressure: CubicSplineWithNaN
-    penetration_depth: CubicSplineWithNaN
-    coupling_strength: CubicSpline
+    contact_pressure: Union[CubicSplineWithNaN, np.ndarray]
+    penetration_depth: Union[CubicSplineWithNaN, np.ndarray]
+    coupling_strength: Union[CubicSpline, np.ndarray]
 
     def get_contact_type(self, frame_idx: float):
         if frame_idx < self.frames[-1]:
             idx = np.where(self.frames == np.min(self.frames[0 < self.frames - frame_idx]))
+        elif self.frames.shape[0] == 1 and frame_idx == self.frames[0]:
+            return self.contact_type
         else:
             idx = np.where(self.frames == self.frames[-1])
         return self.contact_type[idx]
 
     def get_impact_duration(self, frame_idx: float):
-        idx = (np.abs(self.frames - frame_idx)).argmin()
-        return self.impact_duration[idx]
+        if self.frames.shape[0] == 1 and frame_idx == self.frames[0]:
+            return self.impact_duration
+        else:
+            idx = (np.abs(self.frames - frame_idx)).argmin()
+            return self.impact_duration[idx]
 
     def get_contact_point(self, frame_idx: float):
-        return np.array([
-            self.contact_point[0](frame_idx),
-            self.contact_point[1](frame_idx),
-            self.contact_point[2](frame_idx)
-        ])
+        if self.frames.shape[0] == 1 and frame_idx == self.frames[0]:
+            return self.contact_point
+        else:
+            return np.array([
+                self.contact_point[0](frame_idx),
+                self.contact_point[1](frame_idx),
+                self.contact_point[2](frame_idx)
+            ])
 
     def get_contact_radius(self, frame_idx: float):
-        return self.contact_radius(frame_idx)
+        if self.frames.shape[0] == 1 and frame_idx == self.frames[0]:
+            return self.contact_radius
+        else:
+            return self.contact_radius(frame_idx)
 
     def get_coupling_strength(self, frame_idx: float):
-        return self.coupling_strength(frame_idx)
+        if self.frames.shape[0] == 1 and frame_idx == self.frames[0]:
+            return self.coupling_strength
+        else:
+            return self.coupling_strength(frame_idx)
 
     def get_restitution(self, frame_idx: float):
-        return self.restitution(frame_idx)
+        if self.frames.shape[0] == 1 and frame_idx == self.frames[0]:
+            return self.restitution
+        else:
+            return self.restitution(frame_idx)
 
     def get_normal_force_magnitude(self, frame_idx: float):
-        return self.normal_force_magnitude(frame_idx)
+        if self.frames.shape[0] == 1 and frame_idx == self.frames[0]:
+            return self.normal_force_magnitude
+        else:
+            return self.normal_force_magnitude(frame_idx)
 
     def get_normal_force(self, frame_idx: float):
-        return np.array([
-            self.normal_force[0](frame_idx),
-            self.normal_force[1](frame_idx),
-            self.normal_force[2](frame_idx)
-        ])
+        if self.frames.shape[0] == 1 and frame_idx == self.frames[0]:
+            return self.normal_force
+        else:
+            return np.array([
+                self.normal_force[0](frame_idx),
+                self.normal_force[1](frame_idx),
+                self.normal_force[2](frame_idx)
+            ])
         
     def get_tangential_force_magnitude(self, frame_idx: float):
-        return self.tangential_force_magnitude(frame_idx)
+        if self.frames.shape[0] == 1 and frame_idx == self.frames[0]:
+            return self.tangential_force_magnitude
+        else:
+            return self.tangential_force_magnitude(frame_idx)
 
     def get_tangential_force(self, frame_idx: float):
-        return np.array([
-            self.tangential_force[0](frame_idx),
-            self.tangential_force[1](frame_idx),
-            self.tangential_force[2](frame_idx)
-        ])
+        if self.frames.shape[0] == 1 and frame_idx == self.frames[0]:
+            return self.tangential_force
+        else:
+            return np.array([
+                self.tangential_force[0](frame_idx),
+                self.tangential_force[1](frame_idx),
+                self.tangential_force[2](frame_idx)
+            ])
 
     def get_tangential_velocity(self, frame_idx: float):
-        return np.array([
-            self.tangential_velocity[0](frame_idx),
-            self.tangential_velocity[1](frame_idx),
-            self.tangential_velocity[2](frame_idx)
-        ])
+        if self.frames.shape[0] == 1 and frame_idx == self.frames[0]:
+            return self.tangential_velocity
+        else:
+            return np.array([
+                self.tangential_velocity[0](frame_idx),
+                self.tangential_velocity[1](frame_idx),
+                self.tangential_velocity[2](frame_idx)
+            ])
 
     def get_normal_velocity(self, frame_idx: float):
-        return np.array([
-            self.normal_velocity[0](frame_idx),
-            self.normal_velocity[1](frame_idx),
-            self.normal_velocity[2](frame_idx)
-        ])
+        if self.frames.shape[0] == 1 and frame_idx == self.frames[0]:
+            return self.normal_velocity
+        else:
+            return np.array([
+                self.normal_velocity[0](frame_idx),
+                self.normal_velocity[1](frame_idx),
+                self.normal_velocity[2](frame_idx)
+            ])
         
     def get_relative_velocity(self, frame_idx: float):
-        return np.array([
-            self.relative_velocity[0](frame_idx),
-            self.relative_velocity[1](frame_idx),
-            self.relative_velocity[2](frame_idx)
-        ])
+        if self.frames.shape[0] == 1 and frame_idx == self.frames[0]:
+            return self.relative_velocity
+        else:
+            return np.array([
+                self.relative_velocity[0](frame_idx),
+                self.relative_velocity[1](frame_idx),
+                self.relative_velocity[2](frame_idx)
+            ])
 
     def get_stochastic_normal_force(self, frame_idx: float):
-        return np.array([
-            self.stochastic_normal_force[0](frame_idx),
-            self.stochastic_normal_force[1](frame_idx),
-            self.stochastic_normal_force[2](frame_idx)
-        ])
+        if self.frames.shape[0] == 1 and frame_idx == self.frames[0]:
+            return self.stochastic_normal_force
+        else:
+            return np.array([
+                self.stochastic_normal_force[0](frame_idx),
+                self.stochastic_normal_force[1](frame_idx),
+                self.stochastic_normal_force[2](frame_idx)
+            ])
 
     def get_stochastic_tangential_force(self, frame_idx: float):
-        return np.array([
-            self.stochastic_tangential_force[0](frame_idx),
-            self.stochastic_tangential_force[1](frame_idx),
-            self.stochastic_tangential_force[2](frame_idx)
-        ])
+        if self.frames.shape[0] == 1 and frame_idx == self.frames[0]:
+            return self.stochastic_tangential_force
+        else:
+            return np.array([
+                self.stochastic_tangential_force[0](frame_idx),
+                self.stochastic_tangential_force[1](frame_idx),
+                self.stochastic_tangential_force[2](frame_idx)
+            ])
 
     def save(self, filepath: str) -> None:
         """

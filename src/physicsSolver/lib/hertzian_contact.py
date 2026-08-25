@@ -101,6 +101,9 @@ class HertzianContact:
         R1 = self._compute_effective_radius(vertices1, normals1, faces1)
         R2 = self._compute_effective_radius(vertices2, normals2, faces2)
 
+        R1 = R1 if R1 is not None else 0.01
+        R2 = R2 if R2 is not None else 0.01
+
         # Effective radius for two spheres in contact
         if R1 is not None and R2 is not None:
             R_eff = (R1 * R2) / (R1 + R2)
@@ -298,15 +301,11 @@ class HertzianContact:
         # Compute effective radius
         R1 = self._compute_effective_radius(vertices1, normals1, faces1)
         R2 = self._compute_effective_radius(vertices2, normals2, faces2)
+
+        R1 = R1 if R1 is not None else 0.01
+        R2 = R2 if R2 is not None else 0.01
         
-        if R1 is not None and R2 is not None:
-            R_eff = (R1 * R2) / (R1 + R2)
-        elif R1 is not None:
-            R_eff = R1
-        elif R2 is not None:
-            R_eff = R2
-        else:
-            R_eff = 0.01
+        R_eff = (R1 * R2) / (R1 + R2)
         
         # Effective Young's modulus
         E_star = 1 / ((1 - nu1**2)/E1 + (1 - nu2**2)/E2) if E1 and E2 and nu1 and nu2 else 1e9
@@ -565,11 +564,9 @@ class HertzianContact:
         R1 = self._compute_effective_radius(vertices1, normals1, faces1)
         R2 = self._compute_effective_radius(vertices2, normals2, faces2)
 
-        if R1 is None:
-            R1 = 0.01
-        if R2 is None:
-            R2 = 0.01
-    
+        R1 = R1 if R1 is not None else 0.01
+        R2 = R2 if R2 is not None else 0.01
+
         # Initialize factors
         factors = {
             'rolling_factor': 0.0,

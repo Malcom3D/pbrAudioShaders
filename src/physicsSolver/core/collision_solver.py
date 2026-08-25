@@ -282,8 +282,10 @@ class CollisionSolver:
                 force = forces[f_idx]
                 force_frames = force.frames
                 ctf = force_frames[np.where(force_frames <= sample_idx)]
-                
-                if ctf.shape[0] > 0:
+
+                if ctf.shape[0] == 1:
+                    return force.get_contact_type(force_frames[-1])
+                elif ctf.shape[0] > 1:
                     if ctf[-1] != force_frames[-1]:
                         return force.get_contact_type(ctf[-1])
                     else:
