@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from pbrAudioCommon import Approx2Faust
 
 from pbrAudioCommon import EntityManager
-from pbrAudioCommon import _load_mesh, _mesh_to_obj, _compute_rayleigh_damping
+from pbrAudioCommon import _load_mesh, _mesh_to_obj, _compute_rayleigh_damping, _parse_lib, _generate_empty_lib
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
 @dataclass
@@ -141,6 +141,20 @@ class Pym2f:
                         minmode = self.config.system.lowest_frequency
                         maxmode = self.config.system.higher_frequency
                         success, file_names = self._try_fallback(config_obj, vertices, faces, obj_file, young_modulus, poisson_ratio, density, damping, minmode, maxmode, expos, output_name)
+                        if not success:
+                            # End fallback to empty lib generation
+                            success, file_names = self._end_fallback(output_name, minmode, maxmode)
+
+                            empty_content = _generate_empty_lib(output_name, minmode, maxmode)
+                            empty_lib = f"{output_name}.lib"
+                            with open(empty_lib, 'w') as f:
+                                f.write(empty_content)
+                            # Validate the generated file
+                            if not self._validate_lib_file(empty_lib):
+                                debug_print(f"Pym2f fallback: Generated lib file validation failed for {output_name}")
+                                os.remove(lib_file)
+                                return False, []
+                            return True, empty_lib
             
             if success:
                 break
@@ -194,7 +208,7 @@ class Pym2f:
                     if exit_code == 0:
                         file_names.append(f"{output_name}_resonance.lib")
                     else:
-                        debug_print(f"Pym2f: Warning - - resonance model generation failed for {outputoutput_name}")
+                        debug_print(f"Pym2f: Warning - - resonance model generation failed for {output_name}")
                 
                 return True, file_names
         
@@ -239,12 +253,8 @@ class Pym2f:
         )
         
         # Generate Faust .lib file
-        lib_content = self.approx2faust.to_faust_lib(
-            modal_params=modal_params,
-            output_name=output_name,
-            min_freq=minmode if minmode else 20.0,
-            max_freq=maxmode if maxmode else 20000.0
-        )
+        debug_print(f"Generate fallback APPROXIMATE Faust .lib for {config_obj.name} with {modal_params['metadata']['n_voxels']} vertices and {modal_params['metadata']['n_modes']} modes")
+        lib_content = self.approx2faust.to_faust_lib(modal_params=modal_params, output_name=output_name, min_freq=minmode if minmode else 20.0, max_freq=maxmode if maxmode else 20000.0)
         
         # Save the .lib file
         lib_file = f"{output_name}.lib"
@@ -290,6 +300,34 @@ class Pym2f:
             file_names.append(resonance_file)
         
         debug_print(f"Pym2f fallback: Successfully generated approximate modal model for {config_obj.name}")
+        return True, file_names
+
+    def _end_fallback(self, output_name, minmode, maxmode) -> Tuple[bool, List[str]]:
+        """
+        End fallback: generate working fake lib file
+        """
+        empty_content = _generate_empty_lib(output_name, minmode, maxmode)
+        lib_file = f"{output_name}.lib"
+        with open(lib_file, 'w') as f:
+            f.write(empty_content)
+
+        file_names = [lib_file]
+
+        # Validate the generated file
+        if not self._validate_lib_file(lib_file):
+            debug_print(f"Pym2f fallback: Generated lib file validation failed for {output_name}")
+            os.remove(lib_file)
+            return False, []
+
+        # Handle resonance if requested
+        if config_obj.resonance:
+            resonance_file = f"{output_name}_resonance.lib"
+            with open(resonance_file, 'w') as f:
+                f.write(empty_content)
+            
+            file_names.append(resonance_file)
+
+        debug_print(f"Pym2f EndFallback: Successfully generated fake empty modal model for {config_obj.name}")
         return True, file_names
 
     def _validate_lib_file(self, lib_file: str) -> bool:
@@ -346,37 +384,22 @@ class Pym2f:
         tuple_match = r'\d+\.?\d+'
 
         freq_validated, gains_validated = (False for _ in range(2))
-        with open(lib_file, 'r') as file:
-            lines = file.readlines()
-            frequencies, t60s, gains = ([] for _ in range(3))
-            for line in lines:
-                line = line.replace('-nan','1')
-                # Extract frequencies from modeFreqsUnscaled
-                freq_match = re.search(freq_pattern, line, re.DOTALL)
-                if not freq_match == None:
-                    freq_tuple_match = re.findall(tuple_match, freq_match.group())
-                    if not len(freq_tuple_match) == 0:
-                        # Check for reasonable frequency range
-                        freqs = [float(f) for f in freq_tuple_match]
-                        if max(freqs) < 1.0 or min(freqs) < 0:
-                            debug_print(f"Pym2f validation: {lib_file} has unreasonable frequencies")
-                            freq_validated = False
-                        else:
-                            freq_validated = True
 
-            for line in lines:
-                # Extract gains - this is complex due to the large waveform
-                gain_match = re.search(gain_pattern, line, re.DOTALL)
-                if not gain_match == None:
-                    gain_tuple_match = re.findall(gain_pattern, gain_match.group())
-                    gain_tuple_match = re.sub("'", "", gain_tuple_match[0])
-                    if not gain_tuple_match == None:
-                        try:
-                            gains = [float(f) for f in gain_tuple_match.split(",")]
-                            gains_validated = True
-                        except:
-                            debug_print(f"Pym2f validation: {lib_file} has unreasonable gains")
-                            gains_validated = False
+        modal_data = _parse_lib(lib_file)
+
+        # Check for reasonable frequency range
+        if max(modal_data['frequencies']) < 1.0 or min(modal_data['frequencies']) < 0:
+            debug_print(f"Pym2f validation: {lib_file} has unreasonable frequencies")
+            freq_validated = False
+        else:
+            freq_validated = True
+
+        # Check for reasonable frequency range
+        if np.any(np.isnan(modal_data['gains'])) or np.any(np.isinf(modal_data['gains'])):
+            debug_print(f"Pym2f validation: {lib_file} has unreasonable gains")
+            gains_validated = False
+        else:
+            gains_validated = True
         
         return (freq_validated and gains_validated)
 

@@ -186,13 +186,8 @@ class Modal4Proxy:
 
         if modal_params['frequencies'].shape[0] == modal_params['t60s'].shape[0] == modal_params['gains'].shape[0] == n_modes and modal_params['gains'].shape[1] == proxy_vertices.shape[0]:
             # Generate Faust .lib content with t60_scale = 1.0 (actual T60 in seconds)
-            lib_content = approx.to_faust_lib(
-                modal_params=modal_params,
-                output_name=f"{config_obj.name}_proxy_{proxy_type}",
-                min_freq=modal_params['frequencies'][0] / 2,
-                max_freq=modal_params['frequencies'][-1] * 2,
-                t60_scale=1.0
-            )
+            debug_print(f"Generate APPROXIMATE Faust .lib for {config_obj.name} proxy_type {proxy_type} with {modal_params['metadata']['n_voxels']} vertices and {modal_params['metadata']['n_modes']} modes")
+            lib_content = approx.to_faust_lib(modal_params=modal_params, output_name=f"{config_obj.name}_proxy_{proxy_type}", min_freq=modal_params['frequencies'][0] / 2, max_freq=modal_params['frequencies'][-1] * 2, t60_scale=1.0)
 
             # Save the .lib file
             cache_path = self.config.system.cache_path
@@ -216,13 +211,7 @@ class Modal4Proxy:
                     't60s': res_t60s,
                     'metadata': modal_params['metadata']
                 }
-                resonance_content = approx.to_faust_lib(
-                    modal_params=res_params,
-                    output_name=f"{config_obj.name}_proxy_{proxy_type}_resonance",
-                    min_freq=min_freq,
-                    max_freq=max_freq,
-                    t60_scale=1.0
-                )
+                resonance_content = approx.to_faust_lib(modal_params=res_params, output_name=f"{config_obj.name}_proxy_{proxy_type}_resonance", min_freq=min_freq, max_freq=max_freq, t60_scale=1.0)
                 resonance_file = f"{dsp_path}/{config_obj.name}_proxy_{proxy_type}_resonance.lib"
                 with open(resonance_file, 'w') as f:
                     f.write(resonance_content)
