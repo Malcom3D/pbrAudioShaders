@@ -143,7 +143,7 @@ class Pym2f:
                         success, file_names = self._try_fallback(config_obj, vertices, faces, obj_file, young_modulus, poisson_ratio, density, damping, minmode, maxmode, expos, output_name)
                         if not success:
                             # End fallback to empty lib generation
-                            success, file_names = self._end_fallback(output_name, minmode, maxmode)
+                            success, file_names = self._end_fallback(output_name=output_name, minmode=minmode, maxmode=maxmode, n_vertex=vertices.shape[0], n_modes=self.config.system.modal_modes, resonance=config_obj.resonance)
 
             if success:
                 break
@@ -242,8 +242,11 @@ class Pym2f:
         )
         
         # Generate Faust .lib file
-        debug_print(f"Generate fallback APPROXIMATE Faust .lib for {config_obj.name} with {modal_params['metadata']['n_voxels']} voxels and {modal_params['metadata']['n_modes']} modes")
+        debug_print(f"Generate fallback APPROXIMATE Faust .lib for {config_obj.name} with {modal_params['metadata']['n_voxels']} voxels and {len(modal_params['frequencies'])} modes")
         lib_content = self.approx2faust.to_faust_lib(modal_params=modal_params, output_name=output_name, min_freq=minmode if minmode else 20.0, max_freq=maxmode if maxmode else 20000.0)
+
+        if lib_content is None:
+            return False, []
         
         # Save the .lib file
         lib_file = f"{output_name}.lib"
@@ -291,11 +294,11 @@ class Pym2f:
         debug_print(f"Pym2f fallback: Successfully generated approximate modal model for {config_obj.name}")
         return True, file_names
 
-    def _end_fallback(self, output_name, minmode, maxmode) -> Tuple[bool, List[str]]:
+    def _end_fallback(self, output_name: str, minmode: float, maxmode: float, n_vertex: int = None, n_modes: int = None, resonance: bool = False) -> Tuple[bool, List[str]]:
         """
         End fallback: generate working fake lib file
         """
-        empty_content = _generate_empty_lib(output_name, minmode, maxmode)
+        empty_content = _generate_empty_lib(output_name, minmode, maxmode, n_vertex, n_modes)
         lib_file = f"{output_name}.lib"
         with open(lib_file, 'w') as f:
             f.write(empty_content)
@@ -309,14 +312,14 @@ class Pym2f:
             return False, []
 
         # Handle resonance if requested
-        if config_obj.resonance:
+        if resonance:
             resonance_file = f"{output_name}_resonance.lib"
             with open(resonance_file, 'w') as f:
                 f.write(empty_content)
             
             file_names.append(resonance_file)
 
-        debug_print(f"Pym2f EndFallback: Successfully generated fake empty modal model for {config_obj.name}")
+        debug_print(f"Pym2f EndFallback: Successfully generated fake empty modal model for {output_name}")
         return True, file_names
 
     def _validate_lib_file(self, lib_file: str) -> bool:
