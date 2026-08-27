@@ -138,10 +138,12 @@ class Pym2f:
                     debug_print(f"Pym2f: Attempting fallback for {config_obj.name} (attempt {attempt})")
                     success, file_names = self._try_fallback(config_obj, vertices, faces, obj_file, young_modulus, poisson_ratio, density, damping, minmode, maxmode, expos, output_name)
                     if not success:
+                        debug_print(f"Pym2f: Attempting fallback for {config_obj.name} without min-max modal frequency limit (attempt {attempt})")
                         minmode = self.config.system.lowest_frequency
                         maxmode = self.config.system.higher_frequency
                         success, file_names = self._try_fallback(config_obj, vertices, faces, obj_file, young_modulus, poisson_ratio, density, damping, minmode, maxmode, expos, output_name)
                         if not success:
+                            debug_print(f"Pym2f: Faking modal model as end fallback for {config_obj.name} (attempt {attempt})")
                             # End fallback to empty lib generation
                             minmode = config_obj.acoustic_shader.low_frequency
                             maxmode = config_obj.acoustic_shader.high_frequency
@@ -243,7 +245,6 @@ class Pym2f:
         )
         
         # Generate Faust .lib file
-        debug_print(f"Generate fallback APPROXIMATE Faust .lib for {config_obj.name} with {modal_params['metadata']['n_voxels']} voxels and {len(modal_params['frequencies'])} modes")
         lib_content = self.approx2faust.to_faust_lib(modal_params=modal_params, output_name=output_name, min_freq=minmode if minmode else 20.0, max_freq=maxmode if maxmode else 20000.0)
 
         if lib_content is None:
@@ -308,7 +309,7 @@ class Pym2f:
 
         # Validate the generated file
         if not self._validate_lib_file(lib_file):
-            debug_print(f"Pym2f fallback: Generated lib file validation failed for {output_name}")
+            debug_print(f"Pym2f EndFallback: Generated lib file validation failed for {output_name}")
             os.remove(lib_file)
             return False, []
 
@@ -374,19 +375,23 @@ class Pym2f:
         try:
             modal_data = _parse_lib(lib_file)
         except Exception as e:
-            debug_print(f"Pym2f validation: {lib_file} _parse_lib Error: {e}")
             return (freq_validated and gains_validated)
 
-
         # Check for reasonable frequency range
-        if max(modal_data['frequencies']) < 1.0 or min(modal_data['frequencies']) < 0:
+        if len(modal_data['frequencies']) == 0:
+            debug_print(f"Pym2f validation: {lib_file} has zero modal frequencies")
+            freq_validated = False
+        elif max(modal_data['frequencies']) < 1.0 or min(modal_data['frequencies']) < 0:
             debug_print(f"Pym2f validation: {lib_file} has unreasonable frequencies")
             freq_validated = False
         else:
             freq_validated = True
 
         # Check for reasonable frequency range
-        if np.any(np.isnan(modal_data['gains'])) or np.any(np.isinf(modal_data['gains'])):
+        if len(modal_data['gains']) == 0:
+            debug_print(f"Pym2f validation: {lib_file} has zero modal gains")
+            gains_validated = False
+        elif np.any(np.isnan(modal_data['gains'])) or np.any(np.isinf(modal_data['gains'])):
             debug_print(f"Pym2f validation: {lib_file} has unreasonable gains")
             gains_validated = False
         else:

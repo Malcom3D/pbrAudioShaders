@@ -186,7 +186,6 @@ class Modal4Proxy:
 
         if modal_params['frequencies'].shape[0] == modal_params['t60s'].shape[0] == modal_params['gains'].shape[0] == modal_params['metadata']['n_modes'] == n_modes and modal_params['gains'].shape[1] == proxy_vertices.shape[0]:
             # Generate Faust .lib content with t60_scale = 1.0 (actual T60 in seconds)
-            debug_print(f"Generate APPROXIMATE Faust .lib for {config_obj.name} proxy_type {proxy_type} with {modal_params['metadata']['n_voxels']} voxels and {len(modal_params['frequencies'])} modes")
             lib_content = approx.to_faust_lib(modal_params=modal_params, output_name=f"{config_obj.name}_proxy_{proxy_type}", min_freq=modal_params['frequencies'][0] / 2, max_freq=modal_params['frequencies'][-1] * 2, t60_scale=1.0)
 
             if lib_content is not None:
