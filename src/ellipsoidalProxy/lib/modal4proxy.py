@@ -184,41 +184,40 @@ class Modal4Proxy:
             voxel_size=voxel_size
         )
 
-        if modal_params['frequencies'].shape[0] == modal_params['t60s'].shape[0] == modal_params['gains'].shape[0] == n_modes and modal_params['gains'].shape[1] == proxy_vertices.shape[0]:
+        if modal_params['frequencies'].shape[0] == modal_params['t60s'].shape[0] == modal_params['gains'].shape[0] == modal_params['metadata']['n_modes'] == n_modes and modal_params['gains'].shape[1] == proxy_vertices.shape[0]:
             # Generate Faust .lib content with t60_scale = 1.0 (actual T60 in seconds)
-            debug_print(f"Generate APPROXIMATE Faust .lib for {config_obj.name} proxy_type {proxy_type} with {modal_params['metadata']['n_voxels']} vertices and {modal_params['metadata']['n_modes']} modes")
+            debug_print(f"Generate APPROXIMATE Faust .lib for {config_obj.name} proxy_type {proxy_type} with {modal_params['metadata']['n_voxels']} voxels and {modal_params['metadata']['n_modes']} modes")
             lib_content = approx.to_faust_lib(modal_params=modal_params, output_name=f"{config_obj.name}_proxy_{proxy_type}", min_freq=modal_params['frequencies'][0] / 2, max_freq=modal_params['frequencies'][-1] * 2, t60_scale=1.0)
 
-            # Save the .lib file
-            cache_path = self.config.system.cache_path
-            dsp_path = f"{cache_path}/dsp"
-            os.makedirs(dsp_path, exist_ok=True)
-            lib_file = f"{dsp_path}/{config_obj.name}_proxy_{proxy_type}.lib"
-            with open(lib_file, 'w') as f:
-                f.write(lib_content)        
+            if lib_content is not None:
+                # Save the .lib file
+                cache_path = self.config.system.cache_path
+                dsp_path = f"{cache_path}/dsp"
+                os.makedirs(dsp_path, exist_ok=True)
+                lib_file = f"{dsp_path}/{config_obj.name}_proxy_{proxy_type}.lib"
+                with open(lib_file, 'w') as f:
+                    f.write(lib_content)        
 
-            # Handle resonance if requested
-            if config_obj.resonance:
-                resonance_modes = config_obj.resonance_modes if config_obj.resonance_modes else max(5, n_modes // 2)
-                # We can reuse the same modal_params but take first resonance_modes modes
-                res_freqs = modal_params['frequencies'][:resonance_modes]
-                res_gains = modal_params['gains'][:resonance_modes, :]
-                res_t60s = modal_params['t60s'][:resonance_modes] * 1.2  # slightly longer decay
+                # Handle resonance if requested
+                if config_obj.resonance:
+                    resonance_modes = config_obj.resonance_modes if config_obj.resonance_modes else max(5, n_modes // 2)
+                    # We can reuse the same modal_params but take first resonance_modes modes
+                    res_freqs = modal_params['frequencies'][:resonance_modes]
+                    res_gains = modal_params['gains'][:resonance_modes, :]
+                    res_t60s = modal_params['t60s'][:resonance_modes] * 1.2  # slightly longer decay
 
-                res_params = {
-                    'frequencies': res_freqs,
-                    'gains': res_gains,
-                    't60s': res_t60s,
-                    'metadata': modal_params['metadata']
-                }
-                resonance_content = approx.to_faust_lib(modal_params=res_params, output_name=f"{config_obj.name}_proxy_{proxy_type}_resonance", min_freq=min_freq, max_freq=max_freq, t60_scale=1.0)
-                resonance_file = f"{dsp_path}/{config_obj.name}_proxy_{proxy_type}_resonance.lib"
-                with open(resonance_file, 'w') as f:
-                    f.write(resonance_content)
+                    res_params = {
+                        'frequencies': res_freqs,
+                        'gains': res_gains,
+                        't60s': res_t60s,
+                        'metadata': modal_params['metadata']
+                    }
+                    resonance_content = approx.to_faust_lib(modal_params=res_params, output_name=f"{config_obj.name}_proxy_{proxy_type}_resonance", min_freq=min_freq, max_freq=max_freq, t60_scale=1.0)
+                    resonance_file = f"{dsp_path}/{config_obj.name}_proxy_{proxy_type}_resonance.lib"
+                    with open(resonance_file, 'w') as f:
+                        f.write(resonance_content)
 
-            debug_print(f"Generated proxy modal model for {config_obj.name} (type {proxy_type}) "
-                f"with {len(modal_params['frequencies'])} modes")
-
+                debug_print(f"Generated proxy modal model for {config_obj.name} (type {proxy_type}) with {len(modal_params['frequencies'])} modes") 
             return
 
         debug_print(f"Using analytical mode shapes fallback for {config_obj.name} (type {proxy_type})")

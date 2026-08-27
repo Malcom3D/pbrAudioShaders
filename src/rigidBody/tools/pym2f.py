@@ -145,17 +145,6 @@ class Pym2f:
                             # End fallback to empty lib generation
                             success, file_names = self._end_fallback(output_name, minmode, maxmode)
 
-                            empty_content = _generate_empty_lib(output_name, minmode, maxmode)
-                            empty_lib = f"{output_name}.lib"
-                            with open(empty_lib, 'w') as f:
-                                f.write(empty_content)
-                            # Validate the generated file
-                            if not self._validate_lib_file(empty_lib):
-                                debug_print(f"Pym2f fallback: Generated lib file validation failed for {output_name}")
-                                os.remove(lib_file)
-                                return False, []
-                            return True, empty_lib
-            
             if success:
                 break
         
@@ -253,7 +242,7 @@ class Pym2f:
         )
         
         # Generate Faust .lib file
-        debug_print(f"Generate fallback APPROXIMATE Faust .lib for {config_obj.name} with {modal_params['metadata']['n_voxels']} vertices and {modal_params['metadata']['n_modes']} modes")
+        debug_print(f"Generate fallback APPROXIMATE Faust .lib for {config_obj.name} with {modal_params['metadata']['n_voxels']} voxels and {modal_params['metadata']['n_modes']} modes")
         lib_content = self.approx2faust.to_faust_lib(modal_params=modal_params, output_name=output_name, min_freq=minmode if minmode else 20.0, max_freq=maxmode if maxmode else 20000.0)
         
         # Save the .lib file
