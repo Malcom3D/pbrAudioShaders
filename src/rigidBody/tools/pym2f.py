@@ -143,14 +143,15 @@ class Pym2f:
                         success, file_names = self._try_fallback(config_obj, vertices, faces, obj_file, young_modulus, poisson_ratio, density, damping, minmode, maxmode, expos, output_name)
                         if not success:
                             # End fallback to empty lib generation
-                            success, file_names = self._end_fallback(output_name=output_name, minmode=minmode, maxmode=maxmode, n_vertex=vertices.shape[0], n_modes=self.config.system.modal_modes, resonance=config_obj.resonance)
+                            minmode = config_obj.acoustic_shader.low_frequency
+                            maxmode = config_obj.acoustic_shader.high_frequency
+                            success, file_names = self._end_fallback(output_name=output_name, minmode=minmode, maxmode=maxmode, n_vertex=vertices.shape[0], n_modes=self.config.system.modal_modes, young_modulus=young_modulus, poisson_ratio=poisson_ratio, density=density, damping=damping, resonance=config_obj.resonance)
 
             if success:
                 break
         
         if not success:
-            raise RuntimeError(f"Pym2f: Failed to generate modal model for {config_obj.name} "
-                              f"after {self.max_fallback_attempts + 1} attempts")
+            raise RuntimeError(f"Pym2f: Failed to generate modal model for {config_obj.name} after {self.max_fallback_attempts + 1} attempts")
         
         # Post-process generated files
         self._post_process_files(file_names, output_name, config_obj)
@@ -294,11 +295,11 @@ class Pym2f:
         debug_print(f"Pym2f fallback: Successfully generated approximate modal model for {config_obj.name}")
         return True, file_names
 
-    def _end_fallback(self, output_name: str, minmode: float, maxmode: float, n_vertex: int = None, n_modes: int = None, resonance: bool = False) -> Tuple[bool, List[str]]:
+    def _end_fallback(self, output_name: str, minmode: float, maxmode: float, n_vertex: int = None, n_modes: int = None, young_modulus: float = None, poisson_ratio: float = None, density: float = None, damping: float = None, resonance: bool = False) -> Tuple[bool, List[str]]:
         """
         End fallback: generate working fake lib file
         """
-        empty_content = _generate_empty_lib(output_name, minmode, maxmode, n_vertex, n_modes)
+        empty_content = _generate_empty_lib(output_name=output_name, min_freq=minmode, max_freq=maxmode, n_expos=n_vertex, n_modes=n_modes, young_modulus=young_modulus, poisson_ratio=poisson_ratio, density=density, damping=damping)
         lib_file = f"{output_name}.lib"
         with open(lib_file, 'w') as f:
             f.write(empty_content)
@@ -368,16 +369,13 @@ class Pym2f:
             return False
         
         # Extract and validate frequencies
-
-        freq_pattern = r'modeFreqsUnscaled.*?=.*?ba\.take.*?$$(.*?)$$'
-        t60_pattern = r'modesT60s.*?=.*?t60Scale.*?ba\.take.*?$$(.*?)$$'
-        gain_pattern = r'modesGains.*?=.*?waveform\{(.*?)\}'
-        parentesis_match = r'\(([^()]+)\)'
-        tuple_match = r'\d+\.?\d+'
-
         freq_validated, gains_validated = (False for _ in range(2))
 
-        modal_data = _parse_lib(lib_file)
+        try:
+            modal_data = _parse_lib(lib_file)
+        except:
+            return (freq_validated and gains_validated)
+
 
         # Check for reasonable frequency range
         if max(modal_data['frequencies']) < 1.0 or min(modal_data['frequencies']) < 0:

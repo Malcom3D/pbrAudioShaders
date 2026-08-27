@@ -195,17 +195,15 @@ class ProxyMesh:
         elif proxy_type == 2:
             # 8-vertex cube - vertices at bounding box corners
             vertices, faces = self._create_cube_8v(extents, center)
-        elif proxy_type in [3, 4, 5]:
+#        elif proxy_type in [3, 4, 5]:
+        else:
+            # Default to Icosahedron without subdivision for unknown types
             # Icosahedron with subdivision
-            subdivisions = proxy_type - 3
+            subdivisions = proxy_type - 3 if proxy_type in [3, 4, 5] else 0
             vertices, faces = self._create_icosahedron(subdivisions=subdivisions)
             # Scale to match extents
             half_extents = extents / 2.0
             vertices = vertices * half_extents[np.newaxis, :] + center
-        else:
-            # Default to 4-vertex pyramid for unknown types
-            debug_print(f"Warning: Unknown proxy_type {proxy_type}, using 4-vertex pyramid")
-            vertices, faces = self._create_pyramid_4v(extents, center)
 
         return vertices, faces
 
