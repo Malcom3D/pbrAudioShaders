@@ -373,7 +373,8 @@ class Pym2f:
 
         try:
             modal_data = _parse_lib(lib_file)
-        except:
+        except Exception as e:
+            debug_print(f"Pym2f validation: {lib_file} _parse_lib Error: {e}")
             return (freq_validated and gains_validated)
 
 
