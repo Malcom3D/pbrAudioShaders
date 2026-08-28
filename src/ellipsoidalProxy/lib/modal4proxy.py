@@ -912,7 +912,7 @@ class Modal4Proxy:
         # Format frequencies
         freq_str = ", ".join([f"{f:.6f}" for f in frequencies])
 
-               # Format T60s
+         Format T60s
         t60_str = ", ".join([f"{t:.6f}" for t in t60s])
 
         # Format gains (flattened array)
@@ -941,7 +941,7 @@ class Modal4Proxy:
         generator = self.__class__.__name__
         header = f"Adapted modal model for {config_obj.name} (proxy)"
 
-        lib_content = _generate_lib(header=header, generator=generator, output_name=output_name, n_modes=n_modes, n_vertices=n_vertices, min_freq=min_freq, max_freq=max_freq, freq_str=freq_str, t60_str=t60_str, gain_waveform=gain_waveform, young_modulus=young_modulus, poisson_ratio=poisson_ratio, density=density)
+        lib_content = _generate_lib(header=header, generator=generator, output_name=output_name, n_modes=n_modes, n_vertices=n_vertices, min_freq=min_freq, max_freq=max_freq, freq_str=freq_str, t60_str=t60_str, gain_waveform=gain_str, young_modulus=young_modulus, poisson_ratio=poisson_ratio, density=density)
 
         # Write the .lib file
         with open(lib_file, 'w') as f:
