@@ -924,6 +924,9 @@ class Modal4Proxy:
         poisson_ratio = config_obj.acoustic_shader.poisson_ratio if config_obj.acoustic_shader else "N/A"
         density = config_obj.acoustic_shader.density if config_obj.acoustic_shader else "N/A"
 
+        min_freq = config_obj.acoustic_shader.low_frequency
+        max_freq = config_obj.acoustic_shader.high_frequency
+
         # Proxy shape name
         proxy_names = {
             0: "pyramid", 
