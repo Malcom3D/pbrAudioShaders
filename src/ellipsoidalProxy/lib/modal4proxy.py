@@ -912,7 +912,7 @@ class Modal4Proxy:
         # Format frequencies
         freq_str = ", ".join([f"{f:.6f}" for f in frequencies])
 
-         Format T60s
+        # Format T60s
         t60_str = ", ".join([f"{t:.6f}" for t in t60s])
 
         # Format gains (flattened array)
