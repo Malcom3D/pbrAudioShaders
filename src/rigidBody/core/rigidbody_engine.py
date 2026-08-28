@@ -53,6 +53,7 @@ class rigidBodyEngine:
 
     def __post_init__(self):
         config = self.entity_manager.get('config')
+        self.physical_core = config.system.physical_core
         self.status_dir = f"{config.system.cache_path}/status/{__class__.__name__}"
         self.collisions_dir = f"{config.system.cache_path}/collisions"
         self.trajectories_dir = f"{config.system.cache_path}/trajectories"
@@ -220,10 +221,23 @@ class rigidBodyEngine:
 #        self.players = [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
 #        tasks_player = [self.bake_player(player) for player in self.players]
 #        tasks_save = [self.bake_save(player) for player in self.players]
-        modal_obj_idx = list(set(self.obj_dyn + self.obj_static) - set(self.obj_proxy_synth))
-        players = [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in modal_obj_idx]
-        tasks_player = [self.bake_player(player) for player in players]
-        results_player = compute(*tasks_player)
+        modal_dyn_idx = list(set(self.obj_dyn) - set(self.obj_proxy_synth))
+        modal_static_idx = list(set(self.obj_static) - set(self.obj_proxy_synth))
+        if len(modal_dyn_idx) >= self.physical_core:
+            for x in range(self.physical_core):
+                modal_groups = [modal_dyn_idx[i:i + self.physical_core] for i in range(0, len(modal_dyn_idx), self.physical_core)]
+            players = []
+            for modal_group in modal_groups:
+                group_players = [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in modal_group]
+                players += group_players
+                group_players += [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in modal_static_idx]
+                tasks_player = [self.bake_player(player) for group_player in group_players]
+                results_player = compute(*tasks_player)
+        else:
+            modal_obj_idx = list(set(self.obj_dyn + self.obj_static) - set(self.obj_proxy_synth))
+            players = [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in modal_obj_idx]
+            tasks_player = [self.bake_player(player) for player in players]
+            results_player = compute(*tasks_player)
 
         self.progress = _update_status(f"{self.status_dir}/bake", 60)
 
