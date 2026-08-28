@@ -289,10 +289,6 @@ class ModalPlayer:
             debug_print(f"Track {suffix} synth track for {config_obj.name} is empty, skipping")
             return
 
-        # Normalize track to between -1.0 and +1.0
-        if suffix == 'rigidbody':
-            track /= np.max(abs(track))
-
 #        # Maximize a normalized track from (-1.0, +1.0) to (float32.max and float32.min)
 #        dtype_max = np.finfo(np.float32).max
 #        track *= dtype_max
@@ -305,7 +301,30 @@ class ModalPlayer:
         subtype = 'FLOAT'
         track_name = config_obj.name
         track_file = f"{track_name}_{suffix}.raw"
+        wave_file = f"{self.output_dir}/{track_file}"
+        json_file = f"{self.output_dir}/{config_obj.name}_{suffix}.json"
 
+        # Find new_min new_max
+        new_max = np.max(abs(track))
+        new_min = np.min(abs(track))
+
+        # Load saved data and track from other groups
+        old_max, old_min = (0 for _ in range(2))
+        if os.path.exists(wave_file):
+            old_track = np.fromfile(wave_file, dtype=np.float32)
+            if suffix == 'rigidbody':
+                with open(json_file, r) as f:
+                    old_data = json.load(f)
+                    old_max = old_data[track_max]
+                    old_min = old_data[track_min]
+                # Normalize track to between -1.0 and +1.0
+                track /= np.max(abs(track))
+                # old_track - new_track ratio
+                max_ratio = new_max / old_max
+                min_ratio = new_min / old_min
+                track = (track - np.min(track)) / (np.max(track) - np.min(track)) * (max_ratio - min_ratio) + min_ratio
+            track += old_track
+            
         project_data = {
             'object_name': config_obj.name,
             'sample_rate': sample_rate,
@@ -313,11 +332,16 @@ class ModalPlayer:
             'bit_depth': subtype,
             'duration': track.shape[0] / sample_rate,
             'track_name': suffix,
+            'track_max': new_max if new_max > old_max else old_max,
+            'track_min': new_min if new_min > old_min else old_min,
             'vertices': self.rigidbody_vertices if suffix == 'rigidbody' else [],
             'channels': 1,
             'position': 0.0
         }
 
+        # Normalize track to between -1.0 and +1.0
+        if suffix == 'rigidbody':
+            track /= np.max(abs(track))
 
 #        if file_format == 'RAW':
 #            track_file = f"{track_name}_{suffix}.raw"
@@ -342,12 +366,10 @@ class ModalPlayer:
 #            track /= np.max(abs(track))
 #            track *= int((2**int(bit_depth))/2) - 1
             
-        wave_file = f"{self.output_dir}/{track_file}"
         sf.write(wave_file, track, sample_rate, subtype=subtype)
         debug_print(f"Saved {track_name} tracks to {self.output_dir}")
 
         # Save project file
-        json_file = f"{self.output_dir}/{config_obj.name}_{suffix}.json"
         with open(json_file, 'w') as f:
             json.dump(project_data, f, indent=2)
 

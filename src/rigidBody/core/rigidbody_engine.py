@@ -214,10 +214,6 @@ class rigidBodyEngine:
         sample_counter.set_total_samples(self.total_samples)
         _ = self.entity_manager.register('sample_counter', sample_counter)
 
-        tasks_luthier = [self.bake_luthier(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
-        results_luthier = compute(*tasks_luthier)
-        self.progress = _update_status(f"{self.status_dir}/bake", 10)
-
 #        self.players = [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
 #        tasks_player = [self.bake_player(player) for player in self.players]
 #        tasks_save = [self.bake_save(player) for player in self.players]
@@ -228,12 +224,19 @@ class rigidBodyEngine:
                 modal_groups = [modal_dyn_idx[i:i + self.physical_core] for i in range(0, len(modal_dyn_idx), self.physical_core)]
             players = []
             for modal_group in modal_groups:
+                tasks_luthier = [self.bake_luthier(obj_idx) for obj_idx in modal_group + self.obj_static]
+                results_luthier = compute(*tasks_luthier)
+                self.progress = _update_status(f"{self.status_dir}/bake", 10)
                 group_players = [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in modal_group]
                 players += group_players
                 group_players += [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in modal_static_idx]
-                tasks_player = [self.bake_player(player) for group_player in group_players]
+                tasks_player = [self.bake_player(group_player) for group_player in group_players]
                 results_player = compute(*tasks_player)
         else:
+            tasks_luthier = [self.bake_luthier(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
+            results_luthier = compute(*tasks_luthier)
+            self.progress = _update_status(f"{self.status_dir}/bake", 10)
+
             modal_obj_idx = list(set(self.obj_dyn + self.obj_static) - set(self.obj_proxy_synth))
             players = [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in modal_obj_idx]
             tasks_player = [self.bake_player(player) for player in players]
