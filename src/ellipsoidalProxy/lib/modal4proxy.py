@@ -29,7 +29,6 @@ from pbrAudioCommon import EntityManager
 from pbrAudioCommon import _load_mesh, _parse_lib, _generate_lib, _compute_rayleigh_damping
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
-
 @dataclass
 class Modal4Proxy:
     """
@@ -351,7 +350,7 @@ class Modal4Proxy:
                 gains = adapted_gains[:n_modes]
             else:
                 # Pad with higher modes
-                frequencies = np.pad(adapted_frequencies, (0, n_modes - n_available), mode='linearlinear_ramp', end_values=(max_freq,))
+                frequencies = np.pad(adapted_frequencies, (0, n_modes - n_available), mode='linear_ramp', end_values=(max_freq,))
                 t60s = np.pad(adapted_t60s, (0, n_modes - n_available), mode='constant', constant_values=(np.mean(adapted_t60s),))
                 gains = np.pad(adapted_gains, ((0, n_modes - n_available), (0, 0)), mode='constant', constant_values=(0,))
         else:

@@ -59,7 +59,7 @@ class ModalPlayer:
             self.player_id = id(self)
 
         # Set polling and timeout for synchronization mechanism
-        self.timeout = 60
+        self.timeout = 600
         self.poll_interval = 0.001
         
 #        self.synth_track = np.zeros(self.sample_counter.total_samples)
