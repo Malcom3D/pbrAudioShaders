@@ -16,6 +16,7 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import asyncio
 import numpy as np
 from typing import Any, List, Tuple, Dict, Optional
 from dataclasses import dataclass, field
@@ -27,11 +28,19 @@ class ConnectedBuffer:
     objs_buffer: np.ndarray = field(default_factory=lambda: np.zeros((1,7), dtype=np.float32))
 
     def add_obj(self, obj_idx: int):
+        asyncio.run(self._add_obj(obj_idx))
+
+    async def _add_obj(self, obj_idx: int):
+        await self._add_obj_internal(obj_idx)
+
+    async def _add_obj_internal(self, obj_idx: int):
         if obj_idx >= self.objs_buffer.shape[0]:
             # Expand buffer
             new_buffer = np.zeros((obj_idx+1,7), dtype=np.float32)
             new_buffer[:self.objs_buffer.shape[0], :] = self.objs_buffer
             self.objs_buffer = new_buffer
+            return 0
+
 #        new_inst = 1 + obj_idx - self.objs_buffer.shape[0]
 #        if new_inst > 0:
 #            buffer_type = [0 for _ in range(7)]
