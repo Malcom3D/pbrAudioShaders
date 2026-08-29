@@ -157,7 +157,8 @@ class Pym2f:
                                 # End fallback to stochastic lib generation
                                 minmode = config_obj.acoustic_shader.low_frequency
                                 maxmode = config_obj.acoustic_shader.high_frequency
-                                success, file_names = self._end_fallback(output_name=output_name, minmode=minmode, maxmode=maxmode, n_vertex=vertices.shape[0], n_modes=self.config.system.modal_modes, young_modulus=young_modulus, poisson_ratio=poisson_ratio, density=density, damping=damping, resonance=config_obj.resonance)
+                                n_modes = self.config.system.modal_modes
+                                success, file_names = self._end_fallback(output_name=output_name, minmode=minmode, maxmode=maxmode, n_vertex=vertices.shape[0], n_modes=n_modes, young_modulus=young_modulus, poisson_ratio=poisson_ratio, density=density, damping=damping, resonance=config_obj.resonance)
 
             if success:
                 break
