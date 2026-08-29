@@ -305,8 +305,8 @@ class ModalPlayer:
         json_file = f"{self.output_dir}/{config_obj.name}_{suffix}.json"
 
         # Find new_min new_max
-        new_max = np.max(abs(track))
-        new_min = np.min(abs(track))
+        new_max = np.max(track)
+        new_min = np.min(track)
 
         # Load saved data and track from other groups
         old_max, old_min = (0 for _ in range(2))
@@ -338,6 +338,8 @@ class ModalPlayer:
             'channels': 1,
             'position': 0.0
         }
+
+        print(project_data)
 
         # Normalize track to between -1.0 and +1.0
         if suffix == 'rigidbody':
