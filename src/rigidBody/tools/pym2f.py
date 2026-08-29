@@ -90,6 +90,7 @@ class Pym2f:
                 damping = config_obj.acoustic_shader.damping if not config_obj.acoustic_shader.damping == None else 0.02
                 minmode = config_obj.acoustic_shader.low_frequency
                 maxmode = config_obj.acoustic_shader.high_frequency
+                expos = expos if expos is not None else [n for n in range(vertices.shape[0])]
                 output_name = f"{config_obj.name}"
 
         # Try mesh2faust first
