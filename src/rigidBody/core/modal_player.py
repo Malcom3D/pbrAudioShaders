@@ -311,12 +311,12 @@ class ModalPlayer:
         # Load saved data and track from other groups
         old_max, old_min = (0 for _ in range(2))
         if os.path.exists(wave_file):
-            old_track = np.fromfile(wave_file, dtype=np.float32)
+            old_track, _ = sf.read(wave_file, channels=1, samplerate=sample_rate, subtype=subtype)
             if suffix == 'rigidbody':
-                with open(json_file, r) as f:
+                with open(json_file, 'r') as f:
                     old_data = json.load(f)
-                    old_max = old_data[track_max]
-                    old_min = old_data[track_min]
+                    old_max = old_data['track_max']
+                    old_min = old_data['track_min']
                 # Normalize track to between -1.0 and +1.0
                 track /= np.max(abs(track))
                 # old_track - new_track ratio
@@ -333,7 +333,7 @@ class ModalPlayer:
             'duration': track.shape[0] / sample_rate,
             'track_name': suffix,
             'track_max': new_max if new_max > old_max else old_max,
-            'track_min': new_min if new_min > old_min else old_min,
+            'track_min': new_min if new_min < old_min else old_min,
             'vertices': self.rigidbody_vertices if suffix == 'rigidbody' else [],
             'channels': 1,
             'position': 0.0

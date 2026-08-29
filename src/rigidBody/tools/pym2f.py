@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from pbrAudioCommon import Approx2Faust
 
 from pbrAudioCommon import EntityManager
-from pbrAudioCommon import _load_mesh, _mesh_to_obj, _compute_rayleigh_damping, _parse_lib, _generate_empty_lib
+from pbrAudioCommon import _load_mesh, _mesh_to_obj, _compute_rayleigh_damping, _parse_lib, _generate_stochastic_lib, _generate_physical_lib
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
 @dataclass
@@ -114,6 +114,8 @@ class Pym2f:
                 try:
                     # Third attempt: use mesh2faust with obj from random frame
                     debug_print(f"Pym2f: Attempting mesh2faust on random frame for {config_obj.name} (attempt {attempt})")
+                    minmode = config_obj.acoustic_shader.low_frequency
+                    maxmode = config_obj.acoustic_shader.high_frequency
                     rand_frame = np.random.randint(1,int(re.findall(r'\d+', filenames[-2])[-1]))
                     rand_vertices, rand_normals, rand_faces = _load_mesh(config_obj, rand_frame)
                     mesh_obj = _mesh_to_obj(rand_vertices, rand_normals, rand_faces, obj_file, config_obj.resonance)
@@ -133,21 +135,28 @@ class Pym2f:
                 except:
                     success = False
             else:
-                # Fallback: use approximate model
+                # Fallback: use approximate model from approx2faust
                 if self.use_fallback:
-                    debug_print(f"Pym2f: Attempting fallback for {config_obj.name} (attempt {attempt})")
+                    debug_print(f"Pym2f: Attempting Approx2Faust fallback for {config_obj.name} (attempt {attempt})")
+                    minmode = config_obj.acoustic_shader.low_frequency
+                    maxmode = config_obj.acoustic_shader.high_frequency
                     success, file_names = self._try_fallback(config_obj, vertices, faces, obj_file, young_modulus, poisson_ratio, density, damping, minmode, maxmode, expos, output_name)
                     if not success:
-                        debug_print(f"Pym2f: Attempting fallback for {config_obj.name} without min-max modal frequency limit (attempt {attempt})")
+                        debug_print(f"Pym2f: Attempting Approx2Faust fallback for {config_obj.name} without min-max modal frequency limit (attempt {attempt})")
                         minmode = self.config.system.lowest_frequency
                         maxmode = self.config.system.higher_frequency
                         success, file_names = self._try_fallback(config_obj, vertices, faces, obj_file, young_modulus, poisson_ratio, density, damping, minmode, maxmode, expos, output_name)
                         if not success:
-                            debug_print(f"Pym2f: Faking modal model as end fallback for {config_obj.name} (attempt {attempt})")
-                            # End fallback to empty lib generation
+                            debug_print(f"Pym2f: Attempting Analytical Approximation fallback for {config_obj.name} (attempt {attempt})")
                             minmode = config_obj.acoustic_shader.low_frequency
                             maxmode = config_obj.acoustic_shader.high_frequency
-                            success, file_names = self._end_fallback(output_name=output_name, minmode=minmode, maxmode=maxmode, n_vertex=vertices.shape[0], n_modes=self.config.system.modal_modes, young_modulus=young_modulus, poisson_ratio=poisson_ratio, density=density, damping=damping, resonance=config_obj.resonance)
+                            success, file_names = self._mid_fallback(config_obj, vertices, faces, obj_file, young_modulus, poisson_ratio, density, damping, minmode, maxmode, expos, output_name)
+                            if not success:
+                                debug_print(f"Pym2f: Attempting Stochastic Approximation modal model as end fallback for {config_obj.name} (attempt {attempt})")
+                                # End fallback to stochastic lib generation
+                                minmode = config_obj.acoustic_shader.low_frequency
+                                maxmode = config_obj.acoustic_shader.high_frequency
+                                success, file_names = self._end_fallback(output_name=output_name, minmode=minmode, maxmode=maxmode, n_vertex=vertices.shape[0], n_modes=self.config.system.modal_modes, young_modulus=young_modulus, poisson_ratio=poisson_ratio, density=density, damping=damping, resonance=config_obj.resonance)
 
             if success:
                 break
@@ -296,14 +305,51 @@ class Pym2f:
         debug_print(f"Pym2f fallback: Successfully generated approximate modal model for {config_obj.name}")
         return True, file_names
 
-    def _end_fallback(self, output_name: str, minmode: float, maxmode: float, n_vertex: int = None, n_modes: int = None, young_modulus: float = None, poisson_ratio: float = None, density: float = None, damping: float = None, resonance: bool = False) -> Tuple[bool, List[str]]:
+    def _mid_fallback(config_obj, vertices, faces, obj_file, young_modulus, poisson_ratio, density, damping, minmode, maxmode, expos, output_name) -> Tuple[bool, List[str]]:
+        """ 
+        Generate modal model using analytical approximations .
+            
+        Returns:
+            (success, file_names)
         """
-        End fallback: generate working fake lib file
-        """
-        empty_content = _generate_empty_lib(output_name=output_name, min_freq=minmode, max_freq=maxmode, n_expos=n_vertex, n_modes=n_modes, young_modulus=young_modulus, poisson_ratio=poisson_ratio, density=density, damping=damping)
+        n_modes = self.config.system.modal_modes
+
+        lib_content = _generate_physical_lib(vertices, faces, obj_file, young_modulus, poisson_ratio, density, damping, minmode, maxmode, expos, output_name, n_modes)
         lib_file = f"{output_name}.lib"
         with open(lib_file, 'w') as f:
-            f.write(empty_content)
+            f.write(lib_content)
+
+        file_names = [lib_file]
+
+        # Validate the generated file
+        if not self._validate_lib_file(lib_file):
+            debug_print(f"Pym2f MidFallback: Generated lib file validation failed for {output_name}")
+            os.remove(lib_file)
+            return False, []
+
+        # Handle resonance if requested
+        if resonance:
+            resonance_file = f"{output_name}_resonance.lib"
+            with open(resonance_file, 'w') as f:
+                f.write(lib_content)
+
+            file_names.append(resonance_file)
+
+        debug_print(f"Pym2f MidFallback: Successfully generated analytical approximate modal model for {output_name}")
+        return True, file_names
+
+
+    def _end_fallback(self, output_name: str, minmode: float, maxmode: float, n_vertex: int = None, n_modes: int = None, young_modulus: float = None, poisson_ratio: float = None, density: float = None, damping: float = None, resonance: bool = False) -> Tuple[bool, List[str]]:
+        """
+        Generate modal model using stochastic approximations.
+
+        Returns:
+            (success, file_names)
+        """
+        lib_content = _generate_stochastic_lib(output_name=output_name, min_freq=minmode, max_freq=maxmode, n_expos=n_vertex, n_modes=n_modes, young_modulus=young_modulus, poisson_ratio=poisson_ratio, density=density, damping=damping)
+        lib_file = f"{output_name}.lib"
+        with open(lib_file, 'w') as f:
+            f.write(lib_content)
 
         file_names = [lib_file]
 
@@ -317,11 +363,11 @@ class Pym2f:
         if resonance:
             resonance_file = f"{output_name}_resonance.lib"
             with open(resonance_file, 'w') as f:
-                f.write(empty_content)
+                f.write(lib_content)
             
             file_names.append(resonance_file)
 
-        debug_print(f"Pym2f EndFallback: Successfully generated fake empty modal model for {output_name}")
+        debug_print(f"Pym2f EndFallback: Successfully generated stochastic approximate modal model for {output_name}")
         return True, file_names
 
     def _validate_lib_file(self, lib_file: str) -> bool:

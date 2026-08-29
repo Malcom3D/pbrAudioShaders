@@ -885,16 +885,7 @@ class Modal4Proxy:
             dimensions = max_coords - min_coords
             return np.prod(dimensions) / 2.0
 
-    def _save_faust_lib(
-        self,
-        config_obj: Any,
-        proxy_type: int,
-        frequencies: np.ndarray,
-        t60s: np.ndarray,
-        gains: np.ndarray,
-        n_modes: int,
-        n_vertices: int
-    ) -> None:
+    def _save_faust_lib(self, config_obj: Any, proxy_type: int, frequencies: np.ndarray, t60s: np.ndarray, gains: np.ndarray, n_modes: int, n_vertices: int) -> None:
         """
         Save the modal model as a Faust .lib file.
 

@@ -212,6 +212,11 @@ class rigidBodyEngine:
 #        tasks_player = [self.bake_player(player) for player in self.players]
 #        tasks_save = [self.bake_save(player) for player in self.players]
 
+        _ = self.entity_manager.register('connected_buffer', connected_buffer)
+        sample_counter = SampleCounter(status_file=f"{self.status_dir}/bake")
+        sample_counter.set_total_samples(self.total_samples)
+        _ = self.entity_manager.register('sample_counter', sample_counter)
+
         modal_dyn_idx = list(set(self.obj_dyn) - set(self.obj_proxy_synth))
         modal_static_idx = list(set(self.obj_static) - set(self.obj_proxy_synth))
         if len(modal_dyn_idx) >= self.physical_core:
@@ -222,11 +227,6 @@ class rigidBodyEngine:
             players = []
             for modal_group in modal_groups:
                 connected_buffer = ConnectedBuffer()
-                _ = self.entity_manager.register('connected_buffer', connected_buffer)
-                sample_counter = SampleCounter(status_file=f"{self.status_dir}/bake")
-                sample_counter.set_total_samples(self.total_samples)
-                _ = self.entity_manager.register('sample_counter', sample_counter)
-
                 tasks_luthier = [self.bake_luthier(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
                 results_luthier = compute(*tasks_luthier)
 #                tasks_luthier = [self.bake_luthier(obj_idx) for obj_idx in modal_group + self.obj_static]
@@ -245,6 +245,12 @@ class rigidBodyEngine:
 
                 self.entity_manager.unregister('sample_counter')
                 self.entity_manager.unregister('connected_buffer')
+
+                _ = self.entity_manager.register('connected_buffer', connected_buffer)
+                sample_counter = SampleCounter(status_file=f"{self.status_dir}/bake")
+                sample_counter.set_total_samples(self.total_samples)
+                _ = self.entity_manager.register('sample_counter', sample_counter)
+
         else:
             connected_buffer = ConnectedBuffer()
             _ = self.entity_manager.register('connected_buffer', connected_buffer)

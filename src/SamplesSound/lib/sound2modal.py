@@ -28,7 +28,7 @@ import soundfile as sf
 from scipy.interpolate import RegularGridInterpolator
 
 from pbrAudioCommon import EntityManager
-from pbrAudioCommon import _generate_lib, _generate_empty_lib
+from pbrAudioCommon import _generate_lib, _generate_stochastic_lib
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 from pbrAudioCommon import ShapeType, ShapeProperties, PrimitiveGeometry
 
@@ -721,7 +721,7 @@ class Sound2Modal:
         n_vertices = gains.shape[1] if gains.ndim > 1 else 1
         
         if n_modes == 0 or n_vertices == 0:
-            return _generate_empty_lib(
+            return _generate_stochastic_lib(
                 output_name=output_name,
                 min_freq=min_freq,
                 max_freq=max_freq,
@@ -742,7 +742,7 @@ class Sound2Modal:
             n_modes = len(frequencies)
             
             if n_modes == 0:
-                return _generate_empty_lib(
+                return _generate_stochastic_lib(
                     output_name=output_name,
                     min_freq=min_freq,
                     max_freq=max_freq,
