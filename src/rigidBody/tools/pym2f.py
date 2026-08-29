@@ -305,7 +305,7 @@ class Pym2f:
         debug_print(f"Pym2f fallback: Successfully generated approximate modal model for {config_obj.name}")
         return True, file_names
 
-    def _mid_fallback(config_obj, vertices, faces, obj_file, young_modulus, poisson_ratio, density, damping, minmode, maxmode, expos, output_name) -> Tuple[bool, List[str]]:
+    def _mid_fallback(self, config_obj, vertices, faces, obj_file, young_modulus, poisson_ratio, density, damping, minmode, maxmode, expos, output_name) -> Tuple[bool, List[str]]:
         """ 
         Generate modal model using analytical approximations .
             
