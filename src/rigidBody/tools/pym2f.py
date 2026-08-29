@@ -330,10 +330,12 @@ class Pym2f:
             return False, []
 
         # Handle resonance if requested
-        if resonance:
+        if config_obj.resonance:
+            n_modes = config_obj.resonance_modes
             resonance_file = f"{output_name}_resonance.lib"
+            resonance_content = _generate_physical_lib(vertices, faces, obj_file, young_modulus, poisson_ratio, density, damping, minmode, maxmode, expos, output_name, n_modes)
             with open(resonance_file, 'w') as f:
-                f.write(lib_content)
+                f.write(resonance_content)
 
             file_names.append(resonance_file)
 
