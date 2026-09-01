@@ -339,8 +339,6 @@ class ModalPlayer:
             'position': 0.0
         }
 
-        print(project_data)
-
         # Normalize track to between -1.0 and +1.0
         if suffix == 'rigidbody':
             track /= np.max(abs(track))

@@ -154,10 +154,13 @@ class RotationSolver:
         self.vertices_local = mesh.vertices - pre_impact_pos
         mesh = trimesh.Trimesh(vertices=self.vertices_local, faces=faces)
         volume = mesh.volume
+#        center_of_mass = mesh.center_mass
+        mesh.center_mass = impact_position
         center_of_mass = mesh.center_mass
         mesh.density = config_obj.acoustic_shader.density
         self.inertia_tensor = mesh.moment_inertia
-        self.mass = mesh.mass
+#        self.mass = mesh.mass
+        self.mass = mesh.mass if mesh.mass > 9e-5 else 0.0001
 
 #        # Regularize and compute inverse inertia tensor
 #        epsilon = 1e-12 * np.trace(self.inertia_tensor) if np.trace(self.inertia_tensor) > 0 else 1e-12
@@ -318,7 +321,10 @@ class RotationSolver:
         
         # Inertia tensor in world coordinates
         I_world = R @ self.inertia_tensor @ R.T
-        I_inv_world = np.linalg.inv(I_world)
+        if np.linalg.det(I_world):
+            I_inv_world = np.linalg.inv(I_world)
+        else:
+            I_inv_world = np.linalg.lstsq(I_world, np.eye(3,3), rcond=None)[0]
 #        I_inv_world = R @ self.inv_inertia_tensor @ R.T
         
         # Compute effective mass matrix
