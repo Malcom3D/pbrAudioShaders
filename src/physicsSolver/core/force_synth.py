@@ -75,7 +75,7 @@ class ForceSynth:
                             collisions.append(collision_data[c_idx])
                     trajectories = self.entity_manager.get('trajectories')
                     for t_idx in trajectories.keys():
-                        if trajectories[t_idx].obj_idx == obj_idx:
+                        if hasattr(trajectories[t_idx], 'obj_idx') and trajectories[t_idx].obj_idx == obj_idx:
                             trajectory = trajectories[t_idx]
                             forces = self.entity_manager.get('forces')
 
@@ -250,7 +250,7 @@ class ForceSynth:
 
         trajectories = self.entity_manager.get('trajectories')
         for t_idx in trajectories.keys():
-            if trajectories[t_idx].obj_idx == other_config_obj.idx:
+            if hasattr(trajectories[t_idx], 'obj_idx') and trajectories[t_idx].obj_idx == other_config_obj.idx:
                 other_trajectory = trajectories[t_idx]
 
         tangential_velocity = force.get_tangential_velocity(sample_idx)

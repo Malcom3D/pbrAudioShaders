@@ -26,11 +26,11 @@ from typing import List, Dict, Tuple, Optional, Any
 import math
 
 from pbrAudioCommon import EntityManager
+from pbrAudioCommon import CubicSplineWithNaN
 
 from ..lib.force_data import ContactType, ForceData, ForceDataSequence
 from ..lib.contact_geometry import ContactGeometry
 from ..lib.hertzian_contact import HertzianContact
-from ..lib.cubicspline_with_nan import CubicSplineWithNaN
 
 @dataclass
 class ForceSolver:
@@ -59,7 +59,7 @@ class ForceSolver:
                     return
                 collisions = self.entity_manager.get('collisions')
                 for t_idx in trajectories.keys():
-                    if 'TrajectoryData' in str(type(trajectories[t_idx])):
+                    if 'TrajectoryData' in str(type(trajectories[t_idx])) and hasattr(trajectories[t_idx], 'obj_idx'):
                         if trajectories[t_idx].obj_idx == config_obj.idx:
                             trajectory = trajectories[t_idx]
                 frames = trajectory.get_x()
@@ -80,7 +80,7 @@ class ForceSolver:
                                     other_config_objs.append(other_config)
                                     trajectories = self.entity_manager.get('trajectories') if len(trajectories) == 0 else trajectories
                                     for t_idx in trajectories.keys():
-                                        if 'TrajectoryData' in str(type(trajectories[t_idx])):
+                                        if 'TrajectoryData' in str(type(trajectories[t_idx])) and hasattr(trajectories[t_idx], 'obj_idx'):
                                             if trajectories[t_idx].obj_idx in other_obj_indices:
                                                 other_trajectories.append(trajectories[t_idx])
 

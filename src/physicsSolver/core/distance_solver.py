@@ -68,7 +68,7 @@ class DistanceSolver:
         trajectory, frames  = ([] for _ in range(2))
         trajectories = self.entity_manager.get('trajectories')
         for idx in trajectories.keys():
-            if trajectories[idx].obj_idx in objs_idx:
+            if hasattr(trajectories[idx], 'obj_idx') and trajectories[idx].obj_idx in objs_idx:
                 trajectory.append(trajectories[idx])
                 frames.append(trajectories[idx].get_x())
 

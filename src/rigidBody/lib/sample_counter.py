@@ -32,6 +32,7 @@ class SampleCounter:
     players_ready: List[int] = field(default_factory=list)
     players_registered: List[int] = field(default_factory=list)
     _ready_callbacks: List[Callable] = field(default_factory=list)  # Callbacks to execute when all players are ready
+    _lock: bool = False
 
     def register_player(self, player_id: int) -> None:
         """Register a ModalPlayer instance."""
@@ -69,26 +70,28 @@ class SampleCounter:
 #        print('SampleCounter', player_id, 'ready', self.players_ready, self.players_registered, self.current_sample)
         if player_id in self.players_registered and player_id not in self.players_ready:
             self.players_ready.append(player_id)
-            if len(self.players_ready) == len(self.players_registered):
-                if self.current_sample < self.total_samples:
-                    print('SampleCounter: ', self.current_sample, self.total_samples, self.get_progress())
-                    self.current_sample += 1
-                    if self.current_sample % int(self.total_samples/100) == 0:
-                       _update_status(self.status_file, int(self.get_progress()))
+        if player_id in self.players_registered and player_id in self.players_ready and len(self.players_ready) == len(self.players_registered) and not self._lock: # to handle lock when client unregister
+            self._lock = True
+            if self.current_sample < self.total_samples:
+                self.current_sample += 1
+                print('SampleCounter: ', self.current_sample, self.total_samples, self.get_progress())
+                if self.current_sample % int(self.total_samples/100) == 0:
+                   _update_status(self.status_file, int(self.get_progress()))
                 # Execute all registered callbacks
                 for callback in self._ready_callbacks:
 #                    print('SampleCounter execute callback')
                     callback()
 
-                self.players_ready = []
-                return True  # All players are ready, sample advanced
-            
-            return False  # Still waiting for more players
+            self.players_ready = []
+            self._lock = False
+            return True  # All players are ready, sample advanced
 
-        elif not np.all([ready in self.players_registered for ready in self.players_ready]):
-#            print('SampleCounter: Player already ready or not registered')
+        if not np.all([ready in self.players_registered for ready in self.players_ready]):
+#            print('SampleCounter: Player in ready list not registered: reset ready list')
             self.players_ready = []
             return False # Player already ready or not registered
+
+        return False  # Still waiting for more players
 
     def set_total_samples(self, total_samples: int) -> None:
         """Set the total number of samples."""

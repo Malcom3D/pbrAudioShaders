@@ -108,7 +108,7 @@ class fractureEngine:
     def _set_total_samples(self):
         trajectories = self.entity_manager.get('trajectories')
         for t_idx in trajectories.keys():
-            if not trajectories[t_idx].static:
+            if isinstance(trajectories[t_idx], TrajectoryData) and not trajectories[t_idx].static:
                 trajectory = trajectories[t_idx]
                 return int(trajectory.get_x()[-1])
     

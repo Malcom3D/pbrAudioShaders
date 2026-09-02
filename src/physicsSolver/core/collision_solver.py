@@ -199,9 +199,9 @@ class CollisionSolver:
         trajectory1 = trajectory2 = None
         trajectories = self.entity_manager.get('trajectories')
         for t_idx in trajectories.keys():
-            if trajectories[t_idx].obj_idx == obj1_idx:
+            if hasattr(trajectories[t_idx], 'obj_idx') and trajectories[t_idx].obj_idx == obj1_idx:
                 trajectory1 = trajectories[t_idx]
-            if trajectories[t_idx].obj_idx == obj2_idx:
+            if hasattr(trajectories[t_idx], 'obj_idx') and trajectories[t_idx].obj_idx == obj2_idx:
                 trajectory2 = trajectories[t_idx]
         return trajectory1, trajectory2
 
