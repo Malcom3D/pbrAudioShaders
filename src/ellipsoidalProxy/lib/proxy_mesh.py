@@ -45,12 +45,7 @@ class ProxyMesh:
     """
     entity_manager: EntityManager
 
-    # Validation parameters
-    size_tolerance: float = 0.05  # 5% tolerance for size validation
-    min_volume_ratio: float = 0.75  # Minimum volume ratio (proxy/original)
-    max_volume_ratio: float = 1.25  # Maximum volume ratio (proxy/original)
-
-    def __post_init__(self):
+    def __post_init(self):
         config = self.entity_manager.get('config')
         set_debug(config.system.debug)
         set_debug_prefix(self.__class__.__name__)
@@ -114,15 +109,19 @@ class ProxyMesh:
         center_local_0 = (min_coords_0 + max_coords_0) / 2
 
         # Generate proxy vertices for first frame (reference)
-        proxy_vertices_local_0, proxy_faces_0 = self._generate_proxy_mesh(proxy_type=config_obj.proxy_type, extents=extents_0, center=center_local_0)
-
-        # Validate and fix the proxy mesh for the first frame
-        proxy_vertices_local_0, proxy_faces_0 = self._validate_and_fix_proxy_mesh(
-            proxy_vertices=proxy_vertices_local_0,
-            proxy_faces=proxy_faces_0,
-            original_vertices=vertices_local_0,
-            original_faces=faces_0,
-            proxy_type=config_obj.proxy_type
+        proxy_vertices_local_0, proxy_faces_0 = self._generate_proxy_mesh(
+            proxy_type=config_obj.proxy_type, 
+            extents=extents_0, 
+            center=center_local_0
+        )
+        
+        # Validate and fix the proxy mesh for first frame
+        proxy_vertices_local_0, proxy_faces_0 = self._validate_and_fix_mesh(
+            vertices=proxy_vertices_local_0,
+            faces=proxy_faces_0,
+            proxy_type=config_obj.proxy_type,
+            extents=extents_0,
+            center=center_local_0
         )
 
         # Build KD-tree for first frame's original vertices
@@ -158,18 +157,22 @@ class ProxyMesh:
             center_local = (min_coords + max_coords) / 2
 
             # Generate proxy mesh based on proxy_type
-            proxy_vertices_local, proxy_faces = self._generate_proxy_mesh(proxy_type=config_obj.proxy_type, extents=extents, center=center_local)
-
+            proxy_vertices_local, proxy_faces = self._generate_proxy_mesh(
+                proxy_type=config_obj.proxy_type, 
+                extents=extents, 
+                center=center_local
+            )
+            
             # Validate and fix the proxy mesh for this frame
-            proxy_vertices_local, proxy_faces = self._validate_and_fix_proxy_mesh(
-                proxy_vertices=proxy_vertices_local,
-                proxy_faces=proxy_faces,
-                original_vertices=vertices_local,
-                original_faces=faces,
-                proxy_type=config_obj.proxy_type
+            proxy_vertices_local, proxy_faces = self._validate_and_fix_mesh(
+                vertices=proxy_vertices_local,
+                faces=proxy_faces,
+                proxy_type=config_obj.proxy_type,
+                extents=extents,
+                center=center_local
             )
 
-            # # Now re-index proxy vertices to maintain consistency
+            # Now re-index proxy vertices to maintain consistency
             # For each proxy vertex, find the corresponding original vertex
             # using the mapping established from the first frame
             proxy_tree = cKDTree(proxy_vertices_local)
@@ -188,6 +191,15 @@ class ProxyMesh:
             proxy_vertices_world = (R @ reindexed_proxy_vertices.T).T
             proxy_normals_world = (R @ proxy_normals.T).T
 
+            # Final validation in world coordinates
+            proxy_vertices_world, proxy_faces = self._validate_and_fix_mesh(
+                vertices=proxy_vertices_world,
+                faces=proxy_faces,
+                proxy_type=config_obj.proxy_type,
+                extents=extents,  # Note: extents are in local coords
+                center=position  # Use world position as center
+            )
+
             # Save proxy mesh
             output_file = f"{obj_proxy_path}/{config_obj.name}_{frame_idx:04d}.npz"
             if config_obj.static:
@@ -195,232 +207,6 @@ class ProxyMesh:
             np.savez_compressed(output_file, vertices=proxy_vertices_world.astype(np.float32), normals=proxy_normals_world.astype(np.float32), faces=proxy_faces.astype(np.int32))
 
         debug_print(f"Created {n_frames} proxy frames for {config_obj.name} at {obj_proxy_path}")
-
-    def _validate_and_fix_proxy_mesh(self, proxy_vertices: np.ndarray, proxy_faces: np.ndarray,original_vertices: np.ndarray, original_faces: np.ndarray, proxy_type: int) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Validate and fix the proxy mesh to ensure it properly represents the original mesh.
-
-        This function:
-        1. Checks the size of the proxy mesh against the original
-        2. Ensures the proxy mesh covers the original mesh properly
-        3. Fixes the proxy mesh if it's too small or doesn't properly represent the original
-
-        Args:
-            proxy_vertices: Proxy mesh vertices
-            proxy_faces: Proxy mesh faces
-            original_vertices: Original mesh vertices
-            original_faces: Original mesh faces
-            proxy_type: Proxy type (0-5)
-
-        Returns:
-            Tuple of (fixed_vertices, fixed_faces)
-        """
-#        debug_print(f"Validating proxy mesh with {len(proxy_vertices)} vertices against original with {len(original_vertices)} vertices")
-
-        # Compute bounding boxes
-        proxy_bbox_min = np.min(proxy_vertices, axis=0)
-        proxy_bbox_max = np.max(proxy_vertices, axis=0)
-        proxy_extents = proxy_bbox_max - proxy_bbox_min
-
-        original_bbox_min = np.min(original_vertices, axis=0)
-        original_bbox_max = np.max(original_vertices, axis=0)
-        original_extents = original_bbox_max - original_bbox_min
-
-        # Compute centers
-        proxy_center = (proxy_bbox_min + proxy_bbox_max) / 2
-        original_center = (original_bbox_min + original_bbox_max) / 2
-
-#        debug_print(f"Proxy extents: {proxy_extents}")
-#        debug_print(f"Original extents: {original_extents}")
-#        debug_print(f"Proxy center: {proxy_center}")
-#        debug_print(f"Original center: {original_center}")
-
-        # Check if proxy mesh needs fixing
-        needs_fix = False
-
-        # Check 1: Size validation
-        # The proxy should be within tolerance of the original size
-        for dim in range(3):
-            if original_extents[dim] > 0:  # Avoid division by zero
-                size_ratio = proxy_extents[dim] / original_extents[dim]
-                if size_ratio < (1.0 - self.size_tolerance) or size_ratio > (1.0 + self.size_tolerance):
-#                    debug_print(f"Size mismatch in dimension {dim}: proxy ratio {size_ratio:.4f}")
-                    needs_fix = True
-
-        # Check 2: Volume validation
-        proxy_volume = self._compute_mesh_volume(proxy_vertices, proxy_faces)
-        original_volume = self._compute_mesh_volume(original_vertices, original_faces)
-
-        if proxy_volume == 0:
-            needs_fix = True
-        elif original_volume > 0 and proxy_volume > 0:
-            volume_ratio = proxy_volume / original_volume
-#            debug_print(f"Volume ratio: {volume_ratio:.4f} (proxy: {proxy_volume:.6f}, original: {original_volume:.6f})")
-
-            if volume_ratio < self.min_volume_ratio or volume_ratio > self.max_volume_ratio:
-#                debug_print(f"Volume mismatch: ratio {volume_ratio:.4f}")
-                needs_fix = True
-
-        # Check 3: Center alignment
-        center_distance = np.linalg.norm(proxy_center - original_center)
-        max_extent = np.max(original_extents) if np.max(original_extents) > 0 else 1.0
-        if center_distance > max_extent * 0.1:  # 10% of max extent
-#            debug_print(f"Center misalignment: distance {center_distance:.4f}")
-            needs_fix = True
-
-        if not needs_fix:
-#            debug_print("Proxy mesh validation passed")
-            return proxy_vertices, proxy_faces
-
-#        debug_print("Proxy mesh validation failed - applying fixes")
-
-        # Fix the proxy mesh
-        fixed_vertices = self._fix_proxy_mesh(proxy_vertices=proxy_vertices, proxy_faces=proxy_faces, original_vertices=original_vertices, original_faces=original_faces, proxy_type=proxy_type)
-
-        return fixed_vertices, proxy_faces
-
-    def _fix_proxy_mesh(self, proxy_vertices: np.ndarray, proxy_faces: np.ndarray, original_vertices: np.ndarray, original_faces: np.ndarray, proxy_type: int) -> np.ndarray:
-        """
-        Fix the proxy mesh to properly represent the original mesh.
-
-        The fix strategy depends on the proxy type:
-        - For simple shapes (0, 1, 2), we scale the proxy to match the original bounds
-        - For complex shapes (3, 4, 5), we also scale but may need to adjust vertices
-
-        Args:
-            proxy_vertices: Proxy mesh vertices
-            proxy_faces: Proxy mesh faces
-            original_vertices: Original mesh vertices
-            original_faces: Original mesh faces
-            proxy_type: Proxy type (0-5)
-
-        Returns:
-            Fixed proxy vertices
-        """
-        # Compute original mesh bounds
-        original_min = np.min(original_vertices, axis=0)
-        original_max = np.max(original_vertices, axis=0)
-        original_extents = original_max - original_min
-        original_center = (original_min + original_max) / 2
-
-        # Compute proxy mesh bounds
-        proxy_min = np.min(proxy_vertices, axis=0)
-        proxy_max = np.max(proxy_vertices, axis=0)
-        proxy_extents = proxy_max - proxy_min
-        proxy_center = (proxy_min + proxy_max) / 2
-
-#        debug_print(f"Fixing proxy mesh - original extents: {original_extents}, proxy extents: {proxy_extents}")
-
-        # Check for zero extents (degenerate cases)
-        for dim in range(3):
-            if original_extents[dim] < 1e-10:
-                original_extents[dim] = 1e-4  # Set to reasonable default
-            if proxy_extents[dim] < 1e-10:
-                proxy_extents[dim] = original_extents[dim]  # Use original
-
-        # Compute scaling factors
-        # Use maximum ratio to ensure proxy covers original
-        scale_factors = np.ones(3)
-        for dim in range(3):
-            if proxy_extents[dim] > 0:
-                # Scale to at least match original size
-                scale_factors[dim] = max(1.0, original_extents[dim] / proxy_extents[dim])
-                # Add small margin (5%) to ensure proper coverage
-                scale_factors[dim] *= 1.05
-
-#        debug_print(f"Scale factors: {scale_factors}")
-
-        # Apply scaling to proxy vertices
-        # First center the proxy
-        centered_vertices = proxy_vertices - proxy_center
-
-        # Scale the centered vertices
-        scaled_vertices = centered_vertices * scale_factors
-
-        # Move the scaled proxy to the original center
-        fixed_vertices = scaled_vertices + original_center
-
-        # For icosahedron-based proxies (types 3, 4, 5), we might need additional fixing
-        if proxy_type >= 3:
-            fixed_vertices = self._fix_icosahedron_proxy(vertices=fixed_vertices, original_vertices=original_vertices, original_center=original_center, original_extents=original_extents)
-
-        # Validate the fixed mesh
-        fixed_min = np.min(fixed_vertices, axis=0)
-        fixed_max = np.max(fixed_vertices, axis=0)
-        fixed_extents = fixed_max - fixed_min
-
-#        debug_print(f"Fixed proxy extents: {fixed_extents}")
-
-        # Final check - ensure the fix worked
-#        fixed_volume = trimesh.Trimesh(vertices=fixed_vertices, faces=proxy_faces).volume
-#        while fixed_volume < 1e-10:
-#            for dim in range(3):
-#                # Still too small - apply additional scaling
-#                additional_scale = (original_extents[dim] * 1.1) / (fixed_extents[dim] + 1e-10)
-#                fixed_vertices[:, dim] = (fixed_vertices[:, dim] - original_center[dim]) * additional_scale + original_center[dim]
-#                fixed_volume = trimesh.Trimesh(vertices=fixed_vertices, faces=proxy_faces).volume
-                
-
-        for dim in range(3):
-            if fixed_extents[dim] < original_extents[dim] * 0.9: # 90% of original
-                # Still too small - apply additional scaling
-                additional_scale = (original_extents[dim] * 1.1) / (fixed_extents[dim] + 1e-10)
-                fixed_vertices[:, dim] = (fixed_vertices[:, dim] - original_center[dim]) * additional_scale + original_center[dim]
-
-        return fixed_vertices
-
-    def _fix_icosahedron_proxy(self, vertices: np.ndarray, original_vertices: np.ndarray, original_center: np.ndarray, original_extents: np.ndarray) -> np.ndarray:
-        """
-        Fix icosahedron-based proxy meshes by ensuring proper coverage.
-
-        For subdivided icosahedrons, we need to ensure the vertices
-        properly cover the original mesh surface.
-        """
-        # Compute the radius of the original mesh (max distance from center)
-        distances = np.linalg.norm(original_vertices - original_center, axis=1)
-        original_radius = np.max(distances) if len(distances) > 0 else 1.0
-
-        # Compute the radius of the proxy
-        proxy_distances = np.linalg.norm(vertices - original_center, axis=1)
-        proxy_radius = np.max(proxy_distances) if len(proxy_distances) > 0 else 1.0
-
-        # If proxy is too small, scale it up
-        if proxy_radius < original_radius * 0.9:
-            scale_factor = (original_radius * 1.05) / (proxy_radius + 1e-10)
-#            debug_print(f"Scaling icosahedron proxy by factor {scale_factor:.4f}")
-            vertices = (vertices - original_center) * scale_factor + original_center
-
-        return vertices
-
-    def _compute_mesh_volume(self, vertices: np.ndarray, faces: np.ndarray) -> float:
-        """
-        Compute the volume of a mesh.
-
-        Args:
-            vertices: Mesh vertices
-            faces: Mesh faces
-
-        Returns:
-            Volume of the mesh
-        """
-        if len(vertices) < 4 or len(faces) < 4:
-            # Not enough geometry for volume computation
-            # Use bounding box volume as approximation
-            min_coords = np.min(vertices, axis=0)
-            max_coords = np.max(vertices, axis=0)
-            extents = max_coords - min_coords
-            return np.prod(extents)
-
-        try:
-            # Create a trimesh object and compute volume
-            mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
-            return mesh.volume
-        except:
-            # Fallback to bounding box volume
-            min_coords = np.min(vertices, axis=0)
-            max_coords = np.max(vertices, axis=0)
-            extents = max_coords - min_coords
-            return np.prod(extents)
 
     def _generate_proxy_mesh(self, proxy_type: int, extents: np.ndarray, center: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -445,10 +231,10 @@ class ProxyMesh:
             # 8-vertex cube - vertices at bounding box corners
             vertices, faces = self._create_cube_8v(extents, center)
         else:
-            # Default to Icosacosahedron without subdivision for unknown types
+            # Default to Icosahedron without subdivision for unknown types
             # Icosahedron with subdivision
             subdivisions = proxy_type - 3 if proxy_type in [3, 4, 5] else 0
-            vertices, faces = self._create_icosahedron(subdivisions==subdivisions)
+            vertices, faces = self._create_icosahedron(subdivisions=subdivisions)
             # Scale to match extents
             half_extents = extents / 2.0
             vertices = vertices * half_extents[np.newaxis, :] + center
@@ -590,7 +376,7 @@ class ProxyMesh:
             # Bottom face (z = -hz)
             [0, 1, 2],
             [0, 2, 3],
-            # Top face ( (z = +hz)
+            # Top face (z = +hz)
             [4, 6, 5],
             [4, 7, 6],
             # Front face (y = +hy)
@@ -598,7 +384,7 @@ class ProxyMesh:
             [3, 6, 7],
             # Back face (y = -hy)
             [0, 5, 1],
-            [0, 4, 5],
+                       [0, 4, 5],
             # Left face (x = -hx)
             [0, 3, 7],
             [0, 7, 4],
@@ -720,3 +506,157 @@ class ProxyMesh:
 
         return np.array(new_vertices), np.array(new_faces)
 
+    def _validate_and_fix_mesh(self, vertices: np.ndarray, faces: np.ndarray, proxy_type: int, extents: np.ndarray, center: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Validate that the proxy mesh has a valid volume (volume > 0) and fix it if not.
+        
+        Parameters:
+        -----------
+        vertices : np.ndarray
+            Proxy mesh vertices
+        faces : np.ndarray
+            Proxy mesh faces
+        proxy_type : int
+            Type of proxy mesh (0-5)
+        extents : np.ndarray
+            Bounding box extents of the original mesh
+        center : np.ndarray
+            Center of the bounding box
+        
+        Returns:
+        --------
+        Tuple[np.ndarray, np.ndarray]
+            Fixed vertices and faces
+        """
+        import trimesh
+        
+        # Create mesh for validation
+        mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
+        
+        # Check if volume is valid (not NaN, not negative, not zero)
+        volume = mesh.volume
+        is_valid = (
+            not np.isnan(volume) and 
+            not np.isinf(volume) and 
+            volume > 0 and 
+            mesh.is_watertight and
+            mesh.is_winding_consistent
+        )
+        
+        if is_valid:
+            return vertices, faces
+        
+        debug_print(f"Invalid proxy mesh detected (volume={volume}). Attempting to fix...")
+        
+        # Try different fixing strategies
+        fixed_mesh = None
+        
+        # Strategy 1: Fix normals and fill holes
+        try:
+            if not mesh.is_winding_consistent:
+                mesh.fix_normals()
+            if not mesh.is_watertight:
+                mesh.fill_holes()
+            
+            # Process the mesh
+            mesh.process(validate=True)
+            
+            if mesh.is_watertight and mesh.is_winding_consistent:
+                volume = mesh.volume
+                if not np.isnan(volume) and volume > 0:
+                    fixed_mesh = mesh
+                    debug_print(f"Mesh fixed via normal/hole fixing. New volume: {volume}")
+        except Exception as e:
+            debug_print(f"Fixing strategy 1 failed: {e}")
+        
+        # Strategy 2: Regenerate with minimum size
+        if fixed_mesh is None:
+            debug_print("Attempting to regenerate proxy mesh with minimum size...")
+            
+            # Ensure minimum extents to prevent degenerate meshes
+            min_extent = 0.001  # 1mm minimum
+            fixed_extents = np.maximum(extents, min_extent)
+            
+            # Regenerate the proxy mesh
+            fixed_vertices, fixed_faces = self._generate_proxy_mesh(
+                proxy_type=proxy_type,
+                extents=fixed_extents,
+                center=center
+            )
+            
+            # Validate the regenerated mesh
+            fixed_mesh = trimesh.Trimesh(vertices=fixed_vertices, faces=fixed_faces)
+            volume = fixed_mesh.volume
+            
+            if np.isnan(volume) or volume <= 0:
+                # Strategy 3: Use a simple cube as fallback
+                debug_print("Regeneration failed. Using cube fallback...")
+                half_extents = fixed_extents / 2
+                fixed_vertices = np.array([
+                    [-half_extents[0], -half_extents[1], -half_extents[2]],
+                    [half_extents[0], -half_extents[1], -half_extents[2]],
+                    [half_extents[0], half_extents[1], -half_extents[2]],
+                    [-half_extents[0], half_extents[1], -half_extents[2]],
+                    [-half_extents[0], -half_extents[1], half_extents[2]],
+                    [half_extents[0], -half_extents[1], half_extents[2]],
+                    [half_extents[0], half_extents[1], half_extents[2]],
+                    [-half_extents[0], half_extents[1], half_extents[2]]
+                ]) + center
+                
+                fixed_faces = np.array([
+                    [0, 1, 2], [0, 2, 3],  # Bottom
+                    [4, 6, 5], [4, 7, 6],  # Top
+                    [0, 3, 7], [0, 7, 4],  # Left
+                    [1, 5, 6], [1, 6, 2],  # Right
+                    [0, 4, 5], [0, 5, 1],  # Back
+                    [3, 2, 6], [3, 6, 7]   # Front
+                ])
+                
+                fixed_mesh = trimesh.Trimesh(vertices=fixed_vertices, faces=fixed_faces)
+                debug_print(f"Created fallback cube with volume: {fixed_mesh.volume}")
+        
+        # Final validation
+        if fixed_mesh is not None:
+            volume = fixed_mesh.volume
+            if not np.isnan(volume) and volume > 0:
+                debug_print(f"Mesh validation passed. Final volume: {volume}")
+                return fixed_mesh.vertices, fixed_mesh.faces
+        
+        # If all strategies fail, scale up the original mesh slightly
+        debug_print("All fixing strategies failed. Scaling mesh slightly...")
+        scale_factor = 1.1  # 10% scale up
+        scaled_vertices = (vertices - center) * scale_factor + center
+        
+        # Recreate mesh with scaled vertices
+        scaled_mesh = trimesh.Trimesh(vertices=scaled_vertices, faces=faces)
+        
+        # Try to make it valid
+        if not scaled_mesh.is_winding_consistent:
+            scaled_mesh.fix_normals()
+        
+        volume = scaled_mesh.volume
+        if not np.isnan(volume) and volume > 0:
+            debug_print(f"Scaled mesh has valid volume: {volume}")
+            return scaled_mesh.vertices, scaled_mesh.faces
+        
+        # Absolute last resort: return a small valid cube
+        debug_print("Using absolute fallback: minimal cube")
+        size = max(np.max(extents), 0.01)  # At least 1cm
+        half = size / 2
+        fallback_vertices = np.array([
+            [-half, -half, -half], [half, -half, -half],
+            [half, half, -half], [-half, half, -half],
+            [-half, -half, half], [half, -half, half],
+            [half, half, half], [-half, half, half]
+        ]) + center
+        
+        fallback_faces = np.array([
+            [0, 1, 2], [0, 2, 3],
+            [4, 6, 5], [4, 7, 6],
+            [0, 3, 7], [0, 7, 4],
+            [1, 5, 6], [1, 6, 2],
+            [0, 4, 5], [0, 5, 1],
+            [3, 2, 6], [3, 6, 7]
+        ])
+        
+        return fallback_vertices, fallback_faces
