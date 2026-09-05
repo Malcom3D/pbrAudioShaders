@@ -157,8 +157,6 @@ class RotationSolver:
         volume = mesh.volume
         center_of_mass = mesh.center_mass
 
-        debug_print('Object properties - ', config_obj.name, 'volume', volume, 'mesh.mass', mesh.mass, 'center_of_mass', center_of_mass, 'mesh.moment_inertia', mesh.moment_inertia)
-
         # Check for NaN or invalid values and apply fallbacks
         self.inertia_tensor = mesh.moment_inertia if not np.all(np.isfinite(mesh.moment_inertia)) else np.eye(3) * 0.001
         self.mass = mesh.mass if not np.isfinite(mesh.mass) and mesh.mass > 9e-5 else 0.0001
