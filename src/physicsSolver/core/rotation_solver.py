@@ -159,7 +159,7 @@ class RotationSolver:
 
         # Check for NaN or invalid values and apply fallbacks
         self.inertia_tensor = mesh.moment_inertia if not np.all(np.isfinite(mesh.moment_inertia)) else np.eye(3) * 0.001
-        self.mass = mesh.mass if not np.isfinite(self.mass) and mesh.mass > 9e-5 else 0.0001
+        self.mass = mesh.mass if not np.isfinite(mesh.mass) and mesh.mass > 9e-5 else 0.0001
 
 #        # Regularize and compute inverse inertia tensor
 #        epsilon = 1e-12 * np.trace(self.inertia_tensor) if np.trace(self.inertia_tensor) > 0 else 1e-12
