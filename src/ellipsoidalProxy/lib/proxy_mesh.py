@@ -352,16 +352,17 @@ class ProxyMesh:
 #        debug_print(f"Fixed proxy extents: {fixed_extents}")
 
         # Final check - ensure the fix worked
-        fixed_volume = trimesh.Trimesh(vertices=fixed_vertices, proxy_faces=faces).volume
-        while fixed_volume < 1e-10:
-            for dim in range(3):
-                # Still too small - apply additional scaling
-                additional_scale = (original_extents[dim] * 1.1) / (fixed_extents[dim] + 1e-10)
-                fixed_vertices[:, dim] = (fixed_vertices[:, dim] - original_center[dim]) * additional_scale + original_center[dim]
-                fixed_volume = trimesh.Trimesh(vertices=fixed_vertices, proxy_faces=faces).volume
+#        fixed_volume = trimesh.Trimesh(vertices=fixed_vertices, faces=proxy_faces).volume
+#        while fixed_volume < 1e-10:
+#            for dim in range(3):
+#                # Still too small - apply additional scaling
+#                additional_scale = (original_extents[dim] * 1.1) / (fixed_extents[dim] + 1e-10)
+#                fixed_vertices[:, dim] = (fixed_vertices[:, dim] - original_center[dim]) * additional_scale + original_center[dim]
+#                fixed_volume = trimesh.Trimesh(vertices=fixed_vertices, faces=proxy_faces).volume
+                
 
         for dim in range(3):
-            if fixed_extents[dim] < original_extents[dim] * 0.9 # 90% of original
+            if fixed_extents[dim] < original_extents[dim] * 0.9: # 90% of original
                 # Still too small - apply additional scaling
                 additional_scale = (original_extents[dim] * 1.1) / (fixed_extents[dim] + 1e-10)
                 fixed_vertices[:, dim] = (fixed_vertices[:, dim] - original_center[dim]) * additional_scale + original_center[dim]
