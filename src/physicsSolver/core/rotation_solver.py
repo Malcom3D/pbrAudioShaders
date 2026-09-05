@@ -374,8 +374,10 @@ class RotationSolver:
         # Simple integration: R(t) = R0 * exp(ω * t)
         delta_rot_vec = start_ang_vel * delta_time
         delta_rot = Rotation.from_rotvec(delta_rot_vec)
+        if np.linalg.norm(delta_rot.as_quat()) == 0: # zero norm quaternion
+            delta_rot = np.array([0, 0, 0, 1])  # Identity quaternion
         return start_rot * delta_rot
-    
+
     def _angular_velocity(self, rot1: Rotation, rot2: Rotation, dt: float) -> np.ndarray:
         """
         Estimate angular velocity between two rotations.
