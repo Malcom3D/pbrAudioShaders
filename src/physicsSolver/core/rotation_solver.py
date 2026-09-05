@@ -156,9 +156,10 @@ class RotationSolver:
         volume = mesh.volume
         center_of_mass = mesh.center_mass
         mesh.density = config_obj.acoustic_shader.density
-        self.inertia_tensor = mesh.moment_inertia
-#        self.mass = mesh.mass
-        self.mass = mesh.mass if mesh.mass > 9e-5 else 0.0001
+
+        # Check for NaN or invalid values and apply fallbacks
+        self.inertia_tensor = mesh.moment_inertia if not np.all(np.isfinite(mesh.moment_inertia)) else np.eye(3) * 0.001
+        self.mass = mesh.mass if not np.isfinite(self.mass) and mesh.mass > 9e-5 else 0.0001
 
 #        # Regularize and compute inverse inertia tensor
 #        epsilon = 1e-12 * np.trace(self.inertia_tensor) if np.trace(self.inertia_tensor) > 0 else 1e-12
@@ -319,7 +320,7 @@ class RotationSolver:
         
         # Inertia tensor in world coordinates
         I_world = R @ self.inertia_tensor @ R.T
-        if np.linalg.det(I_world):
+        if np.all(np.isfinite(I_world)) and np.linalg.det(I_world):
             I_inv_world = np.linalg.inv(I_world)
         else:
             I_inv_world = np.linalg.lstsq(I_world, np.eye(3,3), rcond=None)[0]
@@ -334,7 +335,7 @@ class RotationSolver:
         
         # Effective mass matrix for contact point
         K = np.eye(3) / self.mass - r_cross @ I_inv_world @ r_cross
-        if np.linalg.det(K):
+        if np.all(np.isfinite(K)) and np.linalg.det(K):
             K_inv = np.linalg.inv(K)
         else:
             K_inv = np.linalg.lstsq(K, np.eye(3,3), rcond=None)[0]
@@ -369,14 +370,20 @@ class RotationSolver:
     
     def _integrate_to_impact(self, start_rot: Rotation, start_ang_vel: np.ndarray, delta_time: float) -> Rotation:
         """Integrate rotation forward in time assuming constant angular velocity."""
-        # Simple integration: R(t) = R0 * exp(ω * t)
-        delta_rot_vec = start_ang_vel * delta_time
-        delta_rot = Rotation.from_rotvec(delta_rot_vec)
-        if np.linalg.norm(delta_rot.as_quat()) == 0: # zero norm quaternion
-            delta_rot = np.array([0, 0, 0, 1])  # Identity quaternion
-        if np.linalg.norm(start_rot.as_quat()) == 0: # zero norm quaternion
-            start_rot = np.array([0, 0, 0, 1])  # Identity quaternion
-        return start_rot * delta_rot
+        try:
+            # Simple integration: R(t) = R0 * exp(ω * t)
+            delta_rot_vec = start_ang_vel * delta_time
+
+            # Check for invalid angular velocity
+            if not np.all(np.isfinite(delta_rot_vec)):
+                print("Warning: Invalid angular velocity detected, returning start rotation.")
+                return start_rot
+
+            delta_rot = Rotation.from_rotvec(delta_rot_vec)
+            return start_rot * delta_rot
+        except Exception as e:
+            print(f"Error in _integrate_to_impact: {e}. Returning start rotation.")
+            return start_rot
 
     def _angular_velocity(self, rot1: Rotation, rot2: Rotation, dt: float) -> np.ndarray:
         """
