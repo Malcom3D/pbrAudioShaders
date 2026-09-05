@@ -259,9 +259,7 @@ class FractureDetector:
             event.save(f"{self.fracture_dir}/event_{obj_idx}_{event.frame:.6f}_{i:02d}.pkl")
             events.append(event)
 
-            debug_print(f"Detected {fracture_type.value} fracture for {original_obj.name} "
-                       f"at frame {event.frame:.6f}, duration: {event.crack_duration:.6f}s, "
-                       f"energy: {event.fracture_energy:.6f}J")
+            debug_print(f"Detected {fracture_type.value} fracture for {original_obj.name} at frame {event.frame}, duration: {event.crack_duration}s, energy: {event.fracture_energy}J")
 
         return events
 

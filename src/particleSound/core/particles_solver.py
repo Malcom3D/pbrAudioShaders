@@ -89,97 +89,73 @@ class ParticlesSolver:
         for particle_cfg in config.particles:
             if particle_cfg.idx == particle_idx:
             # Load particle data from files
-            particle_frames = self._load_particle(particle_cfg)
-        
-        if len(particle_frames) == 0:
-            debug_print(f"No particle data found in {particle_data_path}")
-            return None
-        
-        # Build master particle list
-        master_particles = self._build_master_particle_list(particle_frames)
-        
-        if len(master_particles) == 0:
-            debug_print("No particles found")
-            return None
-        
-        debug_print(f"Processing {len(master_particles)} particles across {len(particle_frames)} frames")
+            positions, rotations, states = self._load_particle(particle_cfg)
+            break
         
         # Extract frame indices
-        frame_indices = sorted(particle_frames.keys())
+        frame_indices = np.arange(positions.shape[0])
         frame_times = np.array(frame_indices) * self.sample_rate / self.sfps
         
         # Initialize particle trajectory data
-        particle_count = len(master_particles)
-        particle_data = ParticleTrajectoryData(particle_idx=particle_idx, particle_count=particle_count, sfps=self.sfps, sample_rate=self.sample_rate, frames=frame_indices)
+        particle_count = positions[0].shape[0]
+        particle_data = ParticleTrajectoryData(frames=frame_times, particle_idx=particle_idx, is_static=particle_cfg.static, sfps=self.sfps, sample_rate=self.sample_rate, particle_count=particle_count)
+
+        debug_print(f"Processing {particle_count} particles across {positions.shape[0]} frames")
         
-        # Process each particle
-        for p_idx, particle_id in enumerate(master_particles):
-            # Extract particle data across all frames
-            particle_positions = []
-            particle_rotations = []
-            particle_states = []
-            valid_frames = []
+        if particle_cfg.static:
+            particle_data.positions = positions
+            particle_data.rotations = rotations
+            particle_data.states = states
+
+        else:
+            # Process each particle
+            particles_positions, particles_rotations, particles_states = ([] for _ in range(3))
+            for particle_idx in range(particle_count):
+                for frame_idx in frame_indices:
+                    # Extract particle data across all frames
+                    particle_positions, particle_rotations, particle_states = ([] for _ in range(3))
             
-            for frame_idx in frame_indices:
-                if frame_idx in particle_frames:
-                    frame_data = particle_frames[frame_idx]
-                    if particle_id in frame_data:
-                        data = frame_data[particle_id]
-                        particle_positions.append(data['position'])
-                        particle_rotations.append(data['rotation'])
-                        particle_states.append(data['state'])
-                        valid_frames.append(frame_idx)
-            
-            if len(valid_frames) < 2:
-                # Not enough data for interpolation
-                particle_data.is_static[p_idx] = True
-                if len(valid_frames) == 1:
-                    particle_data.static_positions[p_idx] = particle_positions[0]
-                    particle_data.static_rotations[p_idx] = particle_rotations[0]
-                continue
+                    particle_positions.append(positions[frame_idx][particle_idx])
+                    particle_rotations.append(rotations[frame_idx][particle_idx])
+                    particle_states.append(states[frame_idx][particle_idx])
+
+                particles_positions.append(particle_positions)
+                particles_rotations.append(particle_rotations)
+                particles_states.append(particle_states)
             
             # Convert to numpy arrays
-            positions_array = np.array(particle_positions)
-            rotations_array = np.array(particle_rotations)
-            states_array = np.array(particle_states)
-            valid_times = np.array(valid_frames) * self.sample_rate / self.sfps
-            
-            # Check if particle is static
-            if self._is_particle_static(positions_array, rotations_array):
-                particle_data.is_static[p_idx] = True
-                particle_data.static_positions[p_idx] = positions_array[0]
-                particle_data.static_rotations[p_idx] = rotations_array[0]
-                particle_data.states[p_idx] = states_array[0]
-                continue
+            positions_array = np.array(particles_positions)
+            rotations_array = np.array(particles_rotations)
+            states_array = np.array(particles_states)
             
             # Detect unsampled intermediate positions using PositionSolver algorithm
-            unsampled_positions = self._detect_unsampled_positions(positions=positions_array, times=valid_times)
+            for particle_idx in range(particle_count):
+                unsampled_positions = self._detect_unsampled_positions(positions=positions_array[particle_idx], times=frame_times)
             
-            # If unsampled positions found, insert them into the data
-            if len(unsampled_positions) > 0:
-                debug_print(f"Particle {p_idx}: Found {len(unsampled_positions)} unsampled positions")
+                # If unsampled positions found, insert them into the data
+                if len(unsampled_positions) > 0:
+                    debug_print(f"Particle {particle_idx}: Found {len(unsampled_positions)} unsampled positions")
                 
-                # Create combined data with unsampled positions
-                all_times = np.sort(np.concatenate([valid_times, [p['time'] for p in unsampled_positions]]))
+                    # Create combined data with unsampled positions
+                    all_times = np.sort(np.concatenate([frame_times, [p['time'] for p in unsampled_positions]]))
                 
-                # Interpolate positions at all times
-                all_positions = self._interpolate_positions(times=valid_times, positions=positions_array, eval_times=all_times)
+                    # Interpolate positions at all times
+                    all_positions = self._interpolate_positions(times=frame_times, positions=positions_array[particle_idx], eval_times=all_times)
                 
-                # Estimate rotations at unsampled positions using RotationSolver algorithm
-                all_rotations = self._estimate_rotations(times=valid_times, rotations=rotations_array, positions=positions_array, eval_times=all_times, unsampled_positions=unsampled_positions)
-                
-                # Create interpolation functions
-                for coord_idx in range(3):
-                    particle_data.positions[p_idx, coord_idx] = CubicSpline(all_times, all_positions[:, coord_idx], extrapolate=1)
-                    particle_data.rotations[p_idx, coord_idx] = CubicSpline(all_times, all_rotations[:, coord_idx], extrapolate=1)
-            else:
-                # No unsampled positions - use original data
-                for coord_idx in range(3):
-                    particle_data.positions[p_idx, coord_idx] = CubicSpline(valid_times, positions_array[:, coord_idx], extrapolate=1)
-                    particle_data.rotations[p_idx, coord_idx] = CubicSpline(valid_times, rotations_array[:, coord_idx], extrapolate=1)
+                    # Estimate rotations at unsampled positions using RotationSolver algorithm
+                    all_rotations = self._estimate_rotations(times=valid_times, rotations=rotations_array[particle_idx], positions=positions_array[particle_idx], eval_times=all_times, unsampled_positions=unsampled_positions)
+
+                    # Create interpolation functions
+                    for coord_idx in range(3):
+                        particle_data.positions[particle_idx, coord_idx] = CubicSpline(all_times, all_positions[:, coord_idx], extrapolate=1)
+                        particle_data.rotations[particle_idx, coord_idx] = CubicSpline(all_times, all_rotations[:, coord_idx], extrapolate=1)
+                else:
+                    # No unsampled positions - use original data
+                    for coord_idx in range(3):
+                        particle_data.positions[particle_idx, coord_idx] = CubicSpline(frame_times, positions_array[particle_idx][:, coord_idx], extrapolate=1)
+                        particle_data.rotations[particle_idx, coord_idx] = CubicSpline(frame_times, rotations_array[particle_idx][:, coord_idx], extrapolate=1)
             
-            # Set particle state (use most common state)
-            particle_data.states[p_idx] = self._get_most_common_state(states_array)
+            particle_data.states = states_array
         
         # Register with entity manager
         _ = self.entity_manager.register('trajectories', particle_data)
@@ -189,50 +165,6 @@ class ParticlesSolver:
             output_file = f"{self.output_dir}/{obj_name}_particles.pkl"
             particle_data.save(output_file)
         
-    def _build_master_particle_list(self, particle_frames: Dict[int, Dict[str, Dict]]) -> List[str]:
-        """
-        Build master list of all particle identifiers.
-        
-        Returns:
-        --------
-        List of particle identifiers
-        """
-        master_list = []
-        seen = set()
-        
-        for frame_idx in sorted(particle_frames.keys()):
-            frame_data = particle_frames[frame_idx]
-            for particle_id in frame_data.keys():
-                if particle_id not in seen:
-                    seen.add(particle_id)
-                    master_list.append(particle_id)
-        
-        return master_list
-    
-    def _is_particle_static(self, positions: np.ndarray, rotations: np.ndarray) -> bool:
-        """
-        Check if a particle is static across all frames.
-        
-        Parameters:
-        -----------
-        positions : np.ndarray
-            Array of shape (n_frames, 3)
-        rotations : np.ndarray
-            Array of shape (n_frames, 3)
-            
-        Returns:
-        --------
-        bool
-            True if particle is static
-        """
-        if len(positions) < 2:
-            return True
-        
-        position_static = np.all(np.abs(positions - positions[0]) < self.position_tolerance)
-        rotation_static = np.all(np.abs(rotations - rotations[0]) < self.position_tolerance)
-        
-        return position_static and rotation_static
-    
     def _detect_unsampled_positions(self, positions: np.ndarray, times: np.ndarray) -> List[Dict]:
         """
         Detect unsampled intermediate positions using the PositionSolver algorithm.
@@ -257,25 +189,17 @@ class ParticlesSolver:
         if len(positions) < 4:
             return unsampled
         
-        position_old = np.zeros(3)
-        
-        for index in range(2, len(positions) - 2):
+        for index in range(2, positions.shape[0] - 2):
             # Find intersection point using the algorithm from PositionSolver
             intersection_point = self._intersection_point(positions, index)
             
             if intersection_point is not None:
-                error = np.sum((position_old - intersection_point)**2)
-                
-                if error < 1e-06:
-                    # Found an intersection - this is an unsampled position
-                    intersection_time = self._intersection_time(positions=positions, times=times, frame=index, intersection_point=intersection_point)
+                intersection_time = self._intersection_time(positions=positions, times=times, frame=index, intersection_point=intersection_point)
                     
-                    # Check if this time is sufficiently far from existing samples
-                    time_diffs = np.abs(times - intersection_time)
-                    if np.min(time_diffs) > 1.0 / self.sfps:
-                        unsampled.append({'time': intersection_time, 'position': intersection_point})
-                
-                position_old = intersection_point
+                # Check if this time is sufficiently far from existing samples
+                time_diffs = np.abs(times - intersection_time)
+                if np.min(time_diffs) > 1.0 / self.sample_rate:
+                    unsampled.append({'time': intersection_time, 'position': intersection_point})
         
         return unsampled
     
@@ -301,7 +225,7 @@ class ParticlesSolver:
         Optional[np.ndarray]
             Intersection point, or None if lines are parallel
         """
-        if if frame < 2 or frame >= len(positions) - 2:
+        if frame < 2 or frame >= positions.shape[0] - 2:
             return None
         
         # Get surrounding points
@@ -351,7 +275,7 @@ class ParticlesSolver:
         positions : np.ndarray
             Array of positions
         times : np.ndarray
-            Array of frame times
+            Array of frame times @sample_rate
         frame : int
             Frame index
         intersection_point : np.ndarray
@@ -520,27 +444,3 @@ class ParticlesSolver:
                             result[i] = rotations[before_idx]
         
         return result
-    
-    def _get_most_common_state(self, states: np.ndarray) -> int:
-        """
-        Get the most common state from an array of states.
-        
-        Parameters:
-        -----------
-        states : np.ndarray
-            Array of particle states
-            
-        Returns:
-        --------
-        int
-            Most common state
-        """
-        if len(states) == 0:
-            return 0
-        
-        # Count occurrences of each state
-        unique, counts = np.unique(states, return_counts=True)
-        
-        # Return the most common state
-        return int(unique[np.argmax(counts)])
-
