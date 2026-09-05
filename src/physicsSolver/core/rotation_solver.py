@@ -336,7 +336,11 @@ class RotationSolver:
         
         # Effective mass matrix for contact point
         K = np.eye(3) / self.mass - r_cross @ I_inv_world @ r_cross
-        K_inv = np.linalg.inv(K)
+        if np.linalg.det(K):
+            K_inv = np.linalg.inv(K)
+        else:
+            K_inv = np.linalg.lstsq(K, np.eye(3,3), rcond=None)[0]
+#        K_inv = np.linalg.inv(K)
         
         # Normal impulse (using coefficient of restitution)
         j_n = -(1 + self.coefficient_of_restitution) * v_n / np.dot(contact_normal, K_inv @ contact_normal)
