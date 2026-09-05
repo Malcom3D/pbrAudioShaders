@@ -35,7 +35,6 @@ from .core.distance_solver import DistanceSolver
 from .core.force_solver import ForceSolver
 from .core.force_synth import ForceSynth
 from .core.collision_solver import CollisionSolver
-from .core.particles_solver import ParticlesSolver
 from .core.physics_engine import physicsEngine
 from .lib.contact_geometry import ContactGeometry
 from .lib.hertzian_contact import HertzianContact
@@ -43,7 +42,6 @@ from .lib.force_data import ContactType, ForceData, ForceDataSequence
 from .lib.modal_vertices import ModalVertices
 from .lib.trajectory_data import tmpTrajectoryData, TrajectoryData
 from .lib.collision_data import CollisionType, CollisionData
-from .lib.particle_trajectory_data import ParticleTrajectoryData
 
 
 __all__ = [
@@ -56,7 +54,6 @@ __all__ = [
     'ForceSolver',
     'ForceSynth',
     'CollisionSolver',
-    'ParticlesSolver',
     'physicsEngine',
     'ContactGeometry',
     'HertzianContact',
@@ -66,7 +63,6 @@ __all__ = [
     'ModalVertices',
     'tmpTrajectoryData',
     'TrajectoryData',
-    'ParticleTrajectoryData',
     'CollisionType',
     'CollisionData'
 ]
