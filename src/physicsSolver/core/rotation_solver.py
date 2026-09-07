@@ -321,11 +321,19 @@ class RotationSolver:
         # Inertia tensor in world coordinates
         I_world = R @ self.inertia_tensor @ R.T
 #        I_inv_world = R @ self.inv_inertia_tensor @ R.T
-        if np.all(np.isfinite(I_world)) and np.linalg.det(I_world):
-            I_inv_world = np.linalg.inv(I_world)
-        else:
-            I_inv_world = np.linalg.lstsq(I_world, np.eye(3,3), rcond=None)[0]
-        
+
+        # Use lstsq or pinv as fallback
+        try:
+            if np.all(np.isfinite(I_world)) and not np.linalg.det(I_world) == 0:
+                I_inv_world = np.linalg.inv(I_world)
+            else:
+                I_inv_world = np.linalg.lstsq(I_world, np.eye(3,3), rcond=None)[0]
+        except:
+                try:
+                    I_inv_world = np.linalg.pinv(I_world)
+                except np.linalg.LinAlgError:
+                    I_inv_world = np.linalg.pinv(np.eye(3) * 0.001)
+
         # Compute effective mass matrix
         r_cross = np.array([
             [0, -r[2], r[1]],
@@ -336,10 +344,17 @@ class RotationSolver:
         # Effective mass matrix for contact point
         K = np.eye(3) / self.mass - r_cross @ I_inv_world @ r_cross
 #        K_inv = np.linalg.inv(K)
-        if np.all(np.isfinite(K)) and np.linalg.det(K):
-            K_inv = np.linalg.inv(K)
-        else:
-            K_inv = np.linalg.lstsq(K, np.eye(3,3), rcond=None)[0]
+
+        # Use lstsq or pinv as fallback
+        try:
+            if np.all(np.isfinite(K)) and np.linalg.det(K):
+                K_inv = np.linalg.inv(K)
+            else:
+                K_inv = np.linalg.lstsq(K, np.eye(3,3), rcond=None)[0]
+        except:
+                K_inv = np.linalg.pinv(K)
+            except np.linalg.LinAlgError:
+                K_inv = np.linalg.pinv(np.eye(3))
         
         # Normal impulse (using coefficient of restitution)
         j_n = -(1 + self.coefficient_of_restitution) * v_n / np.dot(contact_normal, K_inv @ contact_normal)
