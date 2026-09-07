@@ -69,7 +69,7 @@ class ParticlesSolver:
         # Cache for particle data
         self._particle_data_cache = {}
     
-    def compute(self, particle_idx: int, particle_name: str = None) -> Optional[ParticleTrajectoryData]:
+    def compute(self, particle_idx: int) -> Optional[ParticleTrajectoryData]:
         """
         Compute particle trajectories from particle sequence
         
@@ -77,8 +77,6 @@ class ParticlesSolver:
         -----------
         particle_idx : int
             ID of particles object
-        particle_name : str, optional
-            Object name for output naming
             
         Returns:
         --------
