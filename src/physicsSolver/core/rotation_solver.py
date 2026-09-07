@@ -329,10 +329,10 @@ class RotationSolver:
             else:
                 I_inv_world = np.linalg.lstsq(I_world, np.eye(3,3), rcond=None)[0]
         except:
-                try:
-                    I_inv_world = np.linalg.pinv(I_world)
-                except np.linalg.LinAlgError:
-                    I_inv_world = np.linalg.pinv(np.eye(3) * 0.001)
+            try:
+                I_inv_world = np.linalg.pinv(I_world)
+            except np.linalg.LinAlgError:
+                I_inv_world = np.linalg.pinv(np.eye(3) * 0.001)
 
         # Compute effective mass matrix
         r_cross = np.array([
@@ -352,6 +352,7 @@ class RotationSolver:
             else:
                 K_inv = np.linalg.lstsq(K, np.eye(3,3), rcond=None)[0]
         except:
+            try:
                 K_inv = np.linalg.pinv(K)
             except np.linalg.LinAlgError:
                 K_inv = np.linalg.pinv(np.eye(3))
