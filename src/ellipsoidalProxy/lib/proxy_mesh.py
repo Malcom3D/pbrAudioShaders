@@ -109,20 +109,10 @@ class ProxyMesh:
         center_local_0 = (min_coords_0 + max_coords_0) / 2
 
         # Generate proxy vertices for first frame (reference)
-        proxy_vertices_local_0, proxy_faces_0 = self._generate_proxy_mesh(
-            proxy_type=config_obj.proxy_type, 
-            extents=extents_0, 
-            center=center_local_0
-        )
+        proxy_vertices_local_0, proxy_faces_0 = self._generate_proxy_mesh(proxy_type=config_obj.proxy_type, extents=extents_0, center=center_local_0)
         
         # Validate and fix the proxy mesh for first frame
-        proxy_vertices_local_0, proxy_faces_0 = self._validate_and_fix_mesh(
-            vertices=proxy_vertices_local_0,
-            faces=proxy_faces_0,
-            proxy_type=config_obj.proxy_type,
-            extents=extents_0,
-            center=center_local_0
-        )
+        proxy_vertices_local_0, proxy_faces_0 = self._validate_and_fix_mesh(vertices=proxy_vertices_local_0, faces=proxy_faces_0, proxy_type=config_obj.proxy_type, extents=extents_0, center=center_local_0)
 
         # Build KD-tree for first frame's original vertices
         tree_original_0 = cKDTree(vertices_local_0)
