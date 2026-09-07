@@ -195,15 +195,18 @@ class RotationSolver:
                 initial_guess = rot_guess.as_rotvec()
         
             # Optimize
-            result = minimize(
-                lambda x: objective_function(frame_before, frame, frame_after, x, use_post_impact=True),
-                initial_guess,
-                method='L-BFGS-B',
-                bounds=[(-np.pi, np.pi)] * 3,  # Bound rotation vector components
-                options={'maxiter': max_iterations, 'ftol': tolerance, 'disp': False}
-            )
-        
-            optimal_rot = Rotation.from_rotvec(result.x)
+            try:
+                result = minimize(
+                    lambda x: objective_function(frame_before, frame, frame_after, x, use_post_impact=True),
+                    initial_guess,
+                    method='L-BFGS-B',
+                    bounds=[(-np.pi, np.pi)] * 3,  # Bound rotation vector components
+                    options={'maxiter': max_iterations, 'ftol': tolerance, 'disp': False}
+                )
+                optimal_rot = Rotation.from_rotvec(result.x)
+            except:
+                optimal_rot = rot_interp  # Use the simple interpolation as fallback
+
             # Check if the computed rotation is valid
             if not self._is_valid_rotation(optimal_rot):
                 optimal_rot = slerp(impact_time)
