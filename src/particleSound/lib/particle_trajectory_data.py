@@ -32,12 +32,12 @@ class ParticleTrajectoryData:
     Stores interpolated positions and rotations for multiple particles.
     Each particle has its own set of interpolation functions.
     """
-    frames: np.ndarray  # interpolated frame number
-    particle_idx: int
+    frames: np.ndarray = None # interpolated frame number
+    particle_idx: int = None
+    sfps: float  = None
+    sample_rate: int = None
+    particle_count: int = None
     is_static: bool = False
-    sfps: float 
-    sample_rate: int
-    particle_count: int
     positions: np.ndarray = None  # dtype=object, shape (particle_count, 3)  where each element is a CubicSpline
     rotations: np.ndarray = None  # dtype=object, shape (particle_count, 3)  where each element is a CubicSpline
     states: np.ndarray = None  # Shape: (particle_count,) dtype=int8  0=dead, 1=alive, 2=unborn
@@ -47,7 +47,7 @@ class ParticleTrajectoryData:
             if self.is_static:
                 return self.states.copy()
             particle_cloud = []
-            for particle_idx in range(self.particle_count)
+            for particle_idx in range(self.particle_count):
                 if self.frames.shape[0] > 1 and sample_idx < self.frames[-1]:
                     idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
                 elif self.frames.shape[0] > 1:
@@ -83,7 +83,7 @@ class ParticleTrajectoryData:
             if self.is_static:
                 return self.positions.copy()
             particle_cloud = []
-            for particle_idx in range(self.particle_count)
+            for particle_idx in range(self.particle_count):
                 x = self.positions[particle_idx, 0](sample_idx)
                 y = self.positions[particle_idx, 1](sample_idx)
                 z = self.positions[particle_idx, 2](sample_idx)
@@ -118,7 +118,7 @@ class ParticleTrajectoryData:
             if self.is_static:
                 return self.rotations.copy()
             particle_cloud = []
-            for particle_idx in range(self.particle_count)
+            for particle_idx in range(self.particle_count):
                 x = self.rotations[particle_idx, 0](sample_idx)
                 y = self.rotations[particle_idx, 1](sample_idx)
                 z = self.rotations[particle_idx, 2](sample_idx)
@@ -153,7 +153,7 @@ class ParticleTrajectoryData:
             if self.is_static:
                 return np.zeros((self.particle_count, 3))
             particle_cloud = []
-            for particle_idx in range(self.particle_count)
+            for particle_idx in range(self.particle_count):
                 x = self.positions[particle_idx, 0](sample_idx, 1) * self.sample_rate
                 y = self.positions[particle_idx, 1](sample_idx, 1) * self.sample_rate
                 z = self.positions[particle_idx, 2](sample_idx, 1) * self.sample_rate
@@ -188,7 +188,7 @@ class ParticleTrajectoryData:
             if self.is_static:
                 return np.zeros((self.particle_count, 3))
             particle_cloud = []
-            for particle_idx in range(self.particle_count)
+            for particle_idx in range(self.particle_count):
                 x = self.positions[particle_idx, 0](sample_idx, 2) * self.sample_rate**2
                 y = self.positions[particle_idx, 1](sample_idx, 2) * self.sample_rate**2
                 z = self.positions[particle_idx, 2](sample_idx, 2) * self.sample_rate**2
@@ -223,7 +223,7 @@ class ParticleTrajectoryData:
             if self.is_static:
                 return np.zeros((self.particle_count, 3))
             particle_cloud = []
-            for particle_idx in range(self.particle_count)
+            for particle_idx in range(self.particle_count):
                 x = self.rotations[particle_idx, 0](sample_idx, 1) * self.sample_rate
                 y = self.rotations[particle_idx, 1](sample_idx, 1) * self.sample_rate
                 z = self.rotations[particle_idx, 2](sample_idx, 1) * self.sample_rate

@@ -51,7 +51,7 @@ class ParticlesSolver:
     velocity_threshold: float = 0.01   # Minimum velocity change for detection
     sampling_interval: float = 0.001   # Sampling interval for search
     
-       def __post_init__(self):
+    def __post_init__(self):
         config = self.entity_manager.get('config')
         
         set_debug(config.system.debug)
@@ -86,19 +86,19 @@ class ParticlesSolver:
         config = self.entity_manager.get('config')
         for particle_cfg in config.particles:
             if particle_cfg.idx == particle_idx:
-            # Load particle data from files
-            positions, rotations, states = self._load_particle(particle_cfg)
-            break
+                # Load particle data from files
+                positions, rotations, states = _load_particle(particle_cfg)
+                break
         
         # Extract frame indices
-        frame_indices = np.arange(positions.shape[0])
+        frame_indices = np.arange(len(positions))
         frame_times = np.array(frame_indices) * self.sample_rate / self.sfps
         
         # Initialize particle trajectory data
         particle_count = positions[0].shape[0]
         particle_data = ParticleTrajectoryData(frames=frame_times, particle_idx=particle_idx, is_static=particle_cfg.static, sfps=self.sfps, sample_rate=self.sample_rate, particle_count=particle_count)
 
-        debug_print(f"Processing {particle_count} particles across {positions.shape[0]} frames")
+        debug_print(f"Processing {particle_count} particles across {len(positions)} frames")
         
         if particle_cfg.static:
             particle_data.positions = positions
@@ -107,24 +107,13 @@ class ParticlesSolver:
 
         else:
             # Process each particle
-            particles_positions, particles_rotations, particles_states = ([] for _ in range(3))
+            particles_positions, particles_rotations, particles_states = (np.zeros((particle_count, frame_indices.shape[0], 3)) for _ in range(3))
             for particle_idx in range(particle_count):
                 for frame_idx in frame_indices:
                     # Extract particle data across all frames
-                    particle_positions, particle_rotations, particle_states = ([] for _ in range(3))
-            
-                    particle_positions.append(positions[frame_idx][particle_idx])
-                    particle_rotations.append(rotations[frame_idx][particle_idx])
-                    particle_states.append(states[frame_idx][particle_idx])
-
-                particles_positions.append(particle_positions)
-                particles_rotations.append(particle_rotations)
-                particles_states.append(particle_states)
-            
-            # Convert to numpy arrays
-            positions_array = np.array(particles_positions)
-            rotations_array = np.array(particles_rotations)
-            states_array = np.array(particles_states)
+                    particles_positions[particle_idx, frame_idx] = positions[frame_idx][particle_idx]
+                    particles_rotations[particle_idx, frame_idx] = rotations[frame_idx][particle_idx]
+                    particles_states[particle_idx, frame_idx] = states[frame_idx][particle_idx]
             
             # Detect unsampled intermediate positions using PositionSolver algorithm
             for particle_idx in range(particle_count):
@@ -159,9 +148,8 @@ class ParticlesSolver:
         _ = self.entity_manager.register('trajectories', particle_data)
         
         # Save to file
-        if obj_name:
-            output_file = f"{self.output_dir}/{obj_name}_particles.pkl"
-            particle_data.save(output_file)
+        output_file = f"{self.output_dir}/{particle_cfg.name}.pkl"
+        particle_data.save(output_file)
         
     def _detect_unsampled_positions(self, positions: np.ndarray, times: np.ndarray) -> List[Dict]:
         """
