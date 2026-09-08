@@ -560,7 +560,7 @@ class ParticlesCollisionSolver:
                     collision_margin=self.collision_margin
                 )
                 
-                if len len(contact_vertices) > 0:
+                if len(contact_vertices) > 0:
                     all_contact_vertices.extend(contact_vertices)
                     
                     # Create score event
@@ -833,7 +833,7 @@ class ParticlesCollisionSolver:
         total_samples = int(end_frame + 1000)  # Add some padding for decay
         
         # Initialize score arrays
-        score_type = np.zeros((total_samples, 1),), dtype=np.int32)
+        score_type = np.zeros((total_samples, 1), dtype=np.int32)
         score_vertex_ids = np.zeros((total_samples, len(obj_vertices)), dtype=np.bool_)
         score_contact_area = np.zeros((total_samples, 1), dtype=np.float32)
         

@@ -27,10 +27,12 @@ decimals = 18
 np.set_printoptions(precision=decimals, floatmode='fixed', threshold=np.inf)
 
 from .core.particles_trajectory_solver import ParticlesTrajectorySolver
+from .core.particles_collision_solver import ParticlesCollisionSolver
 from .lib.particles_trajectory_data import ParticlesTrajectoryData
 
 
 __all__ = [
     'ParticlesTrajectorySolver',
+    'ParticlesCollisionSolver',
     'ParticlesTrajectoryData'
 ]
