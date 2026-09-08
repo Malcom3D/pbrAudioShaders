@@ -28,7 +28,7 @@ from pbrAudioCommon import EntityManager
 from pbrAudioCommon import _load_particle
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
-from ..lib.particle_trajectory_data import ParticleTrajectoryData
+from ..lib.particles_trajectory_data import ParticlesTrajectoryData
 
 @dataclass
 class ParticlesTrajectorySolver:
@@ -42,7 +42,7 @@ class ParticlesTrajectorySolver:
     1. Loads particle data from npz files (positions, rotations, sizes, states)
     2. Detects unsampled intermediate positions using the PositionSolver algorithm
     3. Estimates rotations at those positions using the RotationSolver algorithm
-    4. Creates ParticleTrajectoryData with interpolated positions and rotations
+    4. Creates ParticlesTrajectoryData with interpolated positions and rotations
     """
     entity_manager: EntityManager
     
@@ -69,7 +69,7 @@ class ParticlesTrajectorySolver:
         # Cache for particle data
         self._particle_data_cache = {}
     
-    def compute(self, particles_idx: int) -> Optional[ParticleTrajectoryData]:
+    def compute(self, particles_idx: int) -> Optional[ParticlesTrajectoryData]:
         """
         Compute particle trajectories from particle sequence
         
@@ -80,7 +80,7 @@ class ParticlesTrajectorySolver:
             
         Returns:
         --------
-        Optional[ParticleTrajectoryData]
+        Optional[ParticlesTrajectoryData]
             Computed particle trajectory data, or None if failed
         """
         config = self.entity_manager.get('config')
@@ -96,7 +96,7 @@ class ParticlesTrajectorySolver:
         
         # Initialize particle trajectory data
         particles_count = positions[0].shape[0]
-        particles_data = ParticleTrajectoryData(frames=frame_times, particles_idx=particles_idx, is_static=particle_cfg.static, sfps=self.sfps, sample_rate=self.sample_rate, particles_count=particles_count, positions=np.empty((particles_count,3), dtype=object), rotations=np.empty((particles_count,3), dtype=object))
+        particles_data = ParticlesTrajectoryData(frames=frame_times, particles_idx=particles_idx, is_static=particle_cfg.static, sfps=self.sfps, sample_rate=self.sample_rate, particles_count=particles_count, positions=np.empty((particles_count,3), dtype=object), rotations=np.empty((particles_count,3), dtype=object))
 
         debug_print(f"Processing {particles_count} particles across {len(positions)} frames")
         

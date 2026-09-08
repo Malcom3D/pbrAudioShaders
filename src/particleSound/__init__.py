@@ -26,11 +26,11 @@ import numpy as np
 decimals = 18
 np.set_printoptions(precision=decimals, floatmode='fixed', threshold=np.inf)
 
-from .core.particle_trajectory_solver import ParticlesTrajectorySolver
-from .lib.particle_trajectory_data import ParticleTrajectoryData
+from .core.particles_trajectory_solver import ParticlesTrajectorySolver
+from .lib.particles_trajectory_data import ParticlesTrajectoryData
 
 
 __all__ = [
     'ParticlesTrajectorySolver',
-    'ParticleTrajectoryData'
+    'ParticlesTrajectoryData'
 ]
