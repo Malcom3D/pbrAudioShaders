@@ -33,13 +33,14 @@ class ParticleTrajectoryData:
     Each particle has its own set of interpolation functions.
     """
     frames: np.ndarray = None # interpolated frame number
-    particle_idx: int = None
+    particles_idx: int = None
     sfps: float  = None
     sample_rate: int = None
-    particle_count: int = None
+    particles_count: int = None
     is_static: bool = False
     positions: np.ndarray = None  # dtype=object, shape (particle_count, 3)  where each element is a CubicSpline
     rotations: np.ndarray = None  # dtype=object, shape (particle_count, 3)  where each element is a CubicSpline
+    sizes: np.ndarray = None  # Shape: (particle_count,) dtype=float32
     states: np.ndarray = None  # Shape: (particle_count,) dtype=int8  0=dead, 1=alive, 2=unborn
 
     def get_states(self, sample_idx: float, particle_idx: int = None) -> np.ndarray:
@@ -54,7 +55,7 @@ class ParticleTrajectoryData:
                     idx = np.where(self.frames == self.frames[-1])
                 particle_cloud.append(self.states[particle_idx][idx])
             return np.array(particle_cloud)
-
+            
         elif self.is_static and sample_idx == self.frames[0]:
             return self.states[particle_idx]
         elif self.frames.shape[0] > 1 and sample_idx < self.frames[-1]:
@@ -62,6 +63,27 @@ class ParticleTrajectoryData:
         elif self.frames.shape[0] > 1:
             idx = np.where(self.frames == self.frames[-1])
         return self.states[particle_idx][idx]
+
+    def get_sizes(self, sample_idx: float, particle_idx: int = None) -> np.ndarray:
+        if particle_idx is None:
+            if self.is_static:
+                return self.sizes.copy()
+            particle_cloud = []
+            for particle_idx in range(self.particle_count):
+                if self.frames.shape[0] > 1 and sample_idx < self.frames[-1]:
+                    idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
+                elif self.frames.shape[0] > 1:
+                    idx = np.where(self.frames == self.frames[-1])
+                particle_cloud.append(self.sizes[particle_idx][idx])
+            return np.array(particle_cloud)
+
+        elif self.is_static and sample_idx == self.frames[0]:
+            return self.sizes[particle_idx]
+        elif self.frames.shape[0] > 1 and sample_idx < self.frames[-1]:
+            idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
+        elif self.frames.shape[0] > 1:
+            idx = np.where(self.frames == self.frames[-1])
+        return self.sizes[particle_idx][idx]
 
     def get_position(self, sample_idx: float, particle_idx: int = None) -> np.ndarray:
         """
