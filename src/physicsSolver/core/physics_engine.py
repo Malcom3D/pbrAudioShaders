@@ -27,7 +27,7 @@ from dask import config as dask_config
 #dask_config.set(scheduler='processes', num_workers=1024)
 dask_config.set({'num_workers': 1024, 'optimization.fuse.active': True, 'optimization.fuse.max_depth': 10,})
 
-from pbrAudioCommon import EntityManager
+from pbrAudioCommon import EntityManager, CollisionData, ForceDataSequence, ModalVertices
 from pbrAudioCommon import _update_status
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
@@ -43,10 +43,7 @@ from ..core.force_solver import ForceSolver
 from ..core.collision_solver import CollisionSolver
 from ..core.force_synth import ForceSynth
 
-from ..lib.collision_data import CollisionData
 from ..lib.trajectory_data import TrajectoryData, tmpTrajectoryData
-from ..lib.force_data import ForceDataSequence
-from ..lib.modal_vertices import ModalVertices
 
 @dataclass
 class physicsEngine:

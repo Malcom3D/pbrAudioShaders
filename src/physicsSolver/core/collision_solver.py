@@ -26,14 +26,11 @@ from typing import Any, List, Tuple, Dict, Optional
 from dataclasses import dataclass, field
 from itertools import groupby
 
-from pbrAudioCommon import EntityManager
+from pbrAudioCommon import EntityManager, CollisionData, ModalVertices, ContactType
 from pbrAudioCommon import ScoreEvent, ScoreTrack
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
-from ellipsoidalProxy import ProxyPhysics
 
-from ..lib.collision_data import CollisionData
-from ..lib.modal_vertices import ModalVertices
-from ..lib.force_data import ContactType
+from ellipsoidalProxy import ProxyPhysics
 
 @dataclass
 class CollisionSolver:

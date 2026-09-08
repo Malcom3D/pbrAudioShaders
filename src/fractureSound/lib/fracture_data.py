@@ -16,11 +16,6 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# pbrAudioShaders/src/fractureSound/lib/fracture_data.py
-"""
-Fracture event data structures.
-"""
-
 import os
 import pickle
 import numpy as np
@@ -28,8 +23,8 @@ from enum import Enum
 from typing import List, Tuple, Dict, Any, Optional
 from dataclasses import dataclass, field
 
-from physicsSolver import CollisionData, ForceDataSequence, TrajectoryData
-
+from physicsSolver import TrajectoryData
+from pbrAudioCommon import CollisionData, ForceDataSequence
 
 class FractureType(Enum):
     """Types of fracture events."""

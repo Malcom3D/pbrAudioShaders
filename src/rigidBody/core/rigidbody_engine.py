@@ -27,10 +27,10 @@ from dask import config as dask_config
 #dask_config.set(num_workers=1024)
 dask_config.set({'num_workers': 1024, 'optimization.fuse.active': True, 'optimization.fuse.max_depth': 10,})
 
-from pbrAudioCommon import EntityManager, ScoreTrack
+from pbrAudioCommon import EntityManager, ScoreTrack, ForceDataSequence, ModalVertices, CollisionData
 from pbrAudioCommon import _update_status
 
-from physicsSolver import ForceDataSequence, ModalVertices, CollisionData, TrajectoryData
+from physicsSolver import TrajectoryData
 from ellipsoidalProxy import Modal4Proxy, ProxySynth, ProxyEngine
 from postProcess import PostProcessEngine
 

@@ -37,11 +37,7 @@ from .core.force_synth import ForceSynth
 from .core.collision_solver import CollisionSolver
 from .core.physics_engine import physicsEngine
 from .lib.contact_geometry import ContactGeometry
-from .lib.hertzian_contact import HertzianContact
-from .lib.force_data import ContactType, ForceData, ForceDataSequence
-from .lib.modal_vertices import ModalVertices
 from .lib.trajectory_data import tmpTrajectoryData, TrajectoryData
-from .lib.collision_data import CollisionType, CollisionData
 
 
 __all__ = [
@@ -56,13 +52,6 @@ __all__ = [
     'CollisionSolver',
     'physicsEngine',
     'ContactGeometry',
-    'HertzianContact',
-    'ContactType',
-    'ForceData',
-    'ForceDataSequence',
-    'ModalVertices',
     'tmpTrajectoryData',
     'TrajectoryData',
-    'CollisionType',
-    'CollisionData'
 ]

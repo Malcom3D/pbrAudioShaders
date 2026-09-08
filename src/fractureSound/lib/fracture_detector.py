@@ -27,9 +27,10 @@ from scipy.spatial import ConvexHull
 from scipy.spatial.transform import Rotation
 from scipy.optimize import minimize_scalar
 
-from pbrAudioCommon import EntityManager, _load_mesh
+from pbrAudioCommon import EntityManager, ForceDataSequence, CollisionData
+from pbrAudioCommon import _load_mesh
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
-from physicsSolver import TrajectoryData, ForceDataSequence, CollisionData
+from physicsSolver import TrajectoryData
 
 from .fracture_data import FractureEvent, FractureType, FragmentData
 

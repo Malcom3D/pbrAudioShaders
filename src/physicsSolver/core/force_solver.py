@@ -25,12 +25,10 @@ from dataclasses import dataclass
 from typing import List, Dict, Tuple, Optional, Any
 import math
 
-from pbrAudioCommon import EntityManager
+from pbrAudioCommon import EntityManager, ContactType, ForceData, ForceDataSequence, HertzianContact
 from pbrAudioCommon import CubicSplineWithNaN
 
-from ..lib.force_data import ContactType, ForceData, ForceDataSequence
 from ..lib.contact_geometry import ContactGeometry
-from ..lib.hertzian_contact import HertzianContact
 
 @dataclass
 class ForceSolver:

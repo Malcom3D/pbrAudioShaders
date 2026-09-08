@@ -25,11 +25,8 @@ import scipy.signal as signal
 from dataclasses import dataclass 
 from typing import List, Dict, Tuple, Optional, Any
 
-from pbrAudioCommon import EntityManager
+from pbrAudioCommon import EntityManager, HertzianContact, ContactType
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
-
-from ..lib.force_data import ContactType
-from ..lib.hertzian_contact import HertzianContact
 
 @dataclass
 class ForceSynth:
