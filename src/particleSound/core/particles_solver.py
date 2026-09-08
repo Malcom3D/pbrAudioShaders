@@ -96,9 +96,9 @@ class ParticlesSolver:
         
         # Initialize particle trajectory data
         particles_count = positions[0].shape[0]
-        particles_data = ParticleTrajectoryData(frames=frame_times, particles_idx=particles_idx, is_static=particle_cfg.static, sfps=self.sfps, sample_rate=self.sample_rate, particles_count=particles_count, positions=np.empty((particle_count,3), dtype=object), rotations=np.empty((particle_count,3), dtype=object), sizes=np.empty((particle_count,), dtype=np.float32) states=np.empty((particle_count,), dtype=np.int8))
+        particles_data = ParticleTrajectoryData(frames=frame_times, particles_idx=particles_idx, is_static=particle_cfg.static, sfps=self.sfps, sample_rate=self.sample_rate, particles_count=particles_count, positions=np.empty((particles_count,3), dtype=object), rotations=np.empty((particles_count,3), dtype=object))
 
-        debug_print(f"Processing {particle_count} particles across {len(positions)} frames")
+        debug_print(f"Processing {particles_count} particles across {len(positions)} frames")
         
         if particle_cfg.static:
             particles_data.positions = positions
@@ -108,8 +108,8 @@ class ParticlesSolver:
 
         else:
             # Process each particle
-            particles_positions, particles_rotations, particles_states = (np.zeros((particle_count, frame_indices.shape[0], 3)) for _ in range(3))
-            for particle_idx in range(particle_count):
+            particles_positions, particles_rotations, particles_states = (np.zeros((particles_count, frame_indices.shape[0], 3)) for _ in range(3))
+            for particle_idx in range(particles_count):
                 for frame_idx in frame_indices:
                     # Extract particle data across all frames
                     particles_positions[particle_idx, frame_idx] = positions[frame_idx][particle_idx]
@@ -117,7 +117,7 @@ class ParticlesSolver:
                     particles_states[particle_idx, frame_idx] = states[frame_idx][particle_idx]
             
             # Detect unsampled intermediate positions using PositionSolver algorithm
-            for particle_idx in range(particle_count):
+            for particle_idx in range(particles_count):
                 unsampled_positions = self._detect_unsampled_positions(positions=particles_positions[particle_idx], times=frame_times)
             
                 # If unsampled positions found, insert them into the data
