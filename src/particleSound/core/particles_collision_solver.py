@@ -147,24 +147,13 @@ class ParticlesCollisionSolver:
         for config_obj in objects_to_check:
             if config_obj.static:
                 # Static objects: particles collide with them
-                self._compute_static_collisions(
-                    particles_idx=particles_idx,
-                    particle_cfg=particle_cfg,
-                    particle_trajectory=particle_trajectory,
-                    config_obj=config_obj
-                )
+                self._compute_static_collisions(particles_idx=particles_idx, particle_cfg=particle_cfg, particle_trajectory=particle_trajectory, config_obj=config_obj)
             else:
                 # Dynamic objects: check if particles can interact
                 # (Particles typically only collide with static objects or other particles)
                 debug_print(f"Warning: Particle collisions with dynamic objects not fully supported yet")
     
-    def _compute_static_collisions(
-        self,
-        particles_idx: int,
-        particle_cfg: Any,
-        particle_trajectory: ParticlesTrajectoryData,
-        config_obj: ObjectConfig
-    ) -> None:
+    def _compute_static_collisions(self, particles_idx: int, particle_cfg: Any, particle_trajectory: ParticlesTrajectoryData, config_obj: ObjectConfig ) -> None:
         """
         Compute collisions between particles and a static object.
         """
@@ -210,29 +199,13 @@ class ParticlesCollisionSolver:
             sizes = self._get_particle_sizes(particle_trajectory, particle_idx, frames)
             
             # Detect collisions
-            particle_collisions = self._detect_particle_collisions(
-                particle_idx=particle_idx,
-                positions=positions,
-                sizes=sizes,
-                frames=frames,
-                obj_vertices=obj_vertices,
-                obj_faces=obj_faces,
-                obj_tree=obj_tree,
-                config_obj=config_obj
-            )
+            particle_collisions = self._detect_particle_collisions(particle_idx=particle_idx, positions=positions, sizes=sizes, frames=frames, obj_vertices=obj_vertices, obj_faces=obj_faces, obj_tree=obj_tree, config_obj=config_obj)
             
             collision_events.extend(particle_collisions)
         
         # Process collisions to generate forces and score data
         if collision_events:
-            self._process_collision_events(
-                particles_idx=particles_idx,
-                particle_cfg=particle_cfg,
-                particle_trajectory=particle_trajectory,
-                config_obj=config_obj,
-                obj_trajectory=obj_trajectory,
-                collision_events=collision_events
-            )
+            self._process_collision_events(particles_idx=particles_idx, particle_cfg=particle_cfg, particle_trajectory=particle_trajectory, config_obj=config_obj, obj_trajectory=obj_trajectory, collision_events=collision_events)
     
     def _create_static_trajectory(self, config_obj: ObjectConfig) -> Any:
         """
@@ -304,17 +277,7 @@ class ParticlesCollisionSolver:
         
         return sizes
     
-    def _detect_particle_collisions(
-        self,
-        particle_idx: int,
-        positions: np.ndarray,
-        sizes: np.ndarray,
-        frames: np.ndarray,
-        obj_vertices: np.ndarray,
-        obj_faces: np.ndarray,
-        obj_tree: cKDTree,
-        config_obj: ObjectConfig
-    ) -> List[Dict[str, Any]]:
+    def _detect_particle_collisions(self, particle_idx: int, positions: np.ndarray, sizes: np.ndarray, frames: np.ndarray, obj_vertices: np.ndarray, obj_faces: np.ndarray, obj_tree: cKDTree, config_obj: ObjectConfig) -> List[Dict[str, Any]]:
         """
         Detect collisions between a single particle and an object.
         

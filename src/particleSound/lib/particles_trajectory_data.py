@@ -75,7 +75,7 @@ class ParticlesTrajectoryData:
                 elif self.frames.shape[0] > 1:
                     idx = np.where(self.frames == self.frames[-1])
                 particle_cloud.append(self.sizes[particle_idx][idx])
-            return np.array(particle_cloud)
+            return np.array(particle_cloud).reshape(-1,3)
 
         elif self.is_static and sample_idx == self.frames[0]:
             return self.sizes[particle_idx]
@@ -83,7 +83,7 @@ class ParticlesTrajectoryData:
             idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
         elif self.frames.shape[0] > 1:
             idx = np.where(self.frames == self.frames[-1])
-        return self.sizes[particle_idx][idx]
+        return self.sizes[particle_idx][idx].reshape(-1)
 
     def get_position(self, sample_idx: float, particle_idx: int = None) -> np.ndarray:
         """

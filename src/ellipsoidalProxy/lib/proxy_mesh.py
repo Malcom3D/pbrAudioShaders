@@ -17,11 +17,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import os
-import trimesh
 import numpy as np
+import trimesh
 from typing import List, Tuple, Optional, Any, Dict
 from dataclasses import dataclass, field
-from scipy.spatial import cKDTree
 from scipy.spatial.transform import Rotation
 
 from pbrAudioCommon import EntityManager
@@ -35,20 +34,27 @@ class ProxyMesh:
     Generate low-resolution proxy meshes with consistent vertex indexing.
 
     proxy_type values:
-    - 0: 4-vertex pyramid (axis-aligned, 4 vertices at extents)
-    - 1: 6-vertex octahedron (axis-aligned, 6 vertices at extents)
-    - 2: 8-vertex hexahedron/cube (axis-aligned, 8 vertices at corners)
+    - 0: 4-vertex pyramid (axis-aligned)
+    - 1: 6-vertex octahedron (axis-aligned)
+    - 2: 8-vertex hexahedron/cube (axis-aligned)
     - 3,4,5: icosahedron with subdivision of (proxy_type - 3)
 
-    The proxy mesh vertices maintain consistent indexing across frames
-    by mapping to the original mesh's extremal vertices.
+    The proxy mesh is generated once in local coordinates based on the
+    bounding box of the original mesh at frame 0, then transformed to
+    world coordinates for each frame using the pose data.
     """
     entity_manager: EntityManager
 
-    def __post_init(self):
+    def __post_init__(self):
         config = self.entity_manager.get('config')
         set_debug(config.system.debug)
         set_debug_prefix(self.__class__.__name__)
+        
+        # Cache for mesh data to avoid reloading
+        self._mesh_cache = {}
+        
+        # Cache for proxy geometry templates (generated once per proxy_type)
+        self._proxy_templates = {}
 
     def compute(self, obj_idx: int) -> List[int]:
         """
@@ -66,7 +72,10 @@ class ProxyMesh:
         for config_obj in config.objects:
             if config_obj.idx == obj_idx:
                 if config_obj.proxy_type is not False:
-                    debug_print(f"Creating proxy mesh for {config_obj.name} idx={config_obj.idx} proxy_type={config_obj.proxy_type}")
+                    debug_print(
+                        f"Creating proxy mesh for {config_obj.name} "
+                        f"idx={config_obj.idx} proxy_type={config_obj.proxy_type}"
+                    )
                     self._create_proxy_sequence(config_obj)
                     proxy_objects.append(config_obj.idx)
 
@@ -76,226 +85,193 @@ class ProxyMesh:
         """
         Create proxy mesh sequence for an object.
 
-        For each frame, generates a proxy mesh that maintains consistent
-        vertex indexing by mapping to the original mesh's extremal vertices.
+        Strategy:
+        1. Load pose data to get number of frames and transformations
+        2. Load the original mesh at frame 0
+        3. Generate proxy mesh template in local coordinates from frame 0 bbox
+        4. For each frame, transform the proxy template to world coordinates
         """
-        # Load pose data to get number of frames
+        # Load pose data
         positions, rotations = _load_pose(config_obj)
-        n_frames = len(positions)
+        
+        # Determine number of frames
         if config_obj.static:
             n_frames = 1
-
-        # Create output directory for proxy meshes
-        obj_proxy_path = f"{config_obj.obj_path}/proxy"
-        os.makedirs(obj_proxy_path, exist_ok=True)
-
-        # Process first frame to establish vertex mapping
-        vertices_0, normals_0, faces_0 = _load_mesh(config_obj, 0, use_proxy_path=False)
-        if config_obj.static:
+            # For static, positions/rotations are single arrays
             position_0 = positions
             rotation_0 = Rotation.from_euler('XYZ', rotations)
         else:
+            n_frames = len(positions)
             position_0 = positions[0]
             rotation_0 = Rotation.from_euler('XYZ', rotations[0])
 
-        # Transform first frame vertices to local coordinates
+        # Create output directory
+        obj_proxy_path = f"{config_obj.obj_path}/proxy"
+        os.makedirs(obj_proxy_path, exist_ok=True)
+
+        # Load original mesh at frame 0
+        vertices_0, normals_0, faces_0 = self._load_mesh_cached(
+            config_obj, 0, use_proxy_path=False
+        )
+
+        # Transform frame 0 vertices to local coordinates
         R0 = rotation_0.as_matrix()
         vertices_local_0 = (R0.T @ (vertices_0 - position_0).T).T
 
-        # Compute bounding box in local coordinates for first frame
-        min_coords_0 = np.min(vertices_local_0, axis=0)
-        max_coords_0 = np.max(vertices_local_0, axis=0)
-        extents_0 = max_coords_0 - min_coords_0
-        center_local_0 = (min_coords_0 + max_coords_0) / 2
+        # Compute bounding box in local coordinates
+        min_coords = np.min(vertices_local_0, axis=0)
+        max_coords = np.max(vertices_local_0, axis=0)
+        extents = max_coords - min_coords
+        center_local = (min_coords + max_coords) / 2
 
-        # Generate proxy vertices for first frame (reference)
-        proxy_vertices_local_0, proxy_faces_0 = self._generate_proxy_mesh(proxy_type=config_obj.proxy_type, extents=extents_0, center=center_local_0)
-        
-        # Validate and fix the proxy mesh for first frame
-        proxy_vertices_local_0, proxy_faces_0 = self._validate_and_fix_mesh(vertices=proxy_vertices_local_0, faces=proxy_faces_0, proxy_type=config_obj.proxy_type, extents=extents_0, center=center_local_0)
+        # Generate proxy mesh template in local coordinates
+        # This is done ONCE and reused for all frames
+        proxy_vertices_local, proxy_faces = self._get_proxy_template(
+            proxy_type=config_obj.proxy_type,
+            extents=extents,
+            center=center_local
+        )
 
-        # Store the expected number of vertices and faces
-        expected_num_vertices = len(proxy_vertices_local_0)
-        expected_num_faces = len(proxy_faces_0)
+        # Validate and fix the proxy template
+        proxy_vertices_local, proxy_faces = self._validate_and_fix_mesh(
+            vertices=proxy_vertices_local,
+            faces=proxy_faces,
+            proxy_type=config_obj.proxy_type,
+            extents=extents,
+            center=center_local
+        )
 
-        # Build KD-tree for first frame's original vertices
-        tree_original_0 = cKDTree(vertices_local_0)
+        # Compute vertex normals for the template (in local space)
+        proxy_normals_local = self._compute_vertex_normals(
+            proxy_vertices_local, proxy_faces
+        )
 
-        # For each proxy vertex, find the nearest original vertex
-        # This establishes the consistent vertex mapping
-        proxy_vertex_mapping = []
-        for pv in proxy_vertices_local_0:
-            _, idx = tree_original_0.query(pv)
-            proxy_vertex_mapping.append(idx)
+        # Store expected dimensions for consistency
+        expected_num_vertices = len(proxy_vertices_local)
+        expected_num_faces = len(proxy_faces)
+
+        debug_print(
+            f"Proxy template for {config_obj.name}: "
+            f"{expected_num_vertices} vertices, {expected_num_faces} faces"
+        )
 
         # Process each frame
         for frame_idx in range(n_frames):
-            # Load original mesh for this frame
-            try:
-                vertices, normals, faces = _load_mesh(config_obj, frame_idx, use_proxy_path=False)
-            except Exception as e:
-                # Use first frame as fallback
-                vertices, normals, faces = _load_mesh(config_obj, 0, use_proxy_path=False)
-
             # Get pose for this frame
-            position = positions[frame_idx]
-            rotation_euler = rotations[frame_idx]
             if config_obj.static:
                 position = positions
-                rotation_euler = rotations
+                rotation = rotation_0
+            else:
+                position = positions[frame_idx]
+                rotation = Rotation.from_euler('XYZ', rotations[frame_idx])
 
-            # Transform vertices to local coordinates
-            R = Rotation.from_euler('XYZ', rotation_euler).as_matrix()
-            vertices_local = (R.T @ (vertices).T).T
+            # Transform proxy template from local to world coordinates
+            R = rotation.as_matrix()
+            proxy_vertices_world = (R @ proxy_vertices_local.T).T + position
+            proxy_normals_world = (R @ proxy_normals_local.T).T
 
-            # Compute bounding box extents in local coordinates
-            min_coords = np.min(vertices_local, axis=0)
-            max_coords = np.max(vertices_local, axis=0)
-            extents = max_coords - min_coords
-            center_local = (min_coords + max_coords) / 2
+            # Ensure normals are normalized
+            norm_mags = np.linalg.norm(proxy_normals_world, axis=1, keepdims=True)
+            norm_mags[norm_mags == 0] = 1.0
+            proxy_normals_world = proxy_normals_world / norm_mags
 
-            # Generate proxy mesh based on proxy_type
-            proxy_vertices_local, proxy_faces = self._generate_proxy_mesh(proxy_type=config_obj.proxy_type, extents=extents, center=center_local)
-            
-            # Validate and fix the proxy mesh for this frame
-            proxy_vertices_local, proxy_faces = self._validate_and_fix_mesh(vertices=proxy_vertices_local, faces=proxy_faces, proxy_type=config_obj.proxy_type, extents=extents, center=center_local)
-
-            # Ensure consistent vertex count
-            if len(proxy_vertices_local) < expected_num_vertices:
-                # Pad with vertices at the center
-                padding_needed = expected_num_vertices - len(proxy_vertices_local)
-                center_vertex = np.mean(proxy_vertices_local, axis=0)
-                padding = np.tile(center_vertex, (padding_needed, 1))
-                proxy_vertices_local = np.vstack([proxy_vertices_local, padding])
-            elif len(proxy_vertices_local) > expected_num_vertices:
-                # Trim excess vertices
-                proxy_vertices_local = proxy_vertices_local[:expected_num_vertices]
-
-            # Ensure consistent face count
-            if len(proxy_faces) != expected_num_faces:
-                # Regenerate faces if needed
-                if config_obj.proxy_type == 0:  # Pyramid
-                    proxy_faces = np.array([
-                        [0, 1, 2],  # Front face
-                        [0, 2, 3],  # Right face
-                        [0, 3, 1],  # Left face
-                        [1, 3, 2],  # Base face
-                    ], dtype=np.int32)
-                elif config_obj.proxy_type == 1:  # Octahedron
-                    proxy_faces = np.array([
-                        [0, 2, 4], [0, 4, 3], [0, 3, 5], [0, 5, 2],
-                        [1, 4, 2], [1, 3, 4], [1, 5, 3], [1, 2, 5]
-                    ], dtype=np.int32)
-                elif config_obj.proxy_type == 2:  # Cube
-                    proxy_faces = np.array([
-                        [0, 1, 2], [0, 2, 3], [4, 6, 5], [4, 7, 6],
-                        [3, 2, 6], [3, 6, 7], [0, 5, 1], [0, 4, 5],
-                        [0, 3, 7], [0, 7, 4], [1, 6, 2], [1, 5, 6]
-                    ], dtype=np.int32)
-
-            # Now re-index proxy vertices to maintain consistency
-            # For each proxy vertex, find the corresponding original vertex
-            # using the mapping established from the first frame
-            proxy_tree = cKDTree(proxy_vertices_local)
-            
-            reindexed_proxy_vertices = np.zeros_like(proxy_vertices_local)
-            for i, orig_idx in enumerate(proxy_vertex_mapping):
-                # Use the original vertex position as the proxy vertex
-                # This ensures consistent indexing across frames
-                if i < len(proxy_vertices_local):
-                    _, idx = proxy_tree.query(vertices_local[min(orig_idx, len(vertices_local)-1)], k=1)
-                    reindexed_proxy_vertices[i] = proxy_vertices_local[idx]
-
-            # Compute normals for the proxy
-            proxy_normals = self._compute_vertex_normals(reindexed_proxy_vertices, proxy_faces)
-
-            # Transform proxy back to world coordinates
-            proxy_vertices_world = (R @ reindexed_proxy_vertices.T).T
-            proxy_normals_world = (R @ proxy_normals.T).T
-
-            # Final validation in world coordinates
-            proxy_vertices_world, proxy_faces = self._validate_and_fix_mesh(vertices=proxy_vertices_world, faces=proxy_faces, proxy_type=config_obj.proxy_type, extents=extents, center=position)
-
-            # Save proxy mesh
+            # Save proxy mesh for this frame
             output_file = f"{obj_proxy_path}/{config_obj.name}_{frame_idx:04d}.npz"
             if config_obj.static:
                 output_file = f"{obj_proxy_path}/{config_obj.name}.npz"
-            np.savez_compressed(output_file, vertices=proxy_vertices_world.astype(np.float32), normals=proxy_normals_world.astype(np.float32), faces=proxy_faces.astype(np.int32))
+            
+            np.savez_compressed(
+                output_file,
+                vertices=proxy_vertices_world.astype(np.float32),
+                normals=proxy_normals_world.astype(np.float32),
+                faces=proxy_faces.astype(np.int32)
+            )
 
-        debug_print(f"Created {n_frames} proxy frames for {config_obj.name} at {obj_proxy_path}")
+        debug_print(
+            f"Created {n_frames} proxy frames for {config_obj.name} "
+            f"at {obj_proxy_path}"
+        )
 
-    def _generate_proxy_mesh(self, proxy_type: int, extents: np.ndarray, center: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def _load_mesh_cached(self, config_obj: Any, frame_idx: int, 
+                          use_proxy_path: bool = True) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
-        Generate a proxy mesh based on proxy_type, scaled to fit extents.
+        Load mesh with caching to avoid repeated file file I/O.
+        """
+        cache_key = (config_obj.idx, frame_idx, use_proxy_path)
+        
+        if cache_key not in self._mesh_cache:
+            vertices, normals, faces = _load_mesh(config_obj, frame_idx, use_proxy_path)
+            self._mesh_cache[cache_key] = (vertices, normals, faces)
+        
+        return self._mesh_cache[cache_key]
 
+    def _get_proxy_template(self, proxy_type: int, extents: np.ndarray, 
+                            center: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Get or generate proxy mesh template.
+
+        Templates are cached by proxy_type to avoid regeneration.
+        
         Args:
-            proxy_type: 0=4-vertex pyramid, 1=6-vertex octahedron, 
-                        2=8-vertex cube, 3,4,5=icosahedron
+            proxy_type: 0=pyramid, 1=octahedron, 2=cube, 3,4,5=icosahedron
             extents: (dx, dy, dz) bounding box extents
             center: Center of the bounding box in local coordinates
 
         Returns:
             Tuple of (vertices, faces) for the proxy mesh
         """
-        if proxy_type == 0:
-            # 4-vertex pyramid - vertices at extents
-            vertices, faces = self._create_pyramid_4v(extents, center)
-        elif proxy_type == 1:
-            # 6-vertex octahedron - vertices at axis extents
-            vertices, faces = self._create_octahedron_6v(extents, center)
-        elif proxy_type == 2:
-            # 8-vertex cube - vertices at bounding box corners
-            vertices, faces = self._create_cube_8v(extents, center)
-        else:
-            # Default to Icosahedron without subdivision for unknown types
-            # Icosahedron with subdivision
-            subdivisions = proxy_type - 3 if proxy_type in [3, 4, 5] else 0
-            vertices, faces = self._create_icosahedron(subdivisions=subdivisions)
-            # Scale to match extents
-            half_extents = extents / 2.0
-            vertices = vertices * half_extents[np.newaxis, :] + center
-
-        return vertices, faces
+        # Check cache first
+        cache_key = proxy_type
+        if cache_key not in self._proxy_templates:
+            # Generate template based on proxy_type
+            if proxy_type == 0:
+                vertices, faces = self._create_pyramid_4v(extents, center)
+            elif proxy_type == 1:
+                vertices, faces = self._create_octahedron_6v(extents, center)
+            elif proxy_type == 2:
+                vertices, faces = self._create_cube_8v(extents, center)
+            else:
+                # Icosahedron with subdivision
+                subdivisions = proxy_type - 3 if proxy_type in [3, 4, 5] else 0
+                vertices, faces = self._create_icosahedron(subdivisions)
+                # Scale to match extents
+                half_extents = extents / 2.0
+                vertices = vertices * half_extents[np.newaxis, :] + center
+            
+            self._proxy_templates[cache_key] = (vertices, faces)
+        
+        return self._proxy_templates[cache_key]
 
     def _create_pyramid_4v(self, extents: np.ndarray, center: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
         Create a 4-vertex pyramid (axis-aligned).
         
-        Vertices are at the extents:
-        - Vertex 0: +x extent (apex)
-        - Vertex 1: -x extent (base corner 1)
-        - Vertex 2: +y extent (base corner 2)
-        - Vertex 3: -y extent (base corner 3)
-
+        Vertices:
+        - Vertex 0: apex at +x extent
+        - Vertices 1-3: base at -x extent
+        
         The pyramid has a triangular base in the YZ plane and apex at +x.
-
-        Args:
-            extents: (dx, dy, dz) bounding box extents
-            center: Center position
-
-        Returns:
-            Tuple of (4 vertices, 4 triangular faces)
         """
         half_extents = extents / 2.0
+        hx, hy, hz = half_extents
 
-        # 4 vertices at extents forming a pyramid
-        # Apex at +x, base at -x with vertices at ±y and ±z
+        # 4 vertices forming a pyramid
         vertices = np.array([
-            [half_extents[0], 0.0, 0.0],     # 0: Apex (+x)
-            [-half_extents[0], -half_extents[1], -half_extents[2]],  # 1: Base corner (-x, -y, -z)
-            [-half_extents[0], half_extents[1], -half_extents[2]],   # 2: Base corner (-x, +y, -z)
-            [-half_extents[0], 0.0, half_extents[2]],                # 3: Base center (-x, 0, +z)
+            [hx, 0.0, 0.0],                    # 0: Apex (+x)
+            [-hx, -hy, -hz],                   # 1: Base corner 1
+            [-hx, hy, -hz],                    # 2: Base corner 2
+            [-hx, 0.0, hz],                    # 3: Base corner 3
         ], dtype=np.float64)
 
         # Center the vertices
         vertices = vertices + center
 
-        # 4 triangular faces forming a pyramid
+        # 4 triangular faces
         faces = np.array([
-            [0, 1, 2],  # Front face (apex to base front)
-            [0, 2, 3],  # Right face (apex to base right)
-            [0, 3, 1],  # Left face (apex to base left)
-            [1, 3, 2],   # Base face (base triangle)
+            [0, 1, 2],  # Front face
+            [0, 2, 3],  # Right face  
+            [0, 3, 1],  # Left face
+            [1, 3, 2],  # Base face
         ], dtype=np.int32)
 
         return vertices, faces
@@ -304,37 +280,28 @@ class ProxyMesh:
         """
         Create a 6-vertex octahedron (axis-aligned).
         
-        Vertices are at the extents of each axis:
-        - Vertex 0: +x extent
-        - Vertex 1: -x extent
-        - Vertex 2: +y extent
-        - Vertex 3: -y extent
-        - Vertex 4: +z extent
-        - Vertex 5: -z extent
-
-        Args:
-            extents: (dx, dy, dz) bounding box extents
-            center: Center position
-
-        Returns:
-            Tuple of (6 vertices, 8 triangular faces)
+        Vertices at the extents of each axis:
+        - Vertex 0: +x, Vertex 1: -x
+        - Vertex 2: +y, Vertex 3: -y
+        - Vertex 4: +z, Vertex 5: -z
         """
         half_extents = extents / 2.0
+        hx, hy, hz = half_extents
 
         # 6 vertices at axis extents
         vertices = np.array([
-            [half_extents[0], 0.0, 0.0],   # 0: +x
-            [-half_extents[0], 0.0, 0.0],  # 1: -x
-            [0.0, half_extents[1], 0.0],   # 2: +y
-            [0.0, -half_extents[1], 0.0],  # 3: -y
-            [0.0, 0.0, half_extents[2]],   # 4: +z
-            [0.0, 0.0, -half_extents[2]]   # 5: -z
+            [hx, 0.0, 0.0],    # 0: +x
+            [-hx, 0.0, 0.0],   # 1: -x
+            [0.0, hy, 0.0],    # 2: +y
+            [0.0, -hy, 0.0],   # 3: - -y
+            [0.0, 0.0, hz],    # 4: +z
+            [0.0, 0.0, -hz]    # 5: -z
         ], dtype=np.float64)
 
         # Center the vertices
         vertices = vertices + center
 
-        # 8 triangular faces forming an octahedron
+        # 8 triangular faces
         faces = np.array([
             [0, 2, 4],  # +x, +y, +z
             [0, 4, 3],  # +x, +z, -y
@@ -352,22 +319,7 @@ class ProxyMesh:
         """
         Create an 8-vertex cube (hexahedron) axis-aligned.
         
-        Vertices are at the 8 corners of the bounding box:
-        - Vertex 0: (-x, -y, -z)
-        - Vertex 1: (+x, -y, -z)
-        - Vertex 2: (+x, +y, -z)
-        - Vertex 3: (-x, +y, -z)
-        - Vertex 4: (-x, -y, +z)
-        - Vertex 5: (+x, -y, +z)
-        - Vertex 6: (+x, +y, +z)
-        - Vertex 7: (-x, +y, +z)
-
-        Args:
-            extents: (dx, dy, dz) bounding box extents
-            center: Center position
-
-        Returns:
-            Tuple of (8 vertices, 12 triangular faces)
+        Vertices are at the 8 corners of the bounding box.
         """
         half_extents = extents / 2.0
         hx, hy, hz = half_extents
@@ -387,26 +339,20 @@ class ProxyMesh:
         # Center the vertices
         vertices = vertices + center
 
-        # 12 triangular faces (2 triangles per face of the cube)
+        # 12 triangular faces (2 per cube face)
         faces = np.array([
             # Bottom face (z = -hz)
-            [0, 1, 2],
-            [0, 2, 3],
+            [0, 1, 2], [0, 2, 3],
             # Top face (z = +hz)
-            [4, 6, 5],
-            [4, 7, 6],
+            [4, 6, 5], [4, 7, 6],
             # Front face (y = +hy)
-            [3, 2, 6],
-            [3, 6, 7],
+            [3, 2, 6], [3, 6, 7],
             # Back face (y = -hy)
-            [0, 5, 1],
-                       [0, 4, 5],
+            [0, 5, 1], [0, 4, 5],
             # Left face (x = -hx)
-            [0, 3, 7],
-            [0, 7, 4],
+            [0, 3, 7], [0, 7, 4],
             # Right face (x = +hx)
-            [1, 6, 2],
-            [1, 5, 6]
+            [1, 6, 2], [1, 5, 6]
         ], dtype=np.int32)
 
         return vertices, faces
@@ -414,13 +360,6 @@ class ProxyMesh:
     def _compute_vertex_normals(self, vertices: np.ndarray, faces: np.ndarray) -> np.ndarray:
         """
         Compute vertex normals for a mesh.
-
-        Args:
-            vertices: Vertex positions (N, 3)
-            faces: Face indices (M, 3)
-
-        Returns:
-            Vertex normals (N, 3)
         """
         # Compute face normals
         v0 = vertices[faces[:, 0]]
@@ -448,12 +387,8 @@ class ProxyMesh:
     def _create_icosahedron(self, subdivisions: int = 0) -> Tuple[np.ndarray, np.ndarray]:
         """
         Create an icosahedron with optional subdivisions.
-
-        Args:
-            subdivisions: Number of subdivision steps (0=base icosahedron)
-
-        Returns:
-            Tuple of (vertices, faces) centered at origin with unit circumradius
+        
+        Returns vertices centered at origin with unit circumradius.
         """
         phi = (1 + np.sqrt(5)) / 2  # golden ratio
 
@@ -461,7 +396,7 @@ class ProxyMesh:
         vertices = np.array([
             [-1, phi, 0], [1, phi, 0], [-1, -phi, 0], [1, -phi, 0],
             [0, -1, phi], [0, 1, phi], [0, -1, -phi], [0, 1, -phi],
-            [phi, 0, -1], [phi, 0, 1], [-phi,  0, -1], [-phi, 0, 1]
+            [phi, 0, -1], [phi, 0, 1], [-phi, 0, -1], [-phi, 0, 1]
         ], dtype=np.float64)
 
         # Normalize to unit sphere
@@ -484,13 +419,6 @@ class ProxyMesh:
     def _subdivide_mesh(self, vertices: np.ndarray, faces: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
         Subdivide a triangular mesh once (each face -> 4 faces).
-
-        Args:
-            vertices: Current vertices
-            faces: Current faces
-
-        Returns:
-            Tuple of (new_vertices, new_faces)
         """
         new_vertices = list(vertices)
         edge_map = {}
@@ -508,7 +436,9 @@ class ProxyMesh:
                 if key not in edge_map:
                     # Create new vertex at midpoint and project to sphere
                     midpoint = (new_vertices[edge[0]] + new_vertices[edge[1]]) / 2
-                    midpoint = midpoint / np.linalg.norm(midpoint)
+                    norm = np.linalg.norm(midpoint)
+                    if norm > 0:
+                        midpoint = midpoint / norm
                     edge_map[key] = len(new_vertices)
                     new_vertices.append(midpoint)
                 midpoints.append(edge_map[key])
@@ -522,61 +452,44 @@ class ProxyMesh:
 
         return np.array(new_vertices), np.array(new_faces)
 
-    def _validate_and_fix_mesh(self, vertices: np.ndarray, faces: np.ndarray, proxy_type: int, extents: np.ndarray, center: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def _validate_and_fix_mesh(self, vertices: np.ndarray, faces: np.ndarray, 
+                               proxy_type: int, extents: np.ndarray, 
+                               center: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
         Validate that the proxy mesh has a valid volume (volume > 0) and fix it if not.
-        
-        Parameters:
-        -----------
-        vertices : np.ndarray
-            Proxy mesh vertices
-        faces : np.ndarray
-            Proxy mesh faces
-        proxy_type : int
-            Type of proxy mesh (0-5)
-        extents : np.ndarray
-            Bounding box extents of the original mesh
-        center : np.ndarray
-            Center of the bounding box
-        
-        Returns:
-        --------
-        Tuple[np.ndarray, np.ndarray]
-            Fixed vertices and faces
         """
         import trimesh
-        
+
         # Create mesh for validation
         mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
-        
-        # Check if volume is valid (not NaN, not negative, not zero)
+
+        # Check if volume is valid
         volume = mesh.volume
         is_valid = (
-            not np.isnan(volume) and 
-            not np.isinf(volume) and 
-            volume > 0 and 
+            not np.isnan(volume) and
+            not np.isinf(volume) and
+            volume > 0 and
             mesh.is_watertight and
             mesh.is_winding_consistent
         )
-        
+
         if is_valid:
             return vertices, faces
-        
+
         debug_print(f"Invalid proxy mesh detected (volume={volume}). Attempting to fix...")
-        
+
         # Try different fixing strategies
         fixed_mesh = None
-        
+
         # Strategy 1: Fix normals and fill holes
         try:
             if not mesh.is_winding_consistent:
                 mesh.fix_normals()
             if not mesh.is_watertight:
                 mesh.fill_holes()
-            
-            # Process the mesh
+
             mesh.process(validate=True)
-            
+
             if mesh.is_watertight and mesh.is_winding_consistent:
                 volume = mesh.volume
                 if not np.isnan(volume) and volume > 0:
@@ -584,41 +497,39 @@ class ProxyMesh:
                     debug_print(f"Mesh fixed via normal/hole fixing. New volume: {volume}")
         except Exception as e:
             debug_print(f"Fixing strategy 1 failed: {e}")
-        
+
         # Strategy 2: Regenerate with minimum size
         if fixed_mesh is None:
             debug_print("Attempting to regenerate proxy mesh with minimum size...")
-            
-            # Ensure minimum extents to prevent degenerate meshes
+
+            # Ensure minimum extents
             min_extent = 0.001  # 1mm minimum
             fixed_extents = np.maximum(extents, min_extent)
-            
+
             # Regenerate the proxy mesh
-            fixed_vertices, fixed_faces = self._generate_proxy_mesh(
+            fixed_vertices, fixed_faces = self._get_proxy_template(
                 proxy_type=proxy_type,
                 extents=fixed_extents,
                 center=center
             )
-            
+
             # Validate the regenerated mesh
             fixed_mesh = trimesh.Trimesh(vertices=fixed_vertices, faces=fixed_faces)
             volume = fixed_mesh.volume
-            
+
             if np.isnan(volume) or volume <= 0:
                 # Strategy 3: Use a simple cube as fallback
                 debug_print("Regeneration failed. Using cube fallback...")
                 half_extents = fixed_extents / 2
-                fixed_vertices = np.array([
-                    [-half_extents[0], -half_extents[1], -half_extents[2]],
-                    [half_extents[0], -half_extents[1], -half_extents[2]],
-                    [half_extents[0], half_extents[1], -half_extents[2]],
-                    [-half_extents[0], half_extents[1], -half_extents[2]],
-                    [-half_extents[0], -half_extents[1], half_extents[2]],
-                    [half_extents[0], -half_extents[1], half_extents[2]],
-                    [half_extents[0], half_extents[1], half_extents[2]],
-                    [-half_extents[0], half_extents[1], half_extents[2]]
-                ]) + center
+                hx, hy, hz = half_extents
                 
+                fixed_vertices = np.array([
+                    [-hx, -hy, -hz], [hx, -hy, -hz],
+                    [hx, hy, -hz], [-hx, hy, -hz],
+                    [-hx, -hy, hz], [hx, -hy, hz],
+                    [hx, hy, hz], [-hx, hy, hz]
+                ]) + center
+
                 fixed_faces = np.array([
                     [0, 1, 2], [0, 2, 3],  # Bottom
                     [4, 6, 5], [4, 7, 6],  # Top
@@ -627,34 +538,33 @@ class ProxyMesh:
                     [0, 4, 5], [0, 5, 1],  # Back
                     [3, 2, 6], [3, 6, 7]   # Front
                 ])
-                
+
                 fixed_mesh = trimesh.Trimesh(vertices=fixed_vertices, faces=fixed_faces)
                 debug_print(f"Created fallback cube with volume: {fixed_mesh.volume}")
-        
+
         # Final validation
         if fixed_mesh is not None:
             volume = fixed_mesh.volume
             if not np.isnan(volume) and volume > 0:
                 debug_print(f"Mesh validation passed. Final volume: {volume}")
                 return fixed_mesh.vertices, fixed_mesh.faces
-        
+
         # If all strategies fail, scale up the original mesh slightly
         debug_print("All fixing strategies failed. Scaling mesh slightly...")
         scale_factor = 1.1  # 10% scale up
         scaled_vertices = (vertices - center) * scale_factor + center
-        
+
         # Recreate mesh with scaled vertices
         scaled_mesh = trimesh.Trimesh(vertices=scaled_vertices, faces=faces)
-        
-        # Try to make it valid
+
         if not scaled_mesh.is_winding_consistent:
             scaled_mesh.fix_normals()
-        
+
         volume = scaled_mesh.volume
         if not np.isnan(volume) and volume > 0:
             debug_print(f"Scaled mesh has valid volume: {volume}")
             return scaled_mesh.vertices, scaled_mesh.faces
-        
+
         # Absolute last resort: return a small valid cube
         debug_print("Using absolute fallback: minimal cube")
         size = max(np.max(extents), 0.01)  # At least 1cm
@@ -665,7 +575,7 @@ class ProxyMesh:
             [-half, -half, half], [half, -half, half],
             [half, half, half], [-half, half, half]
         ]) + center
-        
+
         fallback_faces = np.array([
             [0, 1, 2], [0, 2, 3],
             [4, 6, 5], [4, 7, 6],
@@ -674,5 +584,5 @@ class ProxyMesh:
             [0, 4, 5], [0, 5, 1],
             [3, 2, 6], [3, 6, 7]
         ])
-        
+
         return fallback_vertices, fallback_faces
