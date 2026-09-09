@@ -24,6 +24,8 @@ from dataclasses import dataclass, field
 from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation, RotationSpline
 
+from ..lib.particles_interpolator import ParticlesInterpolator
+
 @dataclass
 class ParticlesTrajectoryData:
     """
@@ -42,9 +44,12 @@ class ParticlesTrajectoryData:
     rotations: np.ndarray = None  # dtype=object, shape (particles_count, 3)  where each element is a CubicSpline
     sizes: np.ndarray = None  # Shape: (particles_count,) dtype=float32
     states: np.ndarray = None  # Shape: (particles_count,) dtype=int8  0=dead, 1=alive, 2=unborn
+    massive: ParticlesInterpolator = None
 
     def get_states(self, sample_idx: float, particle_idx: int = None) -> np.ndarray:
         if particle_idx is None:
+            if self.massive is not None:
+                return self.massive.interpolate(sample_idx=sample_idx, attributes=['states'])['states']
             if self.is_static:
                 return self.states.copy()
             particle_cloud = []
@@ -56,6 +61,8 @@ class ParticlesTrajectoryData:
                 particle_cloud.append(self.states[particle_idx][idx])
             return np.array(particle_cloud)
             
+        elif self.massive is not None:
+            return self.massive.interpolate(sample_idx=sample_idx, attributes=['states'])['states'][particle_idx]
         elif self.is_static and sample_idx == self.frames[0]:
             return self.states[particle_idx]
         elif self.frames.shape[0] > 1 and sample_idx < self.frames[-1]:
@@ -66,6 +73,8 @@ class ParticlesTrajectoryData:
 
     def get_sizes(self, sample_idx: float, particle_idx: int = None) -> np.ndarray:
         if particle_idx is None:
+            if self.massive is not None:
+                return self.massive.interpolate(sample_idx=sample_idx, attributes=['sizes'])['sizes']
             if self.is_static:
                 return self.sizes.copy()
             particle_cloud = []
@@ -77,6 +86,8 @@ class ParticlesTrajectoryData:
                 particle_cloud.append(self.sizes[particle_idx][idx])
             return np.array(particle_cloud).reshape(-1,3)
 
+        elif self.massive is not None:
+            return self.massive.interpolate(sample_idx=sample_idx, attributes=['sizes'])['sizes'][particle_idx]
         elif self.is_static and sample_idx == self.frames[0]:
             return self.sizes[particle_idx]
         elif self.frames.shape[0] > 1 and sample_idx < self.frames[-1]:
@@ -102,6 +113,8 @@ class ParticlesTrajectoryData:
             Position (3,) at the given sample index
         """
         if particle_idx is None:
+            if self.massive is not None:
+                return self.massive.interpolate(sample_idx=sample_idx, attributes=['positions'])['positions']
             if self.is_static:
                 return self.positions.copy()
             particle_cloud = []
@@ -112,6 +125,8 @@ class ParticlesTrajectoryData:
                 particle_cloud.append([x,y,z])
             return np.array(particle_cloud)
 
+        elif self.massive is not None:
+            return self.massive.interpolate(sample_idx=sample_idx, attributes=['positions'])['positions'][particle_idx]
         elif self.is_static:
             return self.positions[particle_idx].copy()
         else:
@@ -137,6 +152,8 @@ class ParticlesTrajectoryData:
             Euler angles (3,) in radians
         """
         if particle_idx is None:
+            if self.massive is not None:
+                return self.massive.interpolate(sample_idx=sample_idx, attributes=['rotations'])['rotations']
             if self.is_static:
                 return self.rotations.copy()
             particle_cloud = []
@@ -147,6 +164,8 @@ class ParticlesTrajectoryData:
                 particle_cloud.append([x,y,z])
             return np.array(particle_cloud)
 
+        elif self.massive is not None:
+            return self.massive.interpolate(sample_idx=sample_idx, attributes=['rotations'])['rotations'][particle_idx]
         elif self.is_static:
             return self.rotations[particle_idx].copy()
         else:
@@ -172,6 +191,10 @@ class ParticlesTrajectoryData:
             Velocity (3,) in m/s
         """
         if particle_idx is None:
+            if self.massive is not None:
+                pos_after = self.massive.interpolate(sample_idx=sample_idx + 1, attributes=['positions'])['positions']
+                pos_before = self.massive.interpolate(sample_idx=sample_idx - 1, attributes=['positions'])['positions']
+                return (pos_after - pos_before) * self.sample_rate / 2.0
             if self.is_static:
                 return np.zeros((self.particles_count, 3))
             particle_cloud = []
@@ -182,7 +205,11 @@ class ParticlesTrajectoryData:
                 particle_cloud.append([x,y,z])
             return np.array(particle_cloud)
 
-        if self.is_static:
+        elif self.massive is not None:
+            pos_after = self.massive.interpolate(sample_idx=sample_idx + 1, attributes=['positions'])['positions'][particle_idx]
+            pos_before = self.massive.interpolate(sample_idx=sample_idx - 1, attributes=['positions'])['positions'][particle_idx]
+            return (pos_after - pos_before) * self.sample_rate / 2.0
+        elif self.is_static:
             return np.zeros(3)
         else:
             x = self.positions[particle_idx, 0](sample_idx, 1) * self.sample_rate
@@ -207,6 +234,11 @@ class ParticlesTrajectoryData:
             Acceleration (3,) in m/s²
         """
         if particle_idx is None:
+            if self.massive is not None:
+                pos_after = self.massive.interpolate(sample_idx=sample_idx + 1, attributes=['positions'])['positions']
+                pos = self.massive.interpolate(sample_idx=sample_idx, attributes=['positions'])['positions']
+                pos_before = self.massive.interpolate(sample_idx=sample_idx - 1, attributes=['positions'])['positions']
+                return (pos_after - 2*pos + pos_before) * self.sample_rate**2
             if self.is_static:
                 return np.zeros((self.particles_count, 3))
             particle_cloud = []
@@ -217,7 +249,12 @@ class ParticlesTrajectoryData:
                 particle_cloud.append([x,y,z])
             return np.array(particle_cloud)
 
-        if self.is_static:
+        elif self.massive is not None:
+            pos_after = self.massive.interpolate(sample_idx=sample_idx + 1, attributes=['positions'])['positions'][particle_idx]
+            pos = self.massive.interpolate(sample_idx=sample_idx, attributes=['positions'])['positions'][particle_idx]
+            pos_before = self.massive.interpolate(sample_idx=sample_idx - 1, attributes=['positions'])['positions'][particle_idx]
+            return (pos_after - 2*pos + pos_before) * self.sample_rate**2
+        elif self.is_static:
             return np.zeros(3)
         else:
             x = self.positions[particle_idx, 0](sample_idx, 2) * self.sample_rate**2
@@ -242,6 +279,10 @@ class ParticlesTrajectoryData:
             Angular velocity (3,) in rad/s
         """
         if particle_idx is None:
+            if self.massive is not None:
+                rot_after = self.massive.interpolate(sample_idx=sample_idx + 1, attributes=['rotations'])['rotations']
+                rot_before = self.massive.interpolate(sample_idx=sample_idx - 1, attributes=['rotations'])['rotations']
+                return (rot_after - rot_before) * self.sample_rate / 2.0
             if self.is_static:
                 return np.zeros((self.particles_count, 3))
             particle_cloud = []
@@ -252,12 +293,61 @@ class ParticlesTrajectoryData:
                 particle_cloud.append([x,y,z])
             return np.array(particle_cloud)
 
-        if self.is_static:
+        elif self.massive is not None:
+            rot_after = self.massive.interpolate(sample_idx=sample_idx + 1, attributes=['rotations'])['rotations']
+            rot_before = self.massive.interpolate(sample_idx=sample_idx - 1, attributes=['rotations'])['rotations']
+            return (rot_after - rot_before) * self.sample_rate / 2.0
+        elif self.is_static:
             return np.zeros(3)
         else:
             x = self.rotations[particle_idx, 0](sample_idx, 1) * self.sample_rate
             y = self.rotations[particle_idx, 1](sample_idx, 1) * self.sample_rate
             z = self.rotations[particle_idx, 2](sample_idx, 1) * self.sample_rate
+            return np.array([x, y, z])
+
+    def get_angular_acceleration(self, sample_idx: float, particle_idx: int = None) -> np.ndarray:
+        """
+        Get interpolated angular accelerations at a sample index.
+        
+        Parameters:
+        -----------
+        sample_idx : float
+            Sample index to evaluate
+        particle_idx : int, optional
+            Specific particle index. If None, returns all particles.
+            
+        Returns:
+        --------
+        np.ndarray
+            Angular accelerations array (particles_count, 3) or single (3,)
+        """
+        if particle_idx is None:
+            if self.massive is not None:
+                rot_after = self.massive.interpolate(sample_idx=sample_idx + 1, attributes=['rotations'])['rotations']
+                rot = self.massive.interpolate(sample_idx=sample_idx, attributes=['rotations'])['rotations']
+                rot_before = self.massive.interpolate(sample_idx=sample_idx - 1, attributes=['rotations'])['rotations']
+                return (rot_after - 2*rot + rot_before) * self.sample_rate**2
+            if self.is_static:
+                return np.zeros((self.particles_count, 3))
+            particle_cloud = []
+            for particle_idx in range(self.particles_count):
+                x = self.rotations[particle_idx, 0](sample_idx, 2) * self.sample_rate**2
+                y = self.rotations[particle_idx, 1](sample_idx, 2) * self.sample_rate**2
+                z = self.rotations[particle_idx, 2](sample_idx, 2) * self.sample_rate**2
+                particle_cloud.append([x,y,z])
+            return np.array(particle_cloud)
+
+        elif self.massive is not None:
+            rot_after = self.massive.interpolate(sample_idx=sample_idx + 1, attributes=['rotations'])['rotations']
+            rot = self.massive.interpolate(sample_idx=sample_idx, attributes=['rotations'])['rotations']
+            rot_before = self.massive.interpolate(sample_idx=sample_idx - 1, attributes=['rotations'])['rotations']
+            return (rot_after - 2*rot + rot_before) * self.sample_rate**2
+        elif self.is_static:
+            return np.zeros(3)
+        else:
+            x = self.rotations[particle_idx, 0](sample_idx, 2) * self.sample_rate**2
+            y = self.rotations[particle_idx, 1](sample_idx, 2) * self.sample_rate**2
+            z = self.rotations[particle_idx, 2](sample_idx, 2) * self.sample_rate**2
             return np.array([x, y, z])
     
     def save(self, filepath: str) -> None:

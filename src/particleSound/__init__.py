@@ -16,7 +16,7 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-__version__ = "0.0.3"
+__version__ = "0.0.8"
 __author__ = "Malcom3D"
 __description__ = "Particles Sound physics and synthesis engine"
 
@@ -29,10 +29,12 @@ np.set_printoptions(precision=decimals, floatmode='fixed', threshold=np.inf)
 from .core.particles_trajectory_solver import ParticlesTrajectorySolver
 from .core.particles_collision_solver import ParticlesCollisionSolver
 from .lib.particles_trajectory_data import ParticlesTrajectoryData
+from .lib.particles_interpolator import ParticlesInterpolator
 
 
 __all__ = [
     'ParticlesTrajectorySolver',
     'ParticlesCollisionSolver',
+    'ParticlesInterpolator',
     'ParticlesTrajectoryData'
 ]
