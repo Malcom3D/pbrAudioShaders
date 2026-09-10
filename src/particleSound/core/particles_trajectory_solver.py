@@ -92,6 +92,8 @@ class ParticlesTrajectorySolver:
                     massive = ParticlesInterpolator(self.entity_manager, particles_idx)
                     particles_count = massive.get_particle_count()
                     # Extract frame indices
+                    abs_frame_indices = massive.get_frame_range()
+                    frame_indices = np.arange(abs_frame_indices[1] - abs_frame_indices[0])
                     abs_frame_times = massive.get_sample_range()
                     frame_times = abs_frame_times[1] - abs_frame_times[0]
                     break
@@ -107,7 +109,7 @@ class ParticlesTrajectorySolver:
         particles_data = ParticlesTrajectoryData(frames=frame_times, particles_idx=particles_idx, is_static=particle_cfg.static, sfps=self.sfps, sample_rate=self.sample_rate, particles_count=particles_count, positions=np.empty((particles_count,3), dtype=object), rotations=np.empty((particles_count,3), dtype=object))
 
         if particle_cfg.proxy:
-            debug_print(f"Processing {particles_count} particles across {len(positions)} frames")
+            debug_print(f"Processing {particles_count} particles across {frame_indices.shape[0]} frames")
             particles_data.massive = massive
         else:
             debug_print(f"Processing {particles_count} particles across {len(positions)} frames")

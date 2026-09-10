@@ -556,9 +556,7 @@ class ParticlesInterpolator:
         
         return result
     
-    def interpolate_batch(self, 
-                         sample_indices: np.ndarray,
-                         attributes: List[str] = None) -> List[Dict[str, np.ndarray]]:
+    def interpolate_batch(self, sample_indices: np.ndarray, attributes: List[str] = None) -> List[Dict[str, np.ndarray]]:
         """
         Interpolate particle data for multiple sample indices efficiently.
         
