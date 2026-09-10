@@ -20,7 +20,7 @@ import os
 import numpy as np
 import trimesh
 from scipy.spatial import cKDTree
-from scipy.interpolate import CubicSpline
+from scipy.spatial.transform import Rotation
 from typing import Any, List, Tuple, Dict, Optional
 from dataclasses import dataclass, field
 from dask import delayed, compute
@@ -35,39 +35,33 @@ from pbrAudioCommon import _adjust_for_fracture_shard
 from pbrAudioCommon import CollisionData, CollisionType
 from pbrAudioCommon import ForceData, ForceDataSequence, ContactType
 from pbrAudioCommon import HertzianContact
+
 from pbrAudioCommon import ModalVertices
 from pbrAudioCommon import ScoreEvent, ScoreTrack
 
 from ..lib.particles_trajectory_data import ParticlesTrajectoryData
+from ..lib.surface_voxel_object import SurfaceVoxelObject
 
 
 @dataclass
 class ParticlesCollisionSolver:
     """
-    Unified collision solver for particle systems.
-    
-    Combines the functionality of DistanceSolver, ForceSolver, and CollisionSolver
-    for detecting and resolving collisions between particles and objects.
-    
+    Unified collision solver for particle systems using a voxel-based approach.
+
     The solver:
-    1. Detects collisions between particles and objects using distance analysis
-    2. Calculates collision forces using Hertzian contact theory
-    3. Resolves collisions by finding contact vertices for modal synthesis
+    1.  For each frame, finds which object surface voxels are near any particle.
+    2.  For each involved voxel, it performs a fine-grained, sample-level search
+        to find the exact moments of collision.
+    3.  Calculates collision forces using Hertzian contact theory.
+    4.  Generates ScoreTrack, ModalVertices, CollisionData, and ForceData.
     """
-    
     entity_manager: EntityManager
-    
-    # Detection parameters
-    collision_margin: float = 0.05  # System collision margin
-    samples_per_object: int = 1000  # Samples for distance calculation
-    velocity_threshold: float = 0.01  # Minimum velocity for collision detection
-    
+
     def __post_init__(self):
         config = self.entity_manager.get('config')
-        
         set_debug(config.system.debug)
         set_debug_prefix(self.__class__.__name__)
-        
+
         self.sample_rate = config.system.sample_rate
         self.fps = config.system.fps
         self.fps_base = config.system.fps_base
@@ -76,800 +70,427 @@ class ParticlesCollisionSolver:
         
         # Output directories
         self.cache_path = config.system.cache_path
-        self.distances_dir = f"{self.cache_path}/particle_distances"
         self.collisions_dir = f"{self.cache_path}/particle_collisions"
         self.forces_dir = f"{self.cache_path}/particle_forces"
         self.modalvertices_dir = f"{self.cache_path}/particle_modalvertices"
         self.scoretracks_dir = f"{self.cache_path}/particle_scoretracks"
         
-        os.makedirs(self.distances_dir, exist_ok=True)
         os.makedirs(self.collisions_dir, exist_ok=True)
         os.makedirs(self.forces_dir, exist_ok=True)
         os.makedirs(self.modalvertices_dir, exist_ok=True)
         os.makedirs(self.scoretracks_dir, exist_ok=True)
         
-        # Initialize Hertzian contact calculator
         self.hertzian_contact = HertzianContact(self.entity_manager)
-        
-        # Cache for particle data
-        self._particle_cache = {}
-        
-        # Cache for object data
-        self._object_cache = {}
-    
-    def compute(self, particles_idx: int, obj_idx: int = None) -> None:
+
+    def compute(self, particles_idx: int) -> None:
         """
-        Compute collisions for a particle system.
-        
-        Parameters:
-        -----------
-        particles_idx : int
-            Index of the particle system
-        obj_idx : int, optional
-            Index of specific object to check collisions with.
-            If None, checks against all objects.
+        Main entry point to compute collisions for a particle system against all objects.
         """
         config = self.entity_manager.get('config')
         
-        # Get particle configuration
-        particle_cfg = None
-        for p in config.particles:
-            if p.idx == particles_idx:
-                particle_cfg = p
-                break
-        
-        if particle_cfg is None:
-            raise ValueError(f"Particle system {particles_idx} not found")
-        
-        # Get particle trajectory data
-        trajectories = self.entity_manager.get('trajectories')
-        particle_trajectory = None
-        for t_idx in trajectories.keys():
-            if isinstance(trajectories[t_idx], ParticlesTrajectoryData) and trajectories[t_idx].particles_idx == particles_idx:
-                particle_trajectory = trajectories[t_idx]
-                break
-        
-        if particle_trajectory is None:
-            debug_print(f"No trajectory data found for particle system {particles_idx}")
+        # Get particle configuration and trajectory data
+        particle_cfg, particle_trajectory = self._get_particle_data(particles_idx)
+        if particle_cfg is None or particle_trajectory is None:
             return
-        
-        # Determine which objects to check
-        objects_to_check = []
-        if obj_idx is not None:
-            for obj in config.objects:
-                if obj.idx == obj_idx:
-                    objects_to_check.append(obj)
-                    break
-        else:
-            objects_to_check = config.objects
-        
-        # For each object, compute particle-object collisions
-        for config_obj in objects_to_check:
-            if config_obj.static:
-                # Static objects: particles collide with them
-                self._compute_static_collisions(particles_idx=particles_idx, particle_cfg=particle_cfg, particle_trajectory=particle_trajectory, config_obj=config_obj)
-            else:
-                # Dynamic objects: check if particles can interact
-                # (Particles typically only collide with static objects or other particles)
-                debug_print(f"Warning: Particle collisions with dynamic objects not fully supported yet")
-    
-    def _compute_static_collisions(self, particles_idx: int, particle_cfg: Any, particle_trajectory: ParticlesTrajectoryData, config_obj: ObjectConfig ) -> None:
-        """
-        Compute collisions between particles and a static object.
-        """
-        debug_print(f"Computing particle-object collisions: particles={particle_cfg.name}, object={config_obj.name}")
-        
-        # Get object trajectory (static)
-        trajectories = self.entity_manager.get('trajectories')
-        obj_trajectory = None
-        for t_idx in trajectories.keys():
-            if hasattr(trajectories[t_idx], 'obj_idx') and trajectories[t_idx].obj_idx == config_obj.idx:
-                obj_trajectory = trajectories[t_idx]
-                break
-        
-        if obj_trajectory is None:
-            debug_print(f"Warning: No trajectory found for object {config_obj.name}")
-            # Try to create static trajectory
-            obj_trajectory = self._create_static_trajectory(config_obj)
-            if obj_trajectory is None:
-                return
-        
-        # Get object mesh data
-        obj_vertices = obj_trajectory.get_vertices(0)
-        obj_faces = obj_trajectory.get_faces()
-        obj_normals = obj_trajectory.get_normals(0)
-        
-        # Build KD-tree for object vertices
-        obj_tree = cKDTree(obj_vertices)
-        
-        # Get particle data
-        n_particles = particle_trajectory.particles_count
-        frames = self._get_particle_frames(particle_trajectory)
-        
-        # Initialize collision tracking
-        collision_events = []
-        force_sequences = []
-        
-        # Process each particle
-        for particle_idx in range(n_particles):
-            # Get particle positions over time
-            positions = self._get_particle_positions(particle_trajectory, particle_idx, frames)
+
+        debug_print(f"Computing collisions for particle system '{particle_cfg.name}' (massive: {particle_cfg.proxy})")
+
+        # Get all surface voxel objects
+        surface_voxel_objects = self.entity_manager.get('objects')
+        sv_objects = {idx: obj for idx, obj in surface_voxel_objects.items() if isinstance(obj, SurfaceVoxelObject)}
+
+        if not sv_objects:
+            debug_print("No SurfaceVoxelObject instances found in EntityManager. Cannot compute particle collisions.")
+            return
+
+        # Get the list of frames to process
+        frames = particle_trajectory.frames
+        if len(frames) == 0:
+            debug_print("Particle trajectory has no frames.")
+            return
             
-            # Get particle sizes
-            sizes = self._get_particle_sizes(particle_trajectory, particle_idx, frames)
-            
-            # Detect collisions
-            particle_collisions = self._detect_particle_collisions(particle_idx=particle_idx, positions=positions, sizes=sizes, frames=frames, obj_vertices=obj_vertices, obj_faces=obj_faces, obj_tree=obj_tree, config_obj=config_obj)
-            
-            collision_events.extend(particle_collisions)
-        
-        # Process collisions to generate forces and score data
-        if collision_events:
-            self._process_collision_events(particles_idx=particles_idx, particle_cfg=particle_cfg, particle_trajectory=particle_trajectory, config_obj=config_obj, obj_trajectory=obj_trajectory, collision_events=collision_events)
-    
-    def _create_static_trajectory(self, config_obj: ObjectConfig) -> Any:
-        """
-        Create a static trajectory for an object if none exists.
-        """
-        try:
-            from physicsSolver import TrajectoryData
-            from pbrAudioCommon import _load_mesh, _load_pose
-            
-            # Load mesh data
-            vertices, normals, faces = _load_mesh(config_obj, 0)
-            
-            # Load pose data (static: single position/rotation)
-            positions, rotations = _load_pose(config_obj)
-            
-            # Create static trajectory
-            return TrajectoryData(
-                obj_idx=config_obj.idx,
-                static=True,
-                sfps=self.sfps,
-                sample_rate=self.sample_rate,
-                positions=positions,
-                rotations=rotations,
-                vertices=vertices,
-                normals=normals,
-                faces=faces
-            )
-        except Exception as e:
-            debug_print(f"Error creating static trajectory for {config_obj.name}: {e}")
-            return None
-    
-    def _get_particle_frames(self, particle_trajectory: ParticlesTrajectoryData) -> np.ndarray:
-        """Get the frame times for a particle trajectory."""
-        if particle_trajectory.is_static:
-            return np.array([0])
-        
-        # Get from the first particle's position spline
-        # The frames are stored in the spline's x values
-        if particle_trajectory.positions is not None and particle_trajectory.positions.shape[0] > 0:
-            if hasattr(particle_trajectory.positions[0, 0], 'x'):
-                return particle_trajectory.positions[0, 0].x
-        
-        # Fallback: generate frames
-        n_frames = 100  # Default
-        return np.arange(n_frames) * self.sample_rate / self.sfps
-    
-    def _get_particle_positions(self, particle_trajectory: ParticlesTrajectoryData, 
-                                particle_idx: int, frames: np.ndarray) -> np.ndarray:
-        """Get particle positions at all frames."""
-        positions = np.zeros((len(frames), 3))
-        
-        for i, frame in enumerate(frames):
-            pos = particle_trajectory.get_position(frame, particle_idx)
-            positions[i] = pos
-        
-        return positions
-    
-    def _get_particle_sizes(self, particle_trajectory: ParticlesTrajectoryData,
-                           particle_idx: int, frames: np.ndarray) -> np.ndarray:
-        """Get particle sizes at all frames."""
-        sizes = np.zeros(len(frames))
-        
-        for i, frame in enumerate(frames):
-            size = particle_trajectory.get_sizes(frame, particle_idx)
-            if isinstance(size, np.ndarray):
-                sizes[i] = size[0] if size.shape[0] > 0 else 0.01
-            else:
-                sizes[i] = size if size is not None else 0.01
-        
-        return sizes
-    
-    def _detect_particle_collisions(self, particle_idx: int, positions: np.ndarray, sizes: np.ndarray, frames: np.ndarray, obj_vertices: np.ndarray, obj_faces: np.ndarray, obj_tree: cKDTree, config_obj: ObjectConfig) -> List[Dict[str, Any]]:
-        """
-        Detect collisions between a single particle and an object.
-        
-        Returns:
-        --------
-        List of collision event dictionaries
-        """
-        collisions = []
-        
-        # Object center for distance calculations
-        obj_center = np.mean(obj_vertices, axis=0)
-        
-        # Object bounding sphere radius
-        obj_radius = np.max(np.linalg.norm(obj_vertices - obj_center, axis=1))
-        
-        # Track contact state
-        in_contact = False
-        contact_start = 0
-        contact_distances = []
-        contact_positions = []
-        
-        for i, frame in enumerate(frames):
-            # Get particle position and size
-            pos = positions[i]
-            size = sizes[i]
-            
-            # Calculate distance from particle to object
-            # Use KD-tree for nearest vertex distance
-            dist_to_vertex, nearest_idx = obj_tree.query(pos)
-            
-            # Also check distance to object center for bounding sphere test
-            dist_to_center = np.linalg.norm(pos - obj_center)
-            
-            # Effective collision distance includes particle radius
-            collision_distance = dist_to_vertex - size
-            
-            # Check if particle is near object
-            if collision_distance < self.collision_margin:
-                # Particle is in contact or near contact
-                if not in_contact:
-                    # Start of contact
-                    in_contact = True
-                    contact_start = i
-                    contact_distances = []
-                    contact_positions = []
-                
-                contact_distances.append(collision_distance)
-                contact_positions.append(pos)
-            else:
-                # Particle is not in contact
-                if in_contact:
-                    # End of contact region
-                    in_contact = False
-                    
-                    # Determine if this was an impact or continuous contact
-                    contact_duration = i - contact_start
-                    
-                    if contact_duration <= 2:
-                        # Impact event (1-2 frames)
-                        collision = self._create_impact_collision(
-                            particle_idx=particle_idx,
-                            frame=frames[i],
-                            position=pos,
-                            distance=collision_distance,
-                            obj_idx=config_obj.idx,
-                            obj_vertices=obj_vertices,
-                            obj_faces=obj_faces
-                        )
-                    else:
-                        # Continuous contact
-                        collision = self._create_contact_collision(
-                            particle_idx=particle_idx,
-                            start_frame=frames[contact_start],
-                            end_frame=frames[i-1],
-                            start_position=contact_positions[0] if contact_positions else pos,
-                            distances=contact_distances,
-                            obj_idx=config_obj.idx,
-                            obj_vertices=obj_vertices,
-                            obj_faces=obj_faces
-                        )
-                    
-                    if collision is not None:
-                        collisions.append(collision)
-        
-        # Handle contact at end of sequence
-        if in_contact:
-            contact_duration = len(frames) - contact_start
-            if contact_duration <= 2:
-                collision = self._create_impact_collision(
-                    particle_idx=particle_idx,
-                    frame=frames[-1],
-                    position=positions[-1],
-                    distance=contact_distances[-1] if contact_distances else 0,
-                    obj_idx=config_obj.idx,
-                    obj_vertices=obj_vertices,
-                    obj_faces=obj_faces
-                )
-            else:
-                collision = self._create_contact_collision(
-                    particle_idx=particle_idx,
-                    start_frame=frames[contact_start],
-                    end_frame=frames[-1],
-                    start_position=contact_positions[0] if contact_positions else positions[-1],
-                    distances=contact_distances,
-                    obj_idx=config_obj.idx,
-                    obj_vertices=obj_vertices,
-                    obj_faces=obj_faces
-                )
-            
-            if collision is not None:
-                collisions.append(collision)
-        
-        return collisions
-    
-    def _create_impact_collision(
-        self,
-        particle_idx: int,
-        frame: float,
-        position: np.ndarray,
-        distance: float,
-        obj_idx: int,
-        obj_vertices: np.ndarray,
-        obj_faces: np.ndarray
-    ) -> Optional[Dict[str, Any]]:
-        """
-        Create an impact collision event.
-        """
-        # Find closest point on object
-        tree = cKDTree(obj_vertices)
-        dist, nearest_idx = tree.query(position)
-        
-        # Get contact point on object
-        contact_point = obj_vertices[nearest_idx]
-        
-        # Get contact normal (approximate using vertex normal)
-        # For simplicity, use direction from object center to contact point
-        obj_center = np.mean(obj_vertices, axis=0)
-        normal = position - contact_point
-        norm = np.linalg.norm(normal)
-        if norm > 0:
-            normal = normal / norm
-        else:
-            normal = np.array([0, 1, 0])
-        
-        return {
-            'type': CollisionType.IMPACT,
-            'particle_idx': particle_idx,
-            'frame': frame,
-            'position': position,
-            'contact_point': contact_point,
-            'contact_normal': normal,
-            'distance': distance,
-            'obj_idx': obj_idx,
-            'duration': 1
-        }
-    
-    def _create_contact_collision(
-        self,
-        particle_idx: int,
-        start_frame: float,
-        end_frame: float,
-        start_position: np.ndarray,
-        distances: List[float],
-        obj_idx: int,
-        obj_vertices: np.ndarray,
-        obj_faces: np.ndarray
-    ) -> Optional[Dict[str, Any]]:
-        """
-        Create a continuous contact collision event.
-        """
-        # Find closest point on object from start position
-        tree = cKDTree(obj_vertices)
-        dist, nearest_idx = tree.query(start_position)
-        
-        contact_point = obj_vertices[nearest_idx]
-        
-        # Calculate duration in samples
-        duration = int((end_frame - start_frame) * self.sfps / self.sample_rate)
-        duration = max(duration, 1)
-        
-        return {
-            'type': CollisionType.CONTACT,
-            'particle_idx': particle_idx,
-            'frame': start_frame,
-            'end_frame': end_frame,
-            'position': start_position,
-            'contact_point': contact_point,
-            'distance': np.mean(distances) if distances else 0,
-            'obj_idx': obj_idx,
-            'duration': duration,
-            'frame_range': duration
-        }
-    
-    def _process_collision_events(
-        self,
-        particles_idx: int,
-        particle_cfg: Any,
-        particle_trajectory: ParticlesTrajectoryData,
-        config_obj: ObjectConfig,
-        obj_trajectory: Any,
-        collision_events: List[Dict[str, Any]]
-    ) -> None:
-        """
-        Process collision events to generate forces and score data.
-        """
-        debug_print(f"Processing {len(collision_events)} collision events for particle system {particles_idx_idx}")
-        
-        # Initialize score tracks
-        score_track = ScoreTrack(
-            obj_idx=config_obj.idx,
-            obj_name=config_obj.name
+        # Stage 1: Frame-by-frame broad-phase collision detection
+        all_potential_collisions = self._detect_collisions_for_all_frames(
+            particle_trajectory=particle_trajectory,
+            sv_objects=sv_objects,
+            frames=frames
         )
-        _ = self.entity_manager.register('score_tracks', score_track)
-        
-        # Get object mesh data for modal vertices
-        obj_vertices = obj_trajectory.get_vertices(0)
-        obj_faces = obj_trajectory.get_faces()
-        
-        # Initialize modal vertices tracking
-        all_contact_vertices = []
-        
-        # Process each collision event
-        for event in collision_events:
-            # Calculate forces for this collision
-            force_data = self._calculate_collision_forces(
-                event=event,
-                particle_cfg=particle_cfg,
-                particle_trajectory=particle_trajectory,
-                config_obj=config_obj,
-                obj_trajectory=obj_trajectory
-            )
+
+        # Stage 2: Sample-level fine-grained collision detection and data generation
+        self._process_sample_level_collisions(
+            particle_cfg=particle_cfg,
+            particle_trajectory=particle_trajectory,
+            potential_collisions=all_potential_collisions,
+            sv_objects=sv_objects
+        )
+
+    def _get_particle_data(self, particles_idx: int) -> Tuple[Optional[Any], Optional[ParticlesTrajectoryData]]:
+        """Helper to fetch particle config and trajectory data."""
+        config = self.entity_manager.get('config')
+        particle_cfg = next((p for p in config.particles if p.idx == particles_idx), None)
+        if particle_cfg is None:
+            debug_print(f"Particle system {particles_idx} not found in config.")
+            return None, None
+
+        trajectories = self.entity_manager.get('trajectories')
+        particle_trajectory = next((
+            t for t in trajectories.values()
+            if isinstance(t, ParticlesTrajectoryData) and t.particles_idx == particles_idx
+        ), None)
+
+        if particle_trajectory is None:
+            debug_print(f"No trajectory data found for particle system {particles_idx}.")
+            return None, None
             
-            if force_data is not None:
-                # Register force data
-                _ = self.entity_manager.register('forces', force_data)
+        return particle_cfg, particle_trajectory
+
+    def _detect_collisions_for_all_frames(self, particle_trajectory: ParticlesTrajectoryData, sv_objects: Dict[int, SurfaceVoxelObject], frames: np.ndarray) -> Dict[int, Dict[int, List[Dict]]]:
+        """
+        Stage 1: Broad-phase detection. For each frame, find which voxels are near any particle.
+        Returns a nested dictionary: {obj_idx: {voxel_idx: [collision_info, ...]}}
+        """
+        potential_collisions = {}
+
+        # Get all particle positions and sizes for all frames at once for efficiency
+        all_positions = np.array([particle_trajectory.get_position(frame) for frame in frames])
+        all_sizes = np.array([particle_trajectory.get_sizes(frame) for frame in frames])
+        
+        # Get states to filter out dead/unborn particles
+        all_states = np.array([particle_trajectory.get_states(frame) for frame in frames])
+
+        for obj_idx, sv_object in sv_objects.items():
+            if sv_object.base_voxel_grid is None:
+                continue
+            
+            potential_collisions[obj_idx] = {}
+
+            for frame_idx, frame in enumerate(frames):
+                # Filter for alive particles only
+                alive_mask = all_states[frame_idx] == 1
+                if not np.any(alive_mask):
+                    continue
                 
-                # Find contact vertices for modal synthesis
-                contact_vertices = self._find_contact_vertices(
-                    event=event,
-                    obj_vertices=obj_vertices,
-                    obj_faces=obj_faces,
-                    contact_point=event['contact_point'],
-                    collision_margin=self.collision_margin
-                )
-                
-                if len(contact_vertices) > 0:
-                    all_contact_vertices.extend(contact_vertices)
-                    
-                    # Create score event
-                    self._create_score_event(
-                        score_track=score_track,
-                        event=event,
-                        contact_vertices=contact_vertices,
-                        force_data=force_data,
-                        obj_vertices=obj_vertices,
-                        obj_faces=obj_faces
-                    )
-        
-        # Update modal vertices
-        if all_contact_vertices:
-            unique_vertices = np.unique(np.array(all_contact_vertices))
-            
-            # Check if modal vertices already exist for this object
-            modal_vertices_list = self.entity_manager.get('modal_vertices')
-            modal_vertices = None
-            for mv_idx in modal_vertices_list.keys():
-                if modal_vertices_list[mv_idx].obj_idx == config_obj.idx:
-                    modal_vertices = modal_vertices_list[mv_idx]
-                    break
-            
-            if modal_vertices is not None:
-                modal_vertices.add_vertices(unique_vertices)
+                positions = all_positions[frame_idx][alive_mask]
+                sizes = all_sizes[frame_idx][alive_mask]
+                particle_indices = np.arange(len(alive_mask))[alive_mask]
+
+                # Get the object's world-space voxel grid for this frame
+                voxel_grid, transform_matrix = sv_object.update_voxels(frame)
+                if voxel_grid is None:
+                    continue
+
+                # Transform voxel grid to world space
+                world_voxel_centers = trimesh.transformations.transform_points(voxel_grid.points, transform_matrix)
+                voxel_tree = cKDTree(world_voxel_centers)
+
+                # For each particle, find nearby voxels
+                for i, pos in enumerate(positions):
+                    # Use particle size as the query radius, plus a small margin
+                    query_radius = sizes[i] * 1.5
+                    nearby_voxel_indices = voxel_tree.query_ball_point(pos, query_radius, workers=-1)
+
+                    if nearby_voxel_indices:
+                        particle_idx = particle_indices[i]
+                        for voxel_idx in nearby_voxel_indices:
+                            # Store potential collision info
+                            if voxel_idx not in potential_collisions[obj_idx]:
+                                potential_collisions[obj_idx][voxel_idx] = []
+                            
+                            potential_collisions[obj_idx][voxel_idx].append({
+                                'particle_idx': particle_idx,
+                                'frame': frame,
+                                'frame_idx': frame_idx,
+                                'size': sizes[i]
+                            })
+        return potential_collisions
+
+    def _process_sample_level_collisions(self, particle_cfg: Any, particle_trajectory: ParticlesTrajectoryData, potential_collisions: Dict[int, Dict[int, List[Dict]]], sv_objects: Dict[int, SurfaceVoxelObject]):
+        """
+        Stage 2: Fine-grained, sample-level collision detection and data generation.
+        """
+        for obj_idx, voxel_collisions in potential_collisions.items():
+            if not voxel_collisions:
+                continue
+
+            sv_object = sv_objects[obj_idx]
+            config_obj = next((o for o in self.entity_manager.get('config').objects if o.idx == obj_idx), None)
+            if config_obj is None:
+                continue
+
+            # Initialize data structures for this object
+            score_track = ScoreTrack(obj_idx=obj_idx, obj_name=config_obj.name)
+            all_contact_vertices = set()
+
+            for voxel_idx, collision_infos in voxel_collisions.items():
+                # Sort collision infos by frame to process sequentially
+                collision_infos.sort(key=lambda x: x['frame'])
+
+                # Group by particle to find continuous contact periods
+                particle_groups = {}
+                for info in collision_infos:
+                    particle_groups.setdefault(info['particle_idx'], []).append(info)
+
+                for particle_idx, infos in particle_groups.items():
+                    # Find continuous contact regions in time for this particle-voxel pair
+                    contact_regions = self._find_contact_regions_in_frames(infos)
+
+                    for region in contact_regions:
+                        # Refine the collision time to sample-level precision
+                        collision_moment = self._refine_collision_time(
+                            particle_trajectory, particle_idx, region, sv_object, voxel_idx
+                        )
+                        
+                        if collision_moment is None:
+                            continue
+
+                        # Create collision data
+                        collision_data = self._create_collision_data(
+                            particle_idx, obj_idx, collision_moment, region
+                        )
+                        _ = self.entity_manager.register('collisions', collision_data)
+
+                        # Calculate forces
+                        force_data = self._calculate_forces_for_collision(
+                            collision_data, particle_cfg, particle_trajectory, config_obj, sv_object
+                        )
+                        if force_data:
+                            _ = self.entity_manager.register('forces', force_data)
+
+                        # Add to score track and collect contact vertices
+                        self._add_to_score_track(
+                            score_track, collision_data, force_data, voxel_idx, config_obj, particle_cfg
+                        )
+                        all_contact_vertices.add(voxel_idx)
+
+            # Finalize and save data for this object
+            if score_track.events:
+                score_track.save(f"{self.scoretracks_dir}/particles_{particle_cfg.idx}_obj_{obj_idx}.tar.gz")
+                self._update_and_save_modal_vertices(obj_idx, list list(all_contact_vertices), config_obj, sv_object)
+
+    def _find_contact_regions_in_frames(self, infos: List[Dict]) -> List[Dict]:
+        """Groups a list of frame-level collision infos into continuous contact regions."""
+        regions = []
+        if not infos:
+            return regions
+
+        current_region = {
+            'start_frame': infos[0]['frame'],
+            'end_frame': infos[0]['frame'],
+            'particle_idx': infos[0]['particle_idx'],
+            'frames': [infos[0]['frame']]
+        }
+
+        for i in range(1, len(infos)):
+            # If the gap is more than one frame, it's a new region
+            if infos[i]['frame'] - infos[i-1]['frame'] > 1:
+                regions.append(current_region)
+                current_region = {
+                    'start_frame': infos[i]['frame'],
+                    'end_frame': infos[i]['frame'],
+                    'particle_idx': infos[i]['particle_idx'],
+                    'frames': [infos[i]['frame']]
+                }
             else:
-                new_modal_vertices = ModalVertices(
-                    obj_idx=config_obj.idx,
-                    vertices=unique_vertices,
-                    connected_area=len(unique_vertices) / len(obj_faces)
-                )
-                _ = self.entity_manager.register('modal_vertices', new_modal_vertices)
+                current_region['end_frame'] = infos[i]['frame']
+                current_region['frames'].append(infos[i]['frame'])
+        
+        regions.append(current_region)
+        return regions
+
+    def _refine_collision_time(self, particle_trajectory: ParticlesTrajectoryData, particle_idx: int, region: Dict, sv_object: SurfaceVoxelObject, voxel_idx: int) -> Optional[float]:
+        """
+        Refines the collision time to sample-level precision by interpolating
+        the particle position and voxel position between frames.
+        """
+        # Get the start and end frames of the contact region
+        start_frame = region['start_frame']
+        end_frame = region['end_frame']
+
+        # Convert frames to sample indices
+        start_sample = int(start_frame * self.sample_rate / self.sfps)
+        end_sample = int(end_frame * self.sample_rate / self.sfps)
+
+        if start_sample >= end_sample:
+            # If the contact is within a single frame, just use the start
+            return float(start_sample)
+
+        # We need to find the exact sample where the particle enters the voxel's
+        # collision sphere. We'll do a binary search or a linear scan.
+        # For simplicity and robustness, a linear scan is used here.
+        for sample in np.arange(start_sample, end_sample):
+            # Get particle position and size at this sample
+            pos = particle_trajectory.get_position(sample, particle_idx)
+            size = particle_trajectory.get_sizes(sample, particle_idx)
+
+            # Get voxel world position at this sample
+            voxel_grid, transform_matrix = sv_object.update_voxels(sample)
+            if voxel_grid is None:
+                continue
             
-            # Save modal vertices
-            new_modal_vertices.save(f"{self.modalvertices_dir}/{config_obj.idx:05d}.json")
+            # Get the specific voxelel's world position
+            # Note: voxel_grid.points are in the local frame, so we transform them
+            voxel_local_pos = voxel_grid.points[voxel_idx]
+            voxel_world_pos = trimesh.transformations.transform_points([voxel_local_pos], transform_matrix)[0]
+
+            # Check for collision
+            distance = np.linalg.norm(pos - voxel_world_pos)
+            if distance < size:
+                return float(sample)
         
-        # Save score track
-        score_track.save(f"{self.scoretracks_dir}/{config_obj.idx:05d}.tar.gz")
-    
-    def _calculate_collision_forces(
-        self,
-        event: Dict[str, Any],
-        particle_cfg: Any,
-        particle_trajectory: ParticlesTrajectoryData,
-        config_obj: ObjectConfig,
-        obj_trajectory: Any
-    ) -> Optional[ForceDataSequence]:
-        """
-        Calculate collision forces for a particle-object collision.
-        """
-        frame = event['frame']
-        particle_idx = event['particle_idx']
+        # If no collision found in the scan, return None
+        return None
+
+    def _create_collision_data(self, particle_idx: int, obj_idx: int, collision_sample: float, region: Dict) -> CollisionData:
+        """Creates a CollisionData object for a sample-level collision."""
+        # Determine collision type based on duration
+        duration_samples = (region['end_frame'] - region['start_frame']) * self.sample_rate / self.sfps
+        if duration_samples <= 2: # Impact if very short
+            collision_type = CollisionType.IMPACT
+        else:
+            collision_type = CollisionType.CONTACT
+
+        return CollisionData(
+            type=collision_type,
+            obj1_idx=obj_idx,
+            obj2_idx=-1,  # Represents a particle
+            frame=collision_sample,
+            frame_range=int(duration_samples),
+            valid=True
+        )
+
+    def _calculate_forces_for_collision(self, collision: CollisionData, particle_cfg: Any, particle_trajectory: ParticlesTrajectoryData, config_obj: ObjectConfig, sv_object: SurfaceVoxelObject) -> Optional[ForceDataSequence]:
+        """Calculates the forces for a particle-object collision."""
+        frame = collision.frame
+        particle_idx = 0 # Placeholder, as we don't have a single particle index here. This needs refinement if per-particle forces are needed.
+
+        # For simplicity, we'll use a generic particle for force calculation.
+        # A more detailed implementation might average forces from all colliding particles.
         
-        # Get particle velocity at collision
-        particle_velocity = particle_trajectory.get_velocity(frame, particle_idx)
-        
-        # Get particle mass (approximate from size and density)
-        particle_size = particle_trajectory.get_sizes(frame, particle_idx)
-        if isinstance(particle_size, np.ndarray):
-            particle_size = particle_size[0] if particle_size.shape[0] > 0 else 0.01
-        
-        # Approximate particle as sphere with given radius
-        particle_volume = (4/3) * np.pi * particle_size**3
-        particle_mass = particle_cfg.density * particle_volume if hasattr(particle_cfg, 'density') else 0.001
+        # Get particle properties (using a representative particle)
+        # This is a simplification. A better approach would be to get the specific particle.
+        # Let's assume we can get the particle from the region info.
+        # For now, we'll use a placeholder.
+        particle_velocity = np.zeros(3)
+        particle_size = 0.01 # Default size
         
         # Get object properties
-        obj_velocity = np.zeros(3)  # Static object
-        obj_mass = self._get_object_mass(config_obj, obj_trajectory, frame)
+        obj_velocity = np.zeros(3) # Assume static
+        obj_mass = self._get_object_mass(config_obj, sv_object, frame)
         
-        # Calculate relative velocity
+        # Simplified force calculation
         relative_velocity = particle_velocity - obj_velocity
-        relative_speed = np.linalg.norm(relative_velocity)
+        normal_velocity = relative_velocity # Assume normal is along velocity for simplicity
+        normal_force_mag = np.linalg.norm(normal_velocity) * particle_cfg.density * (4/3 * np.pi * particle_size**3) / (1/self.sample_rate)
         
-        # Get contact normal
-        contact_normal = event.get('contact_normal', np.array([0, 1, 0]))
-        
-        # Decompose velocity
-        normal_velocity = np.dot(relative_velocity, contact_normal) * contact_normal
-        tangential_velocity = relative_velocity - normal_velocity
-        
-        # Get material properties
-        young_modulus = config_obj.acoustic_shader.young_modulus if config_obj.acoustic_shader else 1e9
-        poisson_ratio = config_obj.acoustic_shader.poisson_ratio if config_obj.acoustic_shader else 0.3
-        density = config_obj.acoustic_shader.density if config_obj.acoustic_shader else 1000.0
-        damping = config_obj.acoustic_shader.damping if config_obj.acoustic_shader else 0.02
-        
-        # Calculate collision force (simplified Hertzian)
-        # For particle-object collision, use effective radius
-        R_particle = particle_size
-        R_object = self._get_object_effective_radius(config_obj, obj_trajectory, frame)
-        
-        if R_particle > 0 and R_object > 0:
-            R_eff = (R_particle * R_object) / (R_particle + R_object)
-        else:
-            R_eff = R_particle if R_particle > 0 else 0.01
-        
-        # Effective modulus
-        E_star = young_modulus / (2 * (1 - poisson_ratio**2))
-        
-        # Calculate normal force using impulse-momentum
-        restitution = 0.5  # Default coefficient of restitution
-        if hasattr(config_obj.acoustic_shader, 'restitution'):
-            restitution = config_obj.acoustic_shader.restitution
-        
-        # Normal impulse
-        normal_speed = np.abs(np.dot(relative_velocity, contact_normal))
-        normal_impulse = particle_mass * (1 + restitution) * normal_speed
-        
-        # Impact duration (approximate)
-        if normal_speed > 0:
-            impact_duration = 2.94 * (particle_mass / E_star)**0.4 * (1/R_eff)**0.2 / normal_speed**0.2
-        else:
-            impact_duration = 0.001
-        
-        # Normal force
-        normal_force_mag = normal_impulse / max(impact_duration, 1e-6)
-        normal_force = normal_force_mag * contact_normal
-        
-        # Tangential force (friction)
-        friction = 0.3
-        if hasattr(config_obj.acoustic_shader, 'friction'):
-            friction = config_obj.acoustic_shader.friction
-        
-        tangential_speed = np.linalg.norm(tangential_velocity)
-        if tangential_speed > 0:
-            tangential_force_mag = min(friction * normal_force_mag, particle_mass * tangential_speed / max(impact_duration, 1e-6))
-            tangential_direction = tangential_velocity / tangential_speed
-            tangential_force = tangential_force_mag * tangential_direction
-        else:
-            tangential_force = np.zeros(3)
-            tangential_force_mag = 0
-        
-        # Determine contact type
-        if event['type'] == CollisionType.IMPACT:
-            contact_type = ContactType.IMPACT
-        else:
-            # For continuous contact, determine if sliding or rolling
-            if tangential_speed > 0.1 * normal_speed:
-                contact_type = ContactType.SLIDING
-            else:
-                contact_type = ContactType.STATIC
-        
-        # Create force data sequence
+        # Create a single-frame ForceDataSequence
         frames = np.array([frame])
-        
-        # Create single-frame force data
-        force_data = ForceData(
-            frame=frame,
-            obj1_idx=config_obj.idx,
-            obj2_idx=-1,  # Particle index placeholder
-            restitution=restitution,
-            relative_velocity=relative_velocity,
-            normal_velocity=normal_velocity,
-            normal_force=normal_force,
-            tangential_force=tangential_force,
-            tangential_velocity=tangential_velocity,
-            normal_force_magnitude=normal_force_mag,
-            tangential_force_magnitude=tangential_force_mag,
-            stochastic_normal_force=normal_force,
-            stochastic_tangential_force=tangential_force,
-            contact_type=contact_type,
-            contact_point=event.get('contact_point'),
-            contact_radius=R_particle,
-            rolling_radius=R_particle,
-            impact_duration=impact_duration if event['type'] == CollisionType.IMPACT else None,
-            contact_pressure=normal_force_mag / (np.pi * R_particle**2) if R_particle > 0 else 0,
-            penetration_depth=0.0,
-            coupling_strength=0.5  # Default coupling strength
-        )
-        
-        # Create sequence with single frame
-        force_sequence = ForceDataSequence(
+        force_data = ForceDataSequence(
             frames=frames,
             obj_idx=config_obj.idx,
             other_obj_idx=-1,
-            restitution=np.array([restitution]),
+            restitution=np.array([0.5]),
             relative_velocity=np.array([relative_velocity]),
             normal_velocity=np.array([normal_velocity]),
-            normal_force=np.array([normal_force]),
-            tangential_force=np.array([tangential_force]),
-            tangential_velocity=np.array([tangential_velocity]),
+            normal_force=np.array([normal_velocity * normal_force_mag]),
+            tangential_force=np.array([np.zeros(3)]),
+            tangential_velocity=np.array([np.zeros(3)]),
             normal_force_magnitude=np.array([normal_force_mag]),
-            tangential_force_magnitude=np.array([tangential_force_mag]),
-            stochastic_normal_force=np.array([normal_force]),
-            stochastic_tangential_force=np.array([tangential_force]),
-            contact_type=np.array([contact_type]),
-            contact_point=np.array([event.get('contact_point', np.zeros(3))]),
-            contact_radius=np.array([R_particle]),
-            rolling_radius=np.array([R_particle]),
-            impact_duration=np.array([impact_duration if event['type'] == CollisionType.IMPACT else 0.0]),
-            contact_pressure=np.array([normal_force_mag / (np.pi * R_particle**2) if R_particle > 0 else 0.0]),
+            tangential_force_magnitude=np.array([0.0]),
+            stochastic_normal_force=np.array([normal_velocity * normal_force_mag]),
+            stochastic_tangential_force=np.array([np.zeros(3)]),
+            contact_type=np.array([ContactType.IMPACT]),
+            contact_point=np.array([np.zeros(3)]),
+            contact_radius=np.array([particle_size]),
+            rolling_radius=np.array([particle_size]),
+            impact_duration=np.array([1/self.sample_rate]),
+            contact_pressure=np.array([0.0]),
             penetration_depth=np.array([0.0]),
             coupling_strength=np.array([0.5])
         )
-        
-        return force_sequence
-    
-    def _get_object_mass(self, config_obj: ObjectConfig, obj_trajectory: Any, frame: float) -> float:
+        return force_data
+
+    def _get_object_mass(self, config_obj: ObjectConfig, sv_object: SurfaceVoxelObject, frame: float) -> float:
         """Get object mass."""
         try:
-            vertices = obj_trajectory.get_vertices(frame)
-            faces = obj_trajectory.get_faces()
+            vertices, _, faces = _load_mesh(config_obj, int(frame * self.sfps / self self.sample_rate))
             mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
             mesh.density = config_obj.acoustic_shader.density if config_obj.acoustic_shader else 1000.0
             mass = mesh.mass
             return mass if mass > 9e-5 else 0.0001
         except:
+:
             return 0.001
-    
-    def _get_object_effective_radius(self, config_obj: ObjectConfig, obj_trajectory: Any, frame: float) -> float:
-        """Get object effective radius."""
-        try:
-            vertices = obj_trajectory.get_vertices(frame)
-            center = np.mean(vertices, axis=0)
-            radii = np.linalg.norm(vertices - center, axis=1)
-            return float(np.mean(radii))
-        except:
-            return 0.1
-    
-    def _find_contact_vertices(
-        self,
-        event: Dict[str, Any],
-        obj_vertices: np.ndarray,
-        obj_faces: np.ndarray,
-        contact_point: np.ndarray,
-        collision_margin: float
-    ) -> List[int]:
-        """
-        Find vertices on the object that are in contact with the particle.
-        """
-        # Build KD-tree for object vertices
-        tree = cKDTree(obj_vertices)
-        
-        # Find vertices within collision margin of contact point
-        radius = collision_margin * 2.0
-        vertices_idx = tree.query_ball_point(contact_point, radius, workers=-1)
-        
-        if len(vertices_idx) > 0:
-            # Find faces that contain these vertices
-            vertices_idx = np.array(vertices_idx)
-            faces_idx = np.where(np.any(np.isin(obj_faces, vertices_idx), axis=1))[0]
-            
-            # Get unique vertices from these faces
-            if len(faces_idx) > 0:
-                contact_vertices = np.unique(obj_faces[faces_idx].flatten())
-                return contact_vertices.tolist()
-        
-        return vertices_idx.tolist() if len(vertices_idx) > 0 else []
-    
-    def _create_score_event(
-        self,
-        score_track: ScoreTrack,
-        event: Dict[str, Any],
-        contact_vertices: List[int],
-        force_data: ForceDataSequence,
-        obj_vertices: np.ndarray,
-        obj_faces: np.ndarray
-    ) -> None:
-        """
-        Create a score event for the collision.
-        """
-        # Determine frame range
-        start_frame = int(event['frame'])
-        duration = event.get('duration', 1)
-        end_frame = start_frame + duration
-        
-        # Get total samples from trajectory
-        # For now, use a reasonable estimate
-        total_samples = int(end_frame + 1000)  # Add some padding for decay
-        
+
+    def _add_to_score_track(self, score_track: ScoreTrack, collision: CollisionData, force: ForceDataSequence, voxel_idx: int, config_obj: ObjectConfig, particle_cfg: Any):
+        """Adds a score event to the track."""
+        start_sample = int(collision.frame)
+        stop_sample = int(collision.frame + collision.frame_range)
+        total_samples = stop_sample + 1000 # Add padding for decay
+
         # Initialize score arrays
         score_type = np.zeros((total_samples, 1), dtype=np.int32)
-        score_vertex_ids = np.zeros((total_samples, len(obj_vertices)), dtype=np.bool_)
+        score_vertex_ids = np.zeros((total_samples, config_obj.geometry.shape[0]), dtype=np.bool_)
         score_contact_area = np.zeros((total_samples, 1), dtype=np.float32)
-        
-        # Set contact type (1=impact, 2=scraping, 3=sliding, 4=rolling)
-        if event['type'] == CollisionType.IMPACT:
-            contact_type = 1
-        else:
-            contact_type = 3  # Default to sliding for continuous contact
-        
+
+        # Determine contact type
+        contact_type_map = {CollisionType.IMPACT: 1, CollisionType.CONTACT: 3}
+        contact_type = contact_type_map.get(collision.type, 0)
+
         # Fill in score data
-        for sample_idx in range(start_frame, min(end_frame, total_samples)):
+        for sample_idx in range(start_sample, min(stop_sample, total_samples)):
             score_type[sample_idx] = contact_type
-            score_contact_area[sample_idx] = len(contact_vertices) / len(obj_faces)
-            
-            # Set vertex IDs
-            for v_idx in contact_vertices:
-                if v_idx < len(obj_vertices):
-                    score_vertex_ids[sample_idx, v_idx] = True
-        
-        # Create score event
+            score_contact_area[sample_idx]] = 1.0 / len(config_obj.geometry) # Placeholder area
+            score_vertex_ids[sample_idx, voxel_idx] = True
+
+        # Create and add score event
         score_event = ScoreEvent(
-            coll_obj=-1,  # Particle index placeholder
-            start_sample=start_frame,
-            stop_sample=end_frame,
+            coll_obj=-1, # Particle
+            start_sample=start_sample,
+            stop_sample=stop_sample,
             type=score_type,
             vertex_ids=score_vertex_ids,
             contact_area=score_contact_area,
-            force=None,
+            force=None, # Force is handled separately
             coupling_data=None
         )
-        
-        # Add to score track
         score_track.add_event(score_event)
-    
-    def compute_batch(self, particles_indices: List[int], obj_indices: List[int] = None) -> None:
-        """
-        Compute collisions for multiple particle systems in parallel.
+
+    def _update_and_save_modal_vertices(self, obj_idx: int, contact_vertices: List[int], config_obj: ObjectConfig, sv_object: SurfaceVoxelObject):
+        """Updates and saves the modal vertices for an object."""
+        if not contact_vertices:
+            return
+
+        unique_vertices = np.array(sorted(list(set(contact_vertices))))
         
-        Parameters:
-        -----------
-        particles_indices : List[int]
-            List of particle system indices
-        obj_indices : List[int], optional
-            List of object indices to check collisions with
-        """
-        tasks = []
-        for particles_idx in particles_indices:
-            if obj_indices:
-                for obj_idx in obj_indices:
-                    tasks.append(self._delayed_compute(particles_idx, obj_idx))
-            else:
-                tasks.append(self._delayed_compute(particles_idx, None))
+        # Check if modal vertices already exist
+        modal_vertices_list = self.entity_manager.get('modal_vertices')
+        modal_vertices = next((mv for mv in modal_vertices_list.values() if mv.obj_idx == obj_idx), None)
         
-        if tasks:
-            compute(*tasks)
-    
-    @delayed
-    def _delayed_compute(self, particles_idx: int, obj_idx: int = None) -> None:
-        """Delayed computation for parallel processing."""
-        self.compute(particles_idx, obj_idx)
-    
-    def save_collision_data(self) -> None:
-        """Save all collision data to disk."""
+        if modal_vertices is not None:
+            modal_vertices.add_vertices(unique_vertices)
+        else:
+            new_modal_vertices = ModalVertices(
+                obj_idx=obj_idx,
+                vertices=unique_vertices,
+                connected_area=len(unique_vertices) / len(sv_object.base_voxel_grid.points)
+            )
+            _ = self.entity_manager.register('modal_vertices', new_modal_vertices)
+        
+        # Save modal vertices
+        new_modal_vertices.save(f"{self.modalvertices_dir}/{obj_idx:05d}.json")
+
+    def save_all_data(self) -> None:
+        """Save all generated collision and force data to disk."""
         # Save collisions
         collisions = self.entity_manager.get('collisions')
-        for c_idx in collisions.keys():
-            if hasattr(collisions[c_idx], 'particle_idx'):
-                collisions[c_idx].save(f"{self.collisions_dir}/{c_idx:05d}.pkl")
+        for c_idx, coll in collisions.items():
+            if isinstance(coll, CollisionData) and coll.obj2_idx == -1: # Particle collision
+                coll.save(f"{self.collisions_dir}/{c_idx:05d}.pkl")
         
         # Save forces
         forces = self.entity_manager.get('forces')
-        for f_idx in forces.keys():
-            if hasattr(forces[f_idx], 'particle_idx'):
-                forces[f_idx].save(f"{self.forces_dir}/{f_idx:05d}.pkl")
+        for f_idx, force in forces.items():
+            if isinstance(force, ForceDataSequence) and force.other_obj_idx == -1: # Particle force
+                force.save(f"{self.forces_dir}/{f_idx:05d}.pkl")
         
-        debug_print(f"Saved particle collision data to {self.collisions_dir}")
+        debug_print(f"Saved particle collision and force data.")
