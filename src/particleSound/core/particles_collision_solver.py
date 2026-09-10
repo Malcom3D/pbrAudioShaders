@@ -70,10 +70,10 @@ class ParticlesCollisionSolver:
         
         # Output directories
         self.cache_path = config.system.cache_path
-        self.collisions_dir = f"{self.cache_path}/particle_collisions"
-        self.forces_dir = f"{self.cache_path}/particle_forces"
-        self.modalvertices_dir = f"{self.cache_path}/particle_modalvertices"
-        self.scoretracks_dir = f"{self.cache_path}/particle_scoretracks"
+        self.collisions_dir = f"{self.cache_path}/particles_collisions"
+        self.forces_dir = f"{self.cache_path}/particles_forces"
+        self.modalvertices_dir = f"{self.cache_path}/particles_modalvertices"
+        self.scoretracks_dir = f"{self.cache_path}/particles_scoretracks"
         
         os.makedirs(self.collisions_dir, exist_ok=True)
         os.makedirs(self.forces_dir, exist_ok=True)
@@ -186,7 +186,7 @@ class ParticlesCollisionSolver:
                 # For each particle, find nearby voxels
                 for i, pos in enumerate(positions):
                     # Use particle size as the query radius, plus a small margin
-                    query_radius = sizes[i] * 1.5
+                    query_radius = np.linalg.norm(sizes[i]) * 1.5
                     nearby_voxel_indices = voxel_tree.query_ball_point(pos, query_radius, workers=-1)
 
                     if nearby_voxel_indices:

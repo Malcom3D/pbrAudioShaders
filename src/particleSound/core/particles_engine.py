@@ -58,9 +58,9 @@ class ParticlesEngine:
         results_colls = compute(*tasks_colls)
 
     @delayed
-    def _colls(self, particle_idx: int):
-        colls = ParticlesCollisionSolver(self.entity_manager)
-        colls.compute(particle_idx)
+    def _traj(self, particle_idx: int):
+        parts = ParticlesTrajectorySolver(self.entity_manager)
+        parts.compute(particle_idx)
 
     @delayed
     def _svobj(self, obj_idx: int):
@@ -68,7 +68,7 @@ class ParticlesEngine:
         _ = self.entity_manager.register('objects', surf_voxel_obj)
 
     @delayed
-    def _traj(self, particle_idx: int):
-        parts = ParticlesTrajectorySolver(self.entity_manager)
-        parts.compute(particle_idx)
-
+    def _colls(self, particle_idx: int):
+        colls = ParticlesCollisionSolver(self.entity_manager)
+        colls.compute(particle_idx)
+        colls.save_all_data()

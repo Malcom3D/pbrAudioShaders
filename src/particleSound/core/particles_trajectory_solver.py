@@ -64,7 +64,7 @@ class ParticlesTrajectorySolver:
         self.subframes = config.system.subframes
         self.sfps = (self.fps / self.fps_base) * self.subframes
         
-        self.output_dir = f"{config.system.cache_path}/particle_trajectories"
+        self.output_dir = f"{config.system.cache_path}/particles_trajectories"
         os.makedirs(self.output_dir, exist_ok=True)
         
         # Cache for particle data
