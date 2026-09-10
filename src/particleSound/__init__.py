@@ -26,15 +26,21 @@ import numpy as np
 decimals = 18
 np.set_printoptions(precision=decimals, floatmode='fixed', threshold=np.inf)
 
+from .core.particles_engine import ParticlesEngine
 from .core.particles_trajectory_solver import ParticlesTrajectorySolver
 from .core.particles_collision_solver import ParticlesCollisionSolver
 from .lib.particles_trajectory_data import ParticlesTrajectoryData
 from .lib.particles_interpolator import ParticlesInterpolator
+from .lib.surface_voxel_sizer import SurfaceVoxelSizer
+from .lib.surface_voxel_object import SurfaceVoxelObject
 
 
 __all__ = [
+    'ParticlesEngine',
     'ParticlesTrajectorySolver',
     'ParticlesCollisionSolver',
     'ParticlesInterpolator',
-    'ParticlesTrajectoryData'
+    'ParticlesTrajectoryData',
+    'SurfaceVoxelSizer',
+    'SurfaceVoxelObject'
 ]

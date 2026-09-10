@@ -31,7 +31,7 @@ from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
 from ..core.particles_trajectory_solver import ParticlesTrajectorySolver
 from ..core.particles_collision_solver import ParticlesCollisionSolver
-from ..lib.surface_voxel_sizer import Surface SurfaceVoxelSizer
+from ..lib.surface_voxel_sizer import SurfaceVoxelSizer
 from ..lib.surface_voxel_object import SurfaceVoxelObject
 
 @dataclass
