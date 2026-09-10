@@ -54,7 +54,7 @@ class ParticlesEngine:
         tasks_svobj = [self._svobj(config_obj.idx) for config_obj in config.objects]
         results_svobj = compute(*tasks_svobj)
 
-        tasks_colls = self._colls(particle_cfg.idx) for particle_cfg in config.particles]
+        tasks_colls = [self._colls(particle_cfg.idx) for particle_cfg in config.particles]
         results_colls = compute(*tasks_colls)
 
     @delayed

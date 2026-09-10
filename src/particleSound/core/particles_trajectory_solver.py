@@ -94,8 +94,7 @@ class ParticlesTrajectorySolver:
                     # Extract frame indices
                     abs_frame_indices = massive.get_frame_range()
                     frame_indices = np.arange(abs_frame_indices[1] - abs_frame_indices[0])
-                    abs_frame_times = massive.get_sample_range()
-                    frame_times = abs_frame_times[1] - abs_frame_times[0]
+                    frame_times = np.array(frame_indices) * self.sample_rate / self.sfps
                     break
                 # Load particle data from files
                 positions, rotations, sizes, states = _load_particle(particle_cfg)

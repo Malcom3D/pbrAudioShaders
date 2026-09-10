@@ -265,7 +265,7 @@ class ParticlesCollisionSolver:
             # Finalize and save data for this object
             if score_track.events:
                 score_track.save(f"{self.scoretracks_dir}/particles_{particle_cfg.idx}_obj_{obj_idx}.tar.gz")
-                self._update_and_save_modal_vertices(obj_idx, list list(all_contact_vertices), config_obj, sv_object)
+                self._update_and_save_modal_vertices(obj_idx, list(all_contact_vertices), config_obj, sv_object)
 
     def _find_contact_regions_in_frames(self, infos: List[Dict]) -> List[Dict]:
         """Groups a list of frame-level collision infos into continuous contact regions."""
@@ -412,13 +412,12 @@ class ParticlesCollisionSolver:
     def _get_object_mass(self, config_obj: ObjectConfig, sv_object: SurfaceVoxelObject, frame: float) -> float:
         """Get object mass."""
         try:
-            vertices, _, faces = _load_mesh(config_obj, int(frame * self.sfps / self self.sample_rate))
+            vertices, _, faces = _load_mesh(config_obj, int(frame * self.sfps / self.sample_rate))
             mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
             mesh.density = config_obj.acoustic_shader.density if config_obj.acoustic_shader else 1000.0
             mass = mesh.mass
             return mass if mass > 9e-5 else 0.0001
         except:
-:
             return 0.001
 
     def _add_to_score_track(self, score_track: ScoreTrack, collision: CollisionData, force: ForceDataSequence, voxel_idx: int, config_obj: ObjectConfig, particle_cfg: Any):
@@ -439,7 +438,7 @@ class ParticlesCollisionSolver:
         # Fill in score data
         for sample_idx in range(start_sample, min(stop_sample, total_samples)):
             score_type[sample_idx] = contact_type
-            score_contact_area[sample_idx]] = 1.0 / len(config_obj.geometry) # Placeholder area
+            score_contact_area[sample_idx] = 1.0 / len(config_obj.geometry) # Placeholder area
             score_vertex_ids[sample_idx, voxel_idx] = True
 
         # Create and add score event
