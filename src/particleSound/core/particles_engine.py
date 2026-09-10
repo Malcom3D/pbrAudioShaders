@@ -54,15 +54,13 @@ class ParticlesEngine:
         tasks_svobj = [self._svobj(config_obj.idx) for config_obj in config.objects]
         results_svobj = compute(*tasks_svobj)
 
-#        tasks_colls = []
-#        for particle_cfg in config.particles:
-#            tasks_colls += [self._colls(particle_cfg.idx, object_cfg.idx) for object_cfg in config.objects]
-#        results_colls = compute(*tasks_colls)
+        tasks_colls = self._colls(particle_cfg.idx) for particle_cfg in config.particles]
+        results_colls = compute(*tasks_colls)
 
     @delayed
-    def _colls(self, particle_idx: int, obj_idx: int):
+    def _colls(self, particle_idx: int):
         colls = ParticlesCollisionSolver(self.entity_manager)
-        colls.compute(particle_idx, obj_idx)
+        colls.compute(particle_idx)
 
     @delayed
     def _svobj(self, obj_idx: int):
