@@ -444,7 +444,7 @@ class DistanceSolver:
             pq1 = trimesh.proximity.ProximityQuery(mesh1)
             pq2 = trimesh.proximity.ProximityQuery(mesh2)
 
-            closest_points1, distances1, faces_id1 = pq1.on_surface(samples1)
+            closest_points1, distances1, faces_id1 = pq2.on_surface(samples1)
             closest_points2, distances2, faces_id2 = pq1.on_surface(samples2)
 
             min_dist_idx1 = np.argmin(distances1)

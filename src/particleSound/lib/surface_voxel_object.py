@@ -57,8 +57,6 @@ class SurfaceVoxelObject:
         Computes the initial voxel grid in the object's local coordinate frame.
         This is done once and then transformed for each frame.
         """
-        debug_print(f"Computing base surface voxel grid for '{self.config_obj.name}'...")
-        
         config = self.entity_manager.get('config')
         trajectories = self.entity_manager.get('trajectories')
         for config_obj in self.config.objects:
@@ -69,6 +67,8 @@ class SurfaceVoxelObject:
                             self.trajectory = trajectories[t_idx]
                 break
         
+        debug_print(f"Computing base surface voxel grid for '{config_obj.name}'...")
+
         try:
             vertices, normals, faces = _load_mesh(config_obj, 0, use_proxy_path=False)
             if vertices is None or len(vertices) == 0:
