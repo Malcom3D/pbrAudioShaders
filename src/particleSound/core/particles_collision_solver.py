@@ -89,37 +89,43 @@ class ParticlesCollisionSolver:
         config = self.entity_manager.get('config')
         
         # Get particle configuration and trajectory data
-        particle_cfg, particle_trajectory = self._get_particle_data(particles_idx)
-        if particle_cfg is None or particle_trajectory is None:
+        trajectories = self.entity_manager.get('trajectories')
+        for particle_cfg in config.particles:
+            if particle_cfg.idx == particles_idx:
+                for t_idx in trajectories.keys():
+                    if hasattr(trajectories[t_idx], 'particles_idx'):
+                        if trajectories[t_idx].particles_idx == particles_idx:
+                            particles_trajectory = trajectories[t_idx]
+                            break
+
+        if particle_cfg is None or particles_trajectory is None:
             return
 
         debug_print(f"Computing collisions for particle system '{particle_cfg.name}' (massive: {particle_cfg.proxy})")
 
         # Get all surface voxel objects
-        surface_voxel_objects = self.entity_manager.get('objects')
-        sv_objects = {idx: obj for idx, obj in surface_voxel_objects.items() if isinstance(obj, SurfaceVoxelObject)}
+        objects = self.entity_manager.get('objects')
+        for o_idx in objects.keys():
+            if hasattr(objects[o_idx], 'voxel_size'):
+                sv_objects[objects[o_idx].obj_idx] = objects[o_idx]
 
         if not sv_objects:
             debug_print("No SurfaceVoxelObject instances found in EntityManager. Cannot compute particle collisions.")
             return
 
         # Get the list of frames to process
-        frames = particle_trajectory.frames
+        frames = particles_trajectory.frames
         if len(frames) == 0:
             debug_print("Particle trajectory has no frames.")
             return
             
         # Stage 1: Frame-by-frame broad-phase collision detection
-        all_potential_collisions = self._detect_collisions_for_all_frames(
-            particle_trajectory=particle_trajectory,
-            sv_objects=sv_objects,
-            frames=frames
-        )
+        all_potential_collisions = self._detect_collisions_for_all_frames(particles_trajectory=particles_trajectory, sv_objects=sv_objects, frames=frames)
 
         # Stage 2: Sample-level fine-grained collision detection and data generation
         self._process_sample_level_collisions(
             particle_cfg=particle_cfg,
-            particle_trajectory=particle_trajectory,
+            particles_trajectory=particles_trajectory,
             potential_collisions=all_potential_collisions,
             sv_objects=sv_objects
         )
@@ -133,78 +139,70 @@ class ParticlesCollisionSolver:
             return None, None
 
         trajectories = self.entity_manager.get('trajectories')
-        particle_trajectory = next((
+        particles_trajectory = next((
             t for t in trajectories.values()
             if isinstance(t, ParticlesTrajectoryData) and t.particles_idx == particles_idx
         ), None)
 
-        if particle_trajectory is None:
+        if particles_trajectory is None:
             debug_print(f"No trajectory data found for particle system {particles_idx}.")
             return None, None
             
-        return particle_cfg, particle_trajectory
+        return particle_cfg, particles_trajectory
 
-    def _detect_collisions_for_all_frames(self, particle_trajectory: ParticlesTrajectoryData, sv_objects: Dict[int, SurfaceVoxelObject], frames: np.ndarray) -> Dict[int, Dict[int, List[Dict]]]:
+    def _detect_collisions_for_all_frames(self, particles_trajectory: ParticlesTrajectoryData, sv_objects: Dict[int, SurfaceVoxelObject], frames: np.ndarray) -> Dict[int, Dict[int, List[Dict]]]:
         """
         Stage 1: Broad-phase detection. For each frame, find which voxels are near any particle.
         Returns a nested dictionary: {obj_idx: {voxel_idx: [collision_info, ...]}}
         """
         potential_collisions = {}
+        collisions = []
 
-        # Get all particle positions and sizes for all frames at once for efficiency
-        all_positions = np.array([particle_trajectory.get_position(frame) for frame in frames])
-        all_sizes = np.array([particle_trajectory.get_sizes(frame) for frame in frames])
-        
-        # Get states to filter out dead/unborn particles
-        all_states = np.array([particle_trajectory.get_states(frame) for frame in frames])
-
-        for obj_idx, sv_object in sv_objects.items():
-            if sv_object.base_voxel_grid is None:
+        for frame_idx in frames:
+            particles_states = particles_trajectory.get_states(frame_idx)
+            alive_mask = particles_states == 1
+            if not np.any(alive_mask):
                 continue
-            
-            potential_collisions[obj_idx] = {}
 
-            for frame_idx, frame in enumerate(frames):
-                # Filter for alive particles only
-                alive_mask = all_states[frame_idx] == 1
-                if not np.any(alive_mask):
+            particles_positions = particles_trajectory.get_position(frame_idx)[alive_mask]
+            particles_sizes = particles_trajectory.get_sizes(frame_idx)[alive_mask]
+            particle_indices = np.arange(len(alive_mask))[alive_mask]
+
+            for obj_idx, sv_object in sv_objects.items():
+                if sv_object.base_voxel_grid is None:
                     continue
-                
-                positions = all_positions[frame_idx][alive_mask]
-                sizes = all_sizes[frame_idx][alive_mask]
-                particle_indices = np.arange(len(alive_mask))[alive_mask]
 
                 # Get the object's world-space voxel grid for this frame
-                voxel_grid, transform_matrix = sv_object.update_voxels(frame)
+                voxel_grid, transform_matrix = sv_object.update_voxels(frame_idx)
                 if voxel_grid is None:
                     continue
 
+                # Init potential collisions for the object
+                potential_collisions[obj_idx] = {}
+
+                # To be tryed => trimesh.sample.sample_surface(voxel_grid.as_boxes, num_sample)
+                # next query query_ball_tree and query
                 # Transform voxel grid to world space
                 world_voxel_centers = trimesh.transformations.transform_points(voxel_grid.points, transform_matrix)
+
+                # build the trees
                 voxel_tree = cKDTree(world_voxel_centers)
+                particles_tree = cKDTree(particles_positions)
 
-                # For each particle, find nearby voxels
-                for i, pos in enumerate(positions):
-                    # Use particle size as the query radius, plus a small margin
-                    query_radius = np.linalg.norm(sizes[i]) * 1.5
-                    nearby_voxel_indices = voxel_tree.query_ball_point(pos, query_radius, workers=-1)
+                # Use the voxel size as the query radius
+                nearby_voxel_indices = voxel_tree.query_ball_tree(particles_tree, r=sv_object.voxel_size*2)
+#                distances, nearby_voxel_indices = voxel_tree.query(particles_positions, workers=-1)
+                voxel_idx = [b for a in nearby_voxel_indices for b in a if not len(a) == 0]
 
-                    if nearby_voxel_indices:
-                        particle_idx = particle_indices[i]
-                        for voxel_idx in nearby_voxel_indices:
-                            # Store potential collision info
-                            if voxel_idx not in potential_collisions[obj_idx]:
-                                potential_collisions[obj_idx][voxel_idx] = []
-                            
-                            potential_collisions[obj_idx][voxel_idx].append({
-                                'particle_idx': particle_idx,
-                                'frame': frame,
-                                'frame_idx': frame_idx,
-                                'size': sizes[i]
-                            })
+                if not len(voxel_idx) == 0:
+                    collisions.append([obj_idx, frame_idx, voxel_idx])
+
+        for obj_idx, frame_idx, voxel_idx in collisions:
+            potential_collisions[obj_idx][frame_idx] = np.unique(voxel_idx).tolist()
+
         return potential_collisions
 
-    def _process_sample_level_collisions(self, particle_cfg: Any, particle_trajectory: ParticlesTrajectoryData, potential_collisions: Dict[int, Dict[int, List[Dict]]], sv_objects: Dict[int, SurfaceVoxelObject]):
+    def _process_sample_level_collisions(self, particle_cfg: Any, particles_trajectory: ParticlesTrajectoryData, potential_collisions: Dict[int, Dict[int, List[Dict]]], sv_objects: Dict[int, SurfaceVoxelObject]):
         """
         Stage 2: Fine-grained, sample-level collision detection and data generation.
         """
@@ -237,7 +235,7 @@ class ParticlesCollisionSolver:
                     for region in contact_regions:
                         # Refine the collision time to sample-level precision
                         collision_moment = self._refine_collision_time(
-                            particle_trajectory, particle_idx, region, sv_object, voxel_idx
+                            particles_trajectory, particle_idx, region, sv_object, voxel_idx
                         )
                         
                         if collision_moment is None:
@@ -251,7 +249,7 @@ class ParticlesCollisionSolver:
 
                         # Calculate forces
                         force_data = self._calculate_forces_for_collision(
-                            collision_data, particle_cfg, particle_trajectory, config_obj, sv_object
+                            collision_data, particle_cfg, particles_trajectory, config_obj, sv_object
                         )
                         if force_data:
                             _ = self.entity_manager.register('forces', force_data)
@@ -297,7 +295,7 @@ class ParticlesCollisionSolver:
         regions.append(current_region)
         return regions
 
-    def _refine_collision_time(self, particle_trajectory: ParticlesTrajectoryData, particle_idx: int, region: Dict, sv_object: SurfaceVoxelObject, voxel_idx: int) -> Optional[float]:
+    def _refine_collision_time(self, particles_trajectory: ParticlesTrajectoryData, particle_idx: int, region: Dict, sv_object: SurfaceVoxelObject, voxel_idx: int) -> Optional[float]:
         """
         Refines the collision time to sample-level precision by interpolating
         the particle position and voxel position between frames.
@@ -319,8 +317,8 @@ class ParticlesCollisionSolver:
         # For simplicity and robustness, a linear scan is used here.
         for sample in np.arange(start_sample, end_sample):
             # Get particle position and size at this sample
-            pos = particle_trajectory.get_position(sample, particle_idx)
-            size = particle_trajectory.get_sizes(sample, particle_idx)
+            pos = particles_trajectory.get_position(sample, particle_idx)
+            size = particles_trajectory.get_sizes(sample, particle_idx)
 
             # Get voxel world position at this sample
             voxel_grid, transform_matrix = sv_object.update_voxels(sample)
@@ -358,7 +356,7 @@ class ParticlesCollisionSolver:
             valid=True
         )
 
-    def _calculate_forces_for_collision(self, collision: CollisionData, particle_cfg: Any, particle_trajectory: ParticlesTrajectoryData, config_obj: ObjectConfig, sv_object: SurfaceVoxelObject) -> Optional[ForceDataSequence]:
+    def _calculate_forces_for_collision(self, collision: CollisionData, particle_cfg: Any, particles_trajectory: ParticlesTrajectoryData, config_obj: ObjectConfig, sv_object: SurfaceVoxelObject) -> Optional[ForceDataSequence]:
         """Calculates the forces for a particle-object collision."""
         frame = collision.frame
         particle_idx = 0 # Placeholder, as we don't have a single particle index here. This needs refinement if per-particle forces are needed.

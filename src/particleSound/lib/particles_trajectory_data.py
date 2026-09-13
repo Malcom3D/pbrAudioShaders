@@ -35,6 +35,7 @@ class ParticlesTrajectoryData:
     Each particle has its own set of interpolation functions.
     """
     frames: np.ndarray = None # interpolated frame number
+    sampled_frames: np.ndarray = None # interpolated frame number with unsampled pose
     particles_idx: int = None
     sfps: float  = None
     sample_rate: int = None

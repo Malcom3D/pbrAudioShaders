@@ -76,7 +76,7 @@ class DistanceSolver:
 
         frames = np.unique(np.sort(np.concatenate((frames[0], frames[1]))))
 
-        if config_objs[1].connected is not False and objs_idx[0] in config_objs[1].connected[:,0] and config_objs[0].connected is not False and objs_idx[1] in config_objs[0].connected[:,0]:
+        if config_objs[1].connected is not False and config_objs[0].name in np.array(config_objs[1].connected)[:,0].tolist() and config_objs[0].connected is not False and config_objs[1].name in np.array(config_objs[0].connected[:,0]).tolist():
             frame = sample_rate / sfps
             distance, closest_points = self._distance(config_objs=config_objs, trajectory1=trajectory1, trajectory2=trajectory2, frame=frame, sfps=sfps, sample_rate=sample_rate, collision_margin=collision_margin, samples_per_object=samples_per_object)
             distances = np.array(distance)
@@ -528,7 +528,6 @@ class DistanceSolver:
             mask1 = np.linalg.norm(mesh1.vertices - closest_point1, axis=1) < min_distance
             mask2 = np.linalg.norm(mesh2.vertices - closest_point2, axis=1) < min_distance
             if np.any(mask1) and np.any(mask2):
-                method = 'HiRes'
                 nearby1 = mesh1.vertices[mask1]
                 nearby2 = mesh2.vertices[mask2]
                 mesh1_faces_idx = np.where(np.any(np.isin(mesh1.faces, nearby1), axis=1))[0]
@@ -540,11 +539,13 @@ class DistanceSolver:
                     tree2 = cKDTree(mesh2_sampled)
                     vertices1_idx = tree1.query_ball_point(closest_point2, min_distance, workers=-1)
                     vertices2_idx = tree2.query_ball_point(closest_point1, min_distance, workers=-1)
-                    distances = np.linalg.norm(vertices1_idx - vertices2_idx, axis=1)
-                    min_dist_idx = np.argmin(distances)
-                    min_distance = distances[min_dist_idx]
-                    closest_point1 = vertices1_idx[min_dist_idx]
-                    closest_point2 = vertices2_idx[min_dist_idx]
+                    if len(vertices1_idx) == len(vertices2_idx):
+                        method = 'HiRes'
+                        distances = np.linalg.norm(mesh1_sampled[vertices1_idx] - mesh2_sampled[vertices2_idx], axis=1)
+                        min_dist_idx = np.argmin(distances)
+                        min_distance = distances[min_dist_idx]
+                        closest_point1 = vertices1_idx[min_dist_idx]
+                        closest_point2 = vertices2_idx[min_dist_idx]
 
         closest_points = {
             'method': method,

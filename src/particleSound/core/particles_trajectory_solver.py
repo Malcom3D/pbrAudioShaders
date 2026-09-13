@@ -130,6 +130,7 @@ class ParticlesTrajectorySolver:
                         particles_states[particle_idx, frame_idx] = states[frame_idx][particle_idx]
             
                 # Detect unsampled intermediate positions using PositionSolver algorithm
+                total_sampled_times = frame_times
                 for particle_idx in range(particles_count):
                     unsampled_positions = self._detect_unsampled_positions(positions=particles_positions[particle_idx], times=frame_times)
             
@@ -139,9 +140,10 @@ class ParticlesTrajectorySolver:
                 
                         # Create combined data with unsampled positions
                         all_times = np.sort(np.concatenate([frame_times, [p['time'] for p in unsampled_positions]]))
+                        total_sampled_times = np.unique(np.sort(np.concatenate([total_sampled_times, all_times])))
                     
                         # Interpolate positions at all times
-                        all_positions = self._interpolate_positions(times=frame_times, positions=particles_positions[particle_idx], eval_times=all_times)
+                        all_positions = self._interpolate_positions(times=frame_times, positions=particles_positions[particle_idx], eval_times=all_times, unsampled_positions=unsampled_positions)
                 
                         # Estimate rotations at unsampled positions using RotationSolver algorithm
                         all_rotations = self._estimate_rotations(times=frame_times, rotations=particles_rotations[particle_idx], positions=particles_positions[particle_idx], eval_times=all_times, unsampled_positions=unsampled_positions)
@@ -156,8 +158,9 @@ class ParticlesTrajectorySolver:
                             particles_data.positions[particle_idx, coord_idx] = CubicSpline(frame_times, particles_positions[particle_idx][:, coord_idx], extrapolate=1)
                             particles_data.rotations[particle_idx, coord_idx] = CubicSpline(frame_times, particles_rotations[particle_idx][:, coord_idx], extrapolate=1)
             
+                particles_data.sampled_frames = total_sampled_times
                 particles_data.sizes = sizes
-                particles_data.states = particles_states
+                particles_data.states = particles_states.astype(np.int8)
         
         # Register with entity manager
         _ = self.entity_manager.register('trajectories', particles_data)
@@ -309,7 +312,7 @@ class ParticlesTrajectorySolver:
         
         return intersection_time
     
-    def _interpolate_positions(self, times: np.ndarray, positions: np.ndarray, eval_times: np.ndarray) -> np.ndarray:
+    def _interpolate_positions(self, times: np.ndarray, positions: np.ndarray, eval_times: np.ndarray, unsampled_positions: List[Dict]) -> np.ndarray:
         """
         Interpolate positions at evaluation times.
         
@@ -321,6 +324,8 @@ class ParticlesTrajectorySolver:
             Original positions (n_times, 3)
         eval_times : np.ndarray
             Times to evaluate at
+        unsampled_positions : List[Dict]
+            List of unsampled positions with 'time' and 'position'
             
         Returns:
         --------
@@ -330,10 +335,17 @@ class ParticlesTrajectorySolver:
         n_eval = len(eval_times)
         result = np.zeros((n_eval, 3))
         
-        for coord_idx in range(3):
-            spline = CubicSpline(times, positions[:, coord_idx], extrapolate=1)
-            result[:, coord_idx] = spline(eval_times)
-        
+        for eval_time_idx in range(n_eval):
+            if eval_times[eval_time_idx] in times:
+                time_idx = np.where(times == eval_times[eval_time_idx])
+                for coord_idx in range(3):
+                    result[eval_time_idx, coord_idx] = positions[time_idx, coord_idx]
+            else:
+                for idx in range(len(unsampled_positions)):
+                    if unsampled_positions[idx]['time'] == eval_times[eval_time_idx]:
+                        for coord_idx in range(3):
+                            result[eval_time_idx, coord_idx] = unsampled_positions[idx]['position'][coord_idx]
+            
         return result
     
     def _estimate_rotations(self, times: np.ndarray, rotations: np.ndarray, positions: np.ndarray, eval_times: np.ndarray, unsampled_positions: List[Dict]) -> np.ndarray:
