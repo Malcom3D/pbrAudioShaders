@@ -105,6 +105,7 @@ class ParticlesCollisionSolver:
 
         # Get all surface voxel objects
         objects = self.entity_manager.get('objects')
+        sv_objects = {}
         for o_idx in objects.keys():
             if hasattr(objects[o_idx], 'voxel_size'):
                 sv_objects[objects[o_idx].obj_idx] = objects[o_idx]

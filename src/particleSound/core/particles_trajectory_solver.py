@@ -98,6 +98,7 @@ class ParticlesTrajectorySolver:
                     break
                 # Load particle data from files
                 positions, rotations, sizes, states = _load_particle(particle_cfg)
+                debug_print('particles_state', states.shape)
                 particles_count = positions[0].shape[0]
                 # Extract frame indices
                 frame_indices = np.arange(len(positions))
