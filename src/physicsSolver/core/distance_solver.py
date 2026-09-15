@@ -540,12 +540,18 @@ class DistanceSolver:
                     vertices1_idx = tree1.query_ball_point(closest_point2, min_distance, workers=-1)
                     vertices2_idx = tree2.query_ball_point(closest_point1, min_distance, workers=-1)
                     if len(vertices1_idx) == len(vertices2_idx):
-                        method = 'HiRes'
-                        distances = np.linalg.norm(mesh1_sampled[vertices1_idx] - mesh2_sampled[vertices2_idx], axis=1)
-                        min_dist_idx = np.argmin(distances)
-                        min_distance = distances[min_dist_idx]
-                        closest_point1 = vertices1_idx[min_dist_idx]
-                        closest_point2 = vertices2_idx[min_dist_idx]
+                        try:
+                            distances = np.linalg.norm(mesh1_sampled[vertices1_idx] - mesh2_sampled[vertices2_idx], axis=1)
+                            min_dist_idx = np.argmin(distances)
+                            min_distance = distances[min_dist_idx]
+                            closest_point1 = vertices1_idx[min_dist_idx]
+                            closest_point2 = vertices2_idx[min_dist_idx]
+                            method = 'HiRes'
+                        except:
+                            debug_print('##################################################################################################################################################################')
+                            debug_print('HiRes method Error:', 'vertices1_idx', len(vertices1_idx), 'vertices2_idx', len(vertices2_idx), 'distances', len(distances), distances)
+                            debug_print('##################################################################################################################################################################')
+                            pass
 
         closest_points = {
             'method': method,
