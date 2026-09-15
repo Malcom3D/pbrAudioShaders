@@ -86,7 +86,8 @@ class ParticlesCollisions:
             
             for obj_idx, obj_data in scene_objects.items():
                 voxel_obj = obj_data['voxel_object']
-                if not voxel_obj: continue
+                if not voxel_obj:
+                    continue
 
                 # Query collisions
                 for p_idx, p_pos in enumerate(particle_positions):
