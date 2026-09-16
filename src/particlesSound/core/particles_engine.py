@@ -28,11 +28,10 @@ dask_config.set({'num_workers': 1024, 'optimization.fuse.active': True, 'optimiz
 from pbrAudioCommon import EntityManager, _update_status
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
-from physicsSolver import TrajectoryData
-
 from ..lib.surface_voxel_size import SurfaceVoxelSize
 from ..lib.surface_voxel_object import SurfaceVoxelObject
 from ..lib.particles_trajectory_data import ParticlesTrajectoryData
+from ..core.particles_trajectory_solver import ParticlesTrajectorySolver
 from ..core.particles_collisions import ParticlesCollisions
 from ..core.particles_composer import ParticlesComposer
 from ..core.particles_luthier import ParticlesLuthier
@@ -97,38 +96,22 @@ class particlesEngine:
     def _compute_surface_voxel_objects(self):
         """Creates and computes SurfaceVoxelObject for all mesh objects in the scene."""
         config = self.entity_manager.get('config')
-        trajectories = self.entity_manager.get('trajectories')
-        
         tasks = []
-        for config_obj in config.objects:
-            if config_obj.idx in trajectories and isinstance(trajectories[config_obj.idx], TrajectoryData):
-                tasks.append(self._voxelize_object(config_obj.idx, trajectories[config_obj.idx]))
-        
+        tasks = [self._voxelize_object(config_obj.idx) for config_obj in config.objects]
         compute(*tasks)
 
     def _compute_particles_trajectories(self):
         """Creates and computes ParticlesTrajectoryData for all particles objects."""
         config = self.entity_manager.get('config')
-        
-        tasks = []
-        for p_config in config.particles:
-            tasks.append(self._trajectory_particles(p_config.idx))
-        
-        compute(*tasks)
+        for particles_config in config.particles:
+            solver = ParticlesTrajectorySolver(self.entity_manager)
+            solver.compute(particles_config.idx)
 
     @delayed
-    def _voxelize_object(self, obj_idx: int, trajectory: TrajectoryData):
+    def _voxelize_object(self, obj_idx: int):
         """Delayed task to compute a SurfaceVoxelObject."""
-        voxel_obj = SurfaceVoxelObject(self.entity_manager, obj_idx, self.voxel_size, trajectory)
-        voxel_obj.compute()
-        self.entity_manager.register('surface_voxel_objects', voxel_obj)
-
-    @delayed
-    def _trajectory_particles(self, particles_obj_idx: int):
-        """Delayed task to compute ParticlesTrajectoryData."""
-        from .particles_trajectory_solver import ParticlesTrajectorySolver
-        solver = ParticlesTrajectorySolver(self.entity_manager)
-        solver.compute(particles_obj_idx)
+        voxel_obj = SurfaceVoxelObject(self.entity_manager, obj_idx, self.voxel_size)
+        self.entity_manager.register('objects', voxel_obj)
 
     @delayed
     def _detect_collisions(self, particles_obj_idx: int):

@@ -92,7 +92,7 @@ class ParticlesPlayer:
         active_convolvers: Dict[int, List[Tuple[VoxelsModalIRConvolver, float]]] = {} # obj_idx -> list of (convolver, end_frame)
         for obj_idx, count in max_concurrent.items():
             obj_config = next((o for o in config.objects if o.idx == obj_idx), None)
-            if if not obj_config: continue
+            if not obj_config: continue
             lib_path = f"{config.system.cache_path}/dsp/{obj_config.name}.lib"
             if not os.path.exists(lib_path): continue
             

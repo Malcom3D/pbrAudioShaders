@@ -35,105 +35,47 @@ class SurfaceVoxelObject:
     entity_manager: EntityManager
     obj_idx: int
     voxel_size: float
-    trajectory: TrajectoryData
-
-    # Store the voxelized surface for each frame
-    voxelized_frames: Dict[float, Dict[str, Any]] = field(default_factory=dict)
 
     def __post_init__(self):
         config = self.entity_manager.get('config')
+
         set_debug(config.system.debug)
         set_debug_prefix(self.__class__.__name__)
-        self.config_obj = next((obj for obj in config.objects if obj.idx == self.obj_idx), None)
-        if not self.config_obj:
-            raise ValueError(f"Object config for idx {self.obj_idx} not found.")
 
-    def compute(self):
-        """Voxelize the object's surface for each frame in its trajectory."""
-        frames = self.trajectory.get_x()
-        if self.trajectory.static:
-            frames = np.array([0])
+        trajectories = self.entity_manager.get('trajectories')
+        for t_idx in trajectories.keys():
+            if hasattr(trajectories[t_idx], 'obj_idx'):
+                if trajectories[t_idx].obj_idx == self.obj_idx:
+                    self.trajectory = trajectories[t_idx]
+                    break
 
-        for frame in frames:
-            try:
-                vertices = self.trajectory.get_vertices(frame)
-                faces = self.trajectory.get_faces()
-                if vertices.size == 0 or faces.size == 0:
-                    continue
+    def get_involved_voxel(self, sample_idx: float, points: np.ndarray):
+        voxel_grid = self._get_voxel_grid(sample_idx)
+        surface_voxels = self._get_surface_voxel(voxel_grid=voxel_grid)
+        voxel_indices = voxel_grid.points_to_indices(points)
+        mask = (surface_voxels[:, None, :] == voxel_indices[None, :, :]).all(axis=2).any(axis=1)
+        return np.where(mask)[0]
 
-                mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
-                if not mesh.is_volume:
-                    continue
+    def _get_voxel_grid(self, sample_idx: float):
+        vertices = self.trajectory.get_vertices(sample_idx)
+        normals = self.trajectory.get_normals(sample_idx)
+        faces = self.trajectory.get_faces(sample_idx)
 
-                # Voxelize the surface
-                voxel_grid = mesh.voxelized(pitch=self.voxel_size).fill()
-                
-                # Get voxel centers and indices
-                voxel_indices = np.argwhere(voxel_grid.matrix)
-                voxel_centers = voxel_grid.indices_to_points(voxel_indices)
+        mesh = trimesh.Trimesh(vertices=vertices, vertex_normals=normals, faces=faces)
+        return mesh.voxelized(pitch=self.voxel_size).fill()
 
-                self.voxelized_frames[frame] = {
-                    'indices': voxel_indices,
-                    'centers': voxel_centers,
-                    'tree': cKDTree(voxel_centers) if len(voxel_centers) > 0 else None
-                }
-            except Exception as e:
-                debug_print(f"Failed to voxelize {self.config_obj.name} at frame {frame}: {e}")
-                self.voxelized_frames[frame] = {'indices': np.array([]), 'centers': np.array([]), 'tree': None}
-
-    def query_collision(self, frame: float, particle_position: np.ndarray) -> Tuple[np.ndarray, float]:
-        """
-        Query if a particle position collides with the object's surface at a given frame.
-        Returns the index of the closest voxel and the distance.
-        """
-        # Find the closest available frame data
-        if self.trajectory.static:
-            frame_key = 0
-        else:
-            available_frames = np.array(list(self.voxelized_frames.keys()))
-            if available_frames.size == 0:
-                return np.array([]), float('inf')
-            frame_key = available_frames[np.argmin(np.abs(available_frames - frame))]
-
-        frame_data = self.voxelized_frames.get(frame_key)
-        if not frame_data or frame_data['tree'] is None:
-            return np.array([]), float('inf')
-
-        # Query the KDTree for the nearest voxel
-        distance, index = frame_data['tree'].query(particle_position, k=1)
-        
-        if distance < self.voxel_size * 1.5: # Collision threshold
-            return frame_data['indices'][index], distance
-        
-        return np.array([]), distance
-
-    def save(self, filepath: str):
-        """Saves the voxelized data to a file."""
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        # We need to remove KDTree objects before pickling
-        save_data = {}
-        for frame, data in self.voxelized_frames.items():
-            save_data[frame] = {
-                'indices': data['indices'],
-                'centers': data['centers']
-            }
-        np.savez_compressed(filepath, **save_data)
-        debug_print(f"Saved surface voxel data for {self.config_obj.name} to {filepath}")
-
-    def load(self, filepath: str):
-        """Loads voxelized data and rebuilds KDTrees."""
-        if not os.path.exists(filepath):
-            debug_print(f"No surface voxel data found for {self.config_obj.name} at {filepath}")
-            return
-        loaded_data = np.load(filepath, allow_pickle=True)
-        self.voxelized_frames = {}
-        for frame, data in loaded_data.items():
-            indices = data.item()['indices']
-            centers = data.item()['centers']
-            self.voxelized_frames[frame] = {
-                'indices': indices,
-                'centers': centers,
-                'tree': cKDTree(centers) if len(centers) > 0 else None
-            }
-        debug_print(f"Loaded surface voxel data for {self.config_obj.name} from {filepath}")
-
+    def _get_surface_voxel(self, sample_idx: float = None, voxel_grid: trimesh.VoxelGrid: None):
+        if sample_idx is None and voxel_grid is None:
+           return np.array([])
+        voxel_grid = voxel_grid if voxel_grid is not None else self._get_voxel_grid(sample_idx)
+        surface_voxels = []
+        for i in range(voxel_grid.matrix.shape[0]):
+            for j in range(voxel_grid.matrix.shape[1]):
+                for k in range(voxel_grid.matrix.shape[2]):
+                    if voxel_grid.matrix[i,j,k]:
+                        voxel_i = voxel_grid.matrix[i-1,j,k] if i == voxel_grid.matrix.shape[0] -1 else voxel_grid.matrix[i-1,j,k] and voxel_grid.matrix[i+1,j,k]
+                        voxel_j = voxel_grid.matrix[i,j-1,k] if j == voxel_grid.matrix.shape[1] -1 else voxel_grid.matrix[i,j-1,k] and voxel_grid.matrix[i,j+1,k]
+                        voxel_k = voxel_grid.matrix[i,j,k-1] if k == voxel_grid.matrix.shape[2] -1 else voxel_grid.matrix[i,j,k-1] and voxel_grid.matrix[i,j,k+1]
+                        if voxel_i and voxel_j and voxel_k:
+                            surface_voxels.append([i,j,k])
+       return np.array(surface_voxels)

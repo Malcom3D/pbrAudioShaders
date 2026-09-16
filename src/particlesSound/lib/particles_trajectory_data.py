@@ -19,121 +19,489 @@
 import os
 import pickle
 import numpy as np
-from typing import Union, Tuple, Dict, Any, List
+from typing import Union, List, Dict, Tuple, Optional, Any
 from dataclasses import dataclass, field
 from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation, RotationSpline
 
+from ..lib.particles_interpolator import ParticlesInterpolator
+
 @dataclass
 class ParticlesTrajectoryData:
     """
-    Container for interpolated particle trajectory data.
-    Manages merged frames (original + solved) for positions, rotations, and sizes.
+    Container for particle trajectory and orientation data.
+    
+    Stores interpolated positions and rotations for multiple particles.
+    Each particle has its own set of interpolation functions.
     """
-    obj_idx: int
-    static: bool
-    sfps: float
-    sample_rate: int
-    # Interpolators for each particle's position, rotation, and size
-    # Stored as lists of CubicSpline/RotationSpline objects, one per particle
-    positions: List[Tuple[CubicSpline, CubicSpline, CubicSpline]]
-    rotations: List[RotationSpline]
-    sizes: List[Tuple[CubicSpline, CubicSpline, CubicSpline]]
-    states: np.ndarray  # Per-particle state over time (0=dead, 1=alive, 2=unborn)
-    original_frames: np.ndarray
-    solved_frames: np.ndarray
+    frames: np.ndarray = None # interpolated frame number
+    sampled_frames: np.ndarray = None # interpolated frame number with unsampled pose
+    particles_idx: int = None
+    sfps: float  = None
+    sample_rate: int = None
+    particles_count: int = None
+    is_static: bool = False
+    positions: np.ndarray = None  # dtype=object, shape (particles_count, 3)  where each element is a CubicSpline
+    rotations: np.ndarray = None  # dtype=object, shape (particles_count, 3)  where each element is a CubicSpline
+    sizes: np.ndarray = None  # Shape: (particles_count,) dtype=float32
+    states: np.ndarray = None  # Shape: (particles_count,) dtype=int8  0=dead, 1=alive, 2=unborn
+    massive: ParticlesInterpolator = None
 
-    def get_x(self) -> np.ndarray:
-        """Get all unique sample times (merged frames)."""
-        if not self.static:
-            return np.unique(np.concatenate((self.original_frames, self.solved_frames)))
-        return self.original_f_frames
-
-    def get_position(self, particle_idx: int, sample_idx: float) -> np.ndarray:
-        """Get interpolated position for a specific particle at a sample index."""
-        if self.static or not self.positions:
-            return np.zeros(3)
-        
-        if particle_idx >= len(self.positions):
-            return np.zeros(3)
-
-        pos_interp = self.positions[particle_idx]
-        if pos_interp is None:
-            return np.zeros(3)
-
-        x = pos_interp[0](sample_idx)
-        y = pos_interp[1](sample_idx)
-        z = pos_interp[2](sample_idx)
-        return np.array([x, y, z])
-
-    def get_rotation(self, particle_idx: int, sample_idx: float) -> np.ndarray:
-        """Get interpolated rotation for a specific particle at a sample index."""
-        if self.static or not self.rotations:
-            return np.array([0., 0., 0.])
-
-        if particle_idx >= len(self.rotations):
-            return np.array([0., 0., 0.])
-
-        rot_interp = self.rotations[particle_idx]
-        if rot_interp is None:
-            return np.array([0., 0., 0.])
+    def get_states(self, sample_idx: float, particle_idx: int = None) -> np.ndarray:
+        if particle_idx is None:
+            if self.massive is not None:
+                return self.massive.interpolate(sample_idx=sample_idx, attributes=['states'])['states']
+            if self.is_static:
+                return self.states.copy()
+            particle_cloud = []
+            for particle_idx in range(self.particles_count):
+                if self.frames.shape[0] > 1 and sample_idx < self.frames[-1]:
+                    idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
+                elif self.frames.shape[0] > 1:
+                    idx = np.where(self.frames == self.frames[-1])
+                particle_cloud.append(self.states[particle_idx][idx])
+            return np.array(particle_cloud)
             
-        return rot_interp(sample_idx).as_euler('XYZ')
+        elif self.massive is not None:
+            return self.massive.interpolate(sample_idx=sample_idx, attributes=['states'])['states'][particle_idx]
+        elif self.is_static and sample_idx == self.frames[0]:
+            return self.states[particle_idx]
+        elif self.frames.shape[0] > 1 and sample_idx < self.frames[-1]:
+            idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
+        elif self.frames.shape[0] > 1:
+            idx = np.where(self.frames == self.frames[-1])
+        return self.states[particle_idx][idx]
 
-    def get_size(self, particle_idx: int, sample_idx: float) -> np.ndarray:
-        """Get interpolated size for a specific particle at a sample index."""
-        if self.static or not self.sizes:
-            return np.zeros(3)
+    def get_sizes(self, sample_idx: float, particle_idx: int = None) -> np.ndarray:
+        if particle_idx is None:
+            if self.massive is not None:
+                return self.massive.interpolate(sample_idx=sample_idx, attributes=['sizes'])['sizes']
+            if self.is_static:
+                return self.sizes.copy()
+            particle_cloud = []
+            for particle_idx in range(self.particles_count):
+                if self.frames.shape[0] > 1 and sample_idx < self.frames[-1]:
+                    idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
+                elif self.frames.shape[0] > 1:
+                    idx = np.where(self.frames == self.frames[-1])
+                particle_cloud.append(self.sizes[particle_idx][idx])
+            return np.array(particle_cloud).reshape(-1,3)
+
+        elif self.massive is not None:
+            return self.massive.interpolate(sample_idx=sample_idx, attributes=['sizes'])['sizes'][particle_idx]
+        elif self.is_static and sample_idx == self.frames[0]:
+            return self.sizes[particle_idx]
+        elif self.frames.shape[0] > 1 and sample_idx < self.frames[-1]:
+            idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
+        elif self.frames.shape[0] > 1:
+            idx = np.where(self.frames == self.frames[-1])
+        return self.sizes[particle_idx][idx].reshape(-1)
+
+    def get_position(self, sample_idx: float, particle_idx: int = None) -> np.ndarray:
+        """
+        Get interpolated position for a specific particle at a sample index.
         
-        if particle_idx >= len(self.sizes):
-            return np.zeros(3)
+        Parameters:
+        -----------
+        sample_idx : float
+            Sample index to evaluate
+        particle_idx : int
+            Index of the particle
+            
+        Returns:
+        --------
+        np.ndarray
+            Position (3,) at the given sample index
+        """
+        if particle_idx is None:
+            if self.massive is not None:
+                return self.massive.interpolate(sample_idx=sample_idx, attributes=['positions'])['positions']
+            if self.is_static:
+                return self.positions.copy()
+            particle_cloud = []
+            if self.positions.dtype == object:
+                for particle_idx in range(self.particles_count):
+                    x = self.positions[particle_idx, 0](sample_idx)
+                    y = self.positions[particle_idx, 1](sample_idx)
+                    z = self.positions[particle_idx, 2](sample_idx)
+                    particle_cloud.append([x,y,z])
+            elif self.positions.dtype == float:
+                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
+                for particle_idx in range(self.particles_count):
+                    particle_cloud.append(self.positions[frame_idx][particle_idx])
+            return np.array(particle_cloud)
 
-        size_interp = self.sizes[particle_idx]
-        if size_interp is None:
-            return np.zeros(3)
-
-        x = size_interp[0](sample_idx)
-        y = size_interp[1](sample_idx)
-        z = size_interp[2](sample_idx)
-        return np.array([x, y, z])
-
-    def get_state(self, particle_idx: int, sample_idx: float) -> int:
-        """Get particle state at a sample index (nearest neighbor)."""
-        if self.static or self.states.size == 0:
-            return 0
+        elif self.massive is not None:
+            return self.massive.interpolate(sample_idx=sample_idx, attributes=['positions'])['positions'][particle_idx]
+        elif self.is_static:
+            return self.positions[particle_idx].copy()
+        else:
+            if self.positions.dtype == object:
+                x = self.positions[particle_idx, 0](sample_idx)
+                y = self.positions[particle_idx, 1](sample_idx)
+                z = self.positions[particle_idx, 2](sample_idx)
+            elif self.positions.dtype == float:
+                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
+                x,y,z = self.positions[frame_idx][particle_idx]
+            return np.array([x, y, z])
+    
+    def get_rotation(self, sample_idx: float, particle_idx: int = None) -> np.ndarray:
+        """
+        Get interpolated rotation (Euler angles XYZ) for a specific particle.
         
-        if particle_idx >= self.states.shape[1]:
-            return 0
+        Parameters:
+        -----------
+        particle_idx : int
+            Index of the particle
+        sample_idx : float
+            Sample index to evaluate
+            
+        Returns:
+        --------
+        np.ndarray
+            Euler angles (3,) in radians
+        """
+        if particle_idx is None:
+            if self.massive is not None:
+                return self.massive.interpolate(sample_idx=sample_idx, attributes=['rotations'])['rotations']
+            if self.is_static:
+                return self.rotations.copy()
+            particle_cloud = []
+            if self.rotations.dtype == object:
+                for particle_idx in range(self.particles_count):
+                    x = self.rotations[particle_idx, 0](sample_idx)
+                    y = self.rotations[particle_idx, 1](sample_idx)
+                    z = self.rotations[particle_idx, 2](sample_idx)
+                    particle_cloud.append([x,y,z])
+            elif self.rotations.dtype == float:
+                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
+                for particle_idx in range(self.particles_count):
+                    particle_cloud.append(self.rotations[frame_idx][particle_idx])
+            return np.array(particle_cloud)
 
-        # Find the closest frame index
-        all_frames = self.get_x()
-        frame_idx = np.argmin(np.abs(all_frames - sample_idx))
+        elif self.massive is not None:
+            return self.massive.interpolate(sample_idx=sample_idx, attributes=['rotations'])['rotations'][particle_idx]
+        elif self.is_static:
+            return self.rotations[particle_idx].copy()
+        else:
+            if self.rotations.dtype == object:
+                x = self.rotations[particle_idx, 0](sample_idx)
+                y = self.rotations[particle_idx, 1](sample_idx)
+                z = self.rotations[particle_idx, 2](sample_idx)
+            elif self.rotations.dtype == float:
+                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
+                x,y,z = self.rotations[frame_idx][particle_idx]
+
+            return np.array([x, y, z])
+    
+    def get_velocity(self, sample_idx: float, particle_idx: int = None) -> np.ndarray:
+        """
+        Get interpolated velocity for a specific particle.
         
-        if frame_idx < self.states.shape[0]:
-            return self.states[frame_idx, particle_idx]
-        return 0
+        Parameters:
+        -----------
+        particle_idx : int
+            Index of the particle
+        sample_idx : float
+            Sample index to evaluate
+            
+        Returns:
+        --------
+        np.ndarray
+            Velocity (3,) in m/s
+        """
+        if particle_idx is None:
+            if self.is_static:
+                return np.zeros((self.particles_count, 3))
+            if self.massive is not None:
+                pos_after = self.get_position(sample_idx=sample_idx + 1)
+                pos_before = self.get_position(sample_idx=sample_idx - 1)
+                return (pos_after - pos_before) * self.sample_rate / 2.0
 
+            particle_cloud = []
+            if self.positions.dtype == object:
+                for particle_idx in range(self.particles_count):
+                    x = self.positions[particle_idx, 0](sample_idx, 1) * self.sample_rate
+                    y = self.positions[particle_idx, 1](sample_idx, 1) * self.sample_rate
+                    z = self.positions[particle_idx, 2](sample_idx, 1) * self.sample_rate
+                    particle_cloud.append([x,y,z])
+            elif self.positions.dtype == float:
+                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
+                frame_idx = frame_idx if frame_idx > self.frames[0] else frame_idx + 1
+                frame_idx = frame_idx if frame_idx < self.frames[-1] else frame_idx - 1
+                for particle_idx in range(self.particles_count):
+                    pos_after = self.positions[frame_idx + 1][particle_idx]
+                    pos_before = self.positions[frame_idx - 1][particle_idx]
+                    x,y,z = (pos_after - pos_before) * self.sfps / 2.0
+                    particle_cloud.append([x,y,z])
+            return np.array(particle_cloud)
+
+        elif self.is_static:
+            return np.zeros(3)
+        elif self.massive is not None:
+            pos_after = self.get_position(sample_idx=sample_idx + 1, particle_idx=particle_idx)
+            pos_before = self.get_position(sample_idx=sample_idx - 1, particle_idx=particle_idx)
+            return (pos_after - pos_before) * self.sample_rate / 2.0
+        else:
+            if self.positions.dtype == object:
+                x = self.positions[particle_idx, 0](sample_idx, 1) * self.sample_rate
+                y = self.positions[particle_idx, 1](sample_idx, 1) * self.sample_rate
+                z = self.positions[particle_idx, 2](sample_idx, 1) * self.sample_rate
+            elif self.positions.dtype == float:
+                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
+                frame_idx = frame_idx if frame_idx > self.frames[0] else frame_idx + 1
+                frame_idx = frame_idx if frame_idx < self.frames[-1] else frame_idx - 1
+                pos_after = self.positions[frame_idx + 1][particle_idx]
+                pos_before = self.positions[frame_idx - 1][particle_idx]
+                x,y,z = (pos_after - pos_before) * self.sfps / 2.0
+            return np.array([x, y, z])
+    
+    def get_acceleration(self, sample_idx: float, particle_idx: int = None) -> np.ndarray:
+        """
+        Get interpolated acceleration for a specific particle.
+        
+        Parameters:
+        -----------
+        particle_idx : int
+            Index of the particle
+        sample_idx : float
+            Sample index to evaluate
+            
+        Returns:
+        --------
+        np.ndarray
+            Acceleration (3,) in m/s²
+        """
+        if particle_idx is None:
+            if self.is_static:
+                return np.zeros((self.particles_count, 3))
+            if self.massive is not None:
+                pos_after = self.get_position(sample_idx=sample_idx + 1)
+                pos = self.get_position(sample_idx=sample_idx)
+                pos_before = self.get_position(sample_idx=sample_idx - 1)
+                return (pos_after - 2*pos + pos_before) * self.sample_rate**2.0
+            particle_cloud = []
+            if self.positions.dtype == object:
+                for particle_idx in range(self.particles_count):
+                    x = self.positions[particle_idx, 0](sample_idx, 2) * self.sample_rate**2
+                    y = self.positions[particle_idx, 1](sample_idx, 2) * self.sample_rate**2
+                    z = self.positions[particle_idx, 2](sample_idx, 2) * self.sample_rate**2
+                particle_cloud.append([x,y,z])
+            elif self.positions.dtype == float:
+                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
+                frame_idx = frame_idx if frame_idx > self.frames[0] else frame_idx + 1
+                frame_idx = frame_idx if frame_idx < self.frames[-1] else frame_idx - 1
+                for particle_idx in range(self.particles_count):
+                    pos_after = self.positions[frame_idx + 1][particle_idx]
+                    pos = self.positions[frame_idx][particle_idx]
+                    pos_before = self.positions[frame_idx - 1][particle_idx]
+                    x,y,z = (pos_after - 2*pos + pos_before) * self.sfps**2.0
+                    particle_cloud.append([x,y,z])
+            return np.array(particle_cloud)
+
+        elif self.is_static:
+            return np.zeros(3)
+        elif self.massive is not None:
+            pos_after = self.get_position(sample_idx=sample_idx + 1, particle_idx=particle_idx)
+            pos = self.get_position(sample_idx=sample_idx, particle_idx=particle_idx)
+            pos_before = self.get_position(sample_idx=sample_idx - 1, particle_idx=particle_idx)
+            return (pos_after - 2*pos + pos_before) * self.sample_rate**2.0
+        else:
+            if self.positions.dtype == object:
+                x = self.positions[particle_idx, 0](sample_idx, 2) * self.sample_rate**2
+                y = self.positions[particle_idx, 1](sample_idx, 2) * self.sample_rate**2
+                z = self.positions[particle_idx, 2](sample_idx, 2) * self.sample_rate**2
+                return np.array([x, y, z])
+            elif self.positions.dtype == float:
+                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
+                frame_idx = frame_idx if frame_idx > self.frames[0] else frame_idx + 1
+                frame_idx = frame_idx if frame_idx < self.frames[-1] else frame_idx - 1
+                pos_after = self.positions[frame_idx + 1][particle_idx]
+                pos = self.positions[frame_idx][particle_idx]
+                pos_before = self.positions[frame_idx - 1][particle_idx]
+                x,y,z = (pos_after - 2*pos + pos_before) * self.sfps**2.0
+            return np.array([x, y, z])
+    
+    def get_angular_velocity(self, sample_idx: float, particle_idx: int = None) -> np.ndarray:
+        """
+        Get interpolated angular velocity for a specific particle.
+        
+        Parameters:
+        -----------
+        particle_idx : int
+            Index of the particle
+        sample_idx : float
+            Sample index to evaluate
+            
+        Returns:
+        --------
+        np.ndarray
+            Angular velocity (3,) in rad/s
+        """
+        if particle_idx is None:
+            if self.is_static:
+                return np.zeros((self.particles_count, 3))
+            if self.massive is not None:
+                rot_after = self.get_rotation(sample_idx=sample_idx + 1)
+                rot_before = self.get_rotation(sample_idx=sample_idx - 1)
+                return (rot_after - rot_before) * self.sample_rate / 2.0
+            particle_cloud = []
+            if self.rotations.dtype == object:
+                for particle_idx in range(self.particles_count):
+                    x = self.rotations[particle_idx, 0](sample_idx, 1) * self.sample_rate
+                    y = self.rotations[particle_idx, 1](sample_idx, 1) * self.sample_rate
+                    z = self.rotations[particle_idx, 2](sample_idx, 1) * self.sample_rate
+                    particle_cloud.append([x,y,z])
+            elif self.rotations.dtype == float:
+                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
+                frame_idx = frame_idx if frame_idx > self.frames[0] else frame_idx + 1
+                frame_idx = frame_idx if frame_idx < self.frames[-1] else frame_idx - 1
+                for particle_idx in range(self.particles_count):
+                    rot_after = self.rotations[frame_idx + 1][particle_idx]
+                    rot_before = self.rotations[frame_idx - 1][particle_idx]
+                    x,y,z = (rot_after - rot_before) * self.sfps / 2.0
+                    particle_cloud.append([x,y,z])
+            return np.array(particle_cloud)
+
+        elif self.is_static:
+            return np.zeros(3)
+        elif self.massive is not None:
+            rot_after = self.get_rotation(sample_idx=sample_idx + 1, attributes=['rotations'])['rotations']
+            rot_before = self.get_rotation(sample_idx=sample_idx - 1, attributes=['rotations'])['rotations']
+            return (rot_after - rot_before) * self.sample_rate / 2.0
+        else:
+            if self.rotations.dtype == object:
+                x = self.rotations[particle_idx, 0](sample_idx, 1) * self.sample_rate
+                y = self.rotations[particle_idx, 1](sample_idx, 1) * self.sample_rate
+                z = self.rotations[particle_idx, 2](sample_idx, 1) * self.sample_rate
+            elif self.rotations.dtype == float:
+                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
+                frame_idx = frame_idx if frame_idx > self.frames[0] else frame_idx + 1
+                frame_idx = frame_idx if frame_idx < self.frames[-1] else frame_idx - 1
+                rot_after = self.rotations[frame_idx + 1][particle_idx]
+                rot_before = self.rotations[frame_idx - 1][particle_idx]
+                x,y,z = (rot_after - rot_before) * self.sfps / 2.0
+            return np.array([x, y, z]) 
+
+    def get_angular_acceleration(self, sample_idx: float, particle_idx: int = None) -> np.ndarray:
+        """
+        Get interpolated angular accelerations at a sample index.
+        
+        Parameters:
+        -----------
+        sample_idx : float
+            Sample index to evaluate
+        particle_idx : int, optional
+            Specific particle index. If None, returns all particles.
+            
+        Returns:
+        --------
+        np.ndarray
+            Angular accelerations array (particles_count, 3) or single (3,)
+        """
+        if particle_idx is None:
+            if self.is_static:
+                return np.zeros((self.particles_count, 3))
+            if self.massive is not None:
+                rot_after = self.get_rotation(sample_idx=sample_idx + 1)
+                rot = self.get_rotation(sample_idx=sample_idx)
+                rot_before = self.get_rotation(sample_idx=sample_idx - 1)
+                return (rot_after - 2*rot + rot_before) * self.sample_rate**2
+
+            particle_cloud = []
+            if self.rotations.dtype == object:
+                for particle_idx in range(self.particles_count):
+                    x = self.rotations[particle_idx, 0](sample_idx, 2) * self.sample_rate**2
+                    y = self.rotations[particle_idx, 1](sample_idx, 2) * self.sample_rate**2
+                    z = self.rotations[particle_idx, 2](sample_idx, 2) * self.sample_rate**2
+                    particle_cloud.append([x,y,z])
+            elif self.rotations.dtype == float:
+                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
+                frame_idx = frame_idx if frame_idx > self.frames[0] else frame_idx + 1
+                frame_idx = frame_idx if frame_idx < self.frames[-1] else frame_idx - 1
+                for particle_idx in range(self.particles_count):
+                    rot_after = self.rotations[frame_idx + 1][particle_idx]
+                    rot = self.rotations[frame_idx][particle_idx]
+                    rot_before = self.rotations[frame_idx - 1][particle_idx]
+                    x,y,z = (rot_after - 2*rot + rot_before) * self.sfps**2.0
+                    particle_cloud.append([x,y,z])
+            return np.array(particle_cloud)
+
+        elif self.is_static:
+            return np.zeros(3)
+        elif self.massive is not None:
+            rot_after = self.get_rotation(sample_idx=sample_idx + 1, particle_idx=particle_idx)
+            rot = self.get_rotation(sample_idx=sample_idx, particle_idx=particle_idx)
+            rot_before = self.get_rotation(sample_idx=sample_idx - 1, particle_idx=particle_idx)
+            return (rot_after - 2*rot + rot_before) * self.sample_rate**2
+        else:
+            if self.rotations.dtype == object:
+                x = self.rotations[particle_idx, 0](sample_idx, 2) * self.sample_rate**2
+                y = self.rotations[particle_idx, 1](sample_idx, 2) * self.sample_rate**2
+                z = self.rotations[particle_idx, 2](sample_idx, 2) * self.sample_rate**2
+            elif self.rotations.dtype == float:
+                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
+                frame_idx = frame_idx if frame_idx > self.frames[0] else frame_idx + 1
+                frame_idx = frame_idx if frame_idx < self.frames[-1] else frame_idx - 1
+                rot_after = self.rotations[frame_idx + 1][particle_idx]
+                rot = self.rotations[frame_idx][particle_idx]
+                rot_before = self.rotations[frame_idx - 1][particle_idx]
+                x,y,z = (rot_after - 2* + rot_before) * self.sfps**2.0
+            return np.array([x, y, z])
+    
     def save(self, filepath: str) -> None:
-        """Save data in pickle format (preserves interpolation objects)."""
+        """
+        Save data in pickle format (preserves interpolation objects).
+        
+        Parameters:
+        -----------
+        filepath : str
+            Path to save the file
+        """
+        # Ensure directory exists
         os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
+        
+        # Create a serializable version of the object
         save_dict = {
-            'obj_idx': self.obj_idx, 'static': self.static, 'sfps': self.sfps,
-            'sample_rate': self.sample_rate, 'positions': self.positions,
-            'rotations': self.rotations, 'sizes': self.sizes,
-            'states': self.states, 'original_frames': self.original_frames,
-            'solved_frames': self.solved_frames,
+            'particles_count': self.particles_count,
+            'positions': self.positions,
+            'rotations': self.rotations,
+            'states': self.states,
+            'is_static': self.is_static,
             '_format': 'ParticlesTrajectoryData_v1_pickle'
         }
+        
         with open(filepath, 'wb') as f:
             pickle.dump(save_dict, f, protocol=pickle.HIGHEST_PROTOCOL)
-        print(f"Particles trajectory data saved to {filepath}")
-
+        print(f"Particle trajectory data saved to {filepath}")
+    
     @staticmethod
     def load(filepath: str) -> 'ParticlesTrajectoryData':
-        """Load data from pickle format."""
+        """
+        Load data from pickle format.
+        
+        Parameters:
+        -----------
+        filepath : str
+            Path to the pickle file
+            
+        Returns:
+        --------
+        ParticlesTrajectoryData
+            Loaded particle trajectory data
+        """
         with open(filepath, 'rb') as f:
             data = pickle.load(f)
+        
+        # Check format
         if '_format' not in data or data['_format'] != 'ParticlesTrajectoryData_v1_pickle':
             raise ValueError("Invalid file format or version")
-        return ParticlesTrajectoryData(**{k: v for k, v in data.items() if k != '_format'})
-
+        
+        # Reconstruct the object
+        return ParticlesTrajectoryData(
+            particles_count=data['particles_count'],
+            positions=data['positions'],
+            rotations=data['rotations'],
+            states=data['states'],
+            is_static=data['is_static'],
+        )

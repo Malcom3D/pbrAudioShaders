@@ -80,7 +80,6 @@ class VoxelsModalIRConvolver:
         Excite the modal model for a given object and return the output sample.
         """
         if obj_idx not in self.coeffs:
-:
             return 0.0
 
         c = self.coeffs[obj_idx]['c']
