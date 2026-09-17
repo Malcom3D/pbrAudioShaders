@@ -385,7 +385,7 @@ class ParticlesInterpolator:
         # Save with named keys so that load_frame(..., unsampled=True) can read them
         np.savez_compressed(output_file, positions=unsampled_positions, rotations=unsampled_rotations, times=unsampled_frames)
 
-        debug_print(f"ParticlesInterpolator: Saved unsampled data for frame {frame_idx} ({len(positions)} particles) -> {output_file}")
+        debug_print(f"ParticlesInterpolator: Saved unsampled data for frame {frame_idx} ({self._particle_count} particles) -> {output_file}")
     
     def load_frame(self, frame: int, unsampled: bool = False) -> Optional[Dict[str, np.ndarray]]:
         """
