@@ -94,15 +94,14 @@ class ParticlesTrajectorySolver:
                     # Massive particles object
                     massive = ParticlesInterpolator(self.entity_manager, particles_idx)
                     particles_count = massive.get_particle_count()
-                    positions, rotations = (None for _ in range(2))
+                    positions, rotations, states = (None for _ in range(3))
                     # Extract frame indices
                     abs_frame_indices = massive.get_frame_range()
-                    frame_indices = np.arange(abs_frame_indices[1] - abs_frame_indices[0])
+                    frame_indices = np.arange(abs_frame_indices[1] - abs_frame_indices[0] + 1)
                     frame_times = np.array(frame_indices) * self.sample_rate / self.sfps
                     break
                 # Load particle data from files
                 positions, rotations, sizes, states = _load_particle(particle_cfg)
-                debug_print('particles_state', states.shape)
                 particles_count = positions[0].shape[0]
                 # Extract frame indices
                 frame_indices = np.arange(len(positions))
@@ -110,13 +109,15 @@ class ParticlesTrajectorySolver:
                 break
         
         # Initialize particle trajectory data
-        particles_data = ParticlesTrajectoryData(frames=frame_times, particles_idx=particles_idx, is_static=particle_cfg.static, sfps=self.sfps, sample_rate=self.sample_rate, particles_count=particles_count, positions=positions, rotations=rotations)
+        particles_data = ParticlesTrajectoryData(frames=frame_times, particles_idx=particles_idx, is_static=particle_cfg.static, sfps=self.sfps, sample_rate=self.sample_rate, particles_count=particles_count, positions=positions, rotations=rotations, states=states)
 
         if particle_cfg.proxy:
             debug_print(f"Processing {particles_count} particles across {frame_indices.shape[0]} frames")
             particles_data.massive = massive
-            tasks = [self._unsampled_massive_data(particles_data, frame_indices[_idx], frame_indices) for _idx in range(2, frame_indices - 2)]
-            results = compute(*tasks)
+#            tasks = [self._unsampled_massive_data(particles_data, frame_indices[_idx], frame_indices) for _idx in range(2, frame_indices.shape[0] - 2)]
+#            results = compute(*tasks)
+            for _idx in range(2, frame_indices.shape[0] - 2):
+                self._unsampled_massive_data(particles_data, frame_indices[_idx], frame_indices)
             
             # Register with entity manager
             _ = self.entity_manager.register('trajectories', particles_data)
@@ -138,16 +139,28 @@ class ParticlesTrajectorySolver:
                 if not particle_cfg.proxy:
                     tasks = [self._unsampled_data(particles_data, particle_idx, frame_indices) for particle_idx in range(particles_count)]
                     results = compute(*tasks)
+                particles_data_positions, particles_data_rotations = (np.zeros((particles_count, 3), dtype=object) for _ in range(2))
+                particles_data_states = np.zeros((particles_count, frame_indices.shape[0]), dtype=np.int8)
+                for particle_idx, particle_positions, particle_rotations, particle_frames, particles_states, sampled_times in results:
+                    particles_data_states[particle_idx] = particles_states
+                    for coord_idx in range(3):
+                        particles_data_positions[particle_idx, coord_idx] = CubicSpline(particle_frames, particle_positions[:, coord_idx], extrapolate=1)
+                        particles_data_rotations[particle_idx, coord_idx] = CubicSpline(particle_frames, particle_rotations[:, coord_idx], extrapolate=1)
+
+                particles_data.positions = particles_data_positions
+                particles_data.rotations = particles_data_rotations
+                particles_data.sampled_frames = sampled_times
+                particles_data.sizes = sizes
+                particles_data.states = states
 
         # Register with entity manager
-        for particles_data in results:
-            _ = self.entity_manager.register('trajectories', particles_data)
+        _ = self.entity_manager.register('trajectories', particles_data)
         
-            # Save to file
-            output_file = f"{self.output_dir}/{particle_cfg.name}.pkl"
-            particles_data.save(output_file)
+        # Save to file
+        output_file = f"{self.output_dir}/{particle_cfg.name}.pkl"
+        particles_data.save(output_file)
 
-    @delayed
+#    @delayed
     def _unsampled_massive_data(self, particles_data: ParticlesTrajectoryData, frame_idx: int, frame_indices: np.ndarray):
         """
         Compute unsampled particles positions and rotations from massive particles sequence
@@ -167,44 +180,59 @@ class ParticlesTrajectorySolver:
             Computed particle trajectory data, or None if failed
         """
         # init results array
-        unsampled_particles_positions, unsampled_particles_rotations = (np.zeros((particles_data.particles_count, 3)) from _ in range(2))
+        unsampled_particles_positions, unsampled_particles_rotations = (np.zeros((particles_data.particles_count, 3)) for _ in range(2))
         unsampled_particles_frames = np.zeros((particles_data.particles_count,)) 
 
         # init temp array
         particles_positions, particles_rotations = (np.zeros((5, particles_data.particles_count, 3)) for _ in range(2))
 
         # Detect unsampled intermediate positions using PositionSolver algorithm
-        frame_times = particles_data.frames
-        total_sampled_times = particles_data.frames
+#        frame_times = particles_data.frames
+        frame_times = []
         # Extract particle data across surrounding frames
         for surround in range(5):
             sample_idx = (frame_idx + (surround - 2)) * self.sample_rate / self.sfps
-            particles_positions[surround] = particles_data.get_positions(sample_idx=sample_idx)
-            particles_rotations[surround] = particles_data.get_rotations(sample_idx=sample_idx)
+            frame_times += [sample_idx]
+            particles_positions[surround] = particles_data.get_position(sample_idx=sample_idx)
+            particles_rotations[surround] = particles_data.get_rotation(sample_idx=sample_idx)
 
-        for particle_idx in range(particles_data.particles_count):
-            unsampled_positions = self._detect_unsampled_positions(positions=particles_positions[particle_idx], times=frame_times)
+        frame_times = np.array(frame_times)
+        tasks = [self._unsampled_particle(particle_idx, particles_positions, particles_rotations, frame_times, frame_idx) for particle_idx in range(particles_data.particles_count)]
+        results = compute(*tasks)
+
+        for frame_idx, particle_idx, unsampled_particle_positions, unsampled_particle_rotations, unsampled_particle_frames in results:
+            unsampled_particles_positions[particle_idx] = unsampled_particle_positions
+            unsampled_particles_rotations[particle_idx] = unsampled_particle_rotations
+            unsampled_particles_frames[particle_idx] = unsampled_particle_frames
+        particles_data.massive.save_unsampled(frame_idx, unsampled_particles_positions, unsampled_particles_rotations, unsampled_particles_frames)
+
+    @delayed
+    def _unsampled_particle(self, particle_idx: int, particles_positions: np.ndarray, particles_rotations: np.ndarray, frame_times: np.ndarray, frame_idx: int):
+#        for particle_idx in range(particles_data.particles_count):
+            unsampled_positions = self._detect_unsampled_positions(positions=particles_positions[:, particle_idx], times=frame_times)
 
             # If unsampled positions found, insert them into the data
             if len(unsampled_positions) > 0:
-                debug_print(f"Particle {particle_idx}: Found {len(unsampled_positions)} unsampled positions")
+                debug_print(f"Massive particle {particle_idx}: Found {len(unsampled_positions)} unsampled positions at frame {frame_idx}")
 
                 # Create combined data with unsampled positions
                 unsampled_frames = [p['time'] for p in unsampled_positions]
                 all_times = np.sort(np.concatenate([frame_times, unsampled_frames]))
 
                 # Interpolate positions at all times
-                all_positions = self._interpolate_positions(times=frame_times, positions=particles_positions[particle_idx], eval_times=all_times, unsampled_positions=unsampled_positions)
+                all_positions = self._interpolate_positions(times=frame_times, positions=particles_positions[:, particle_idx], eval_times=all_times, unsampled_positions=unsampled_positions)
 
                 # Estimate rotations at unsampled positions using RotationSolver algorithm
-                all_rotations = self._estimate_rotations(times=frame_times, rotations=particles_rotations[particle_idx], positions=particles_positions[particle_idx], eval_times=all_times, unsampled_positions=unsampled_positions)
+                all_rotations = self._estimate_rotations(times=frame_times, rotations=particles_rotations[:, particle_idx], positions=particles_positions[:, particle_idx], eval_times=all_times, unsampled_positions=unsampled_positions)
 
                 unsampled_mask = all_times == unsampled_frames
-                unsampled_particles_positions[particle_idx] = all_positions[unsampled_mask]
-                unsampled_particles_rotations[particle_idx] = all_rotations[unsampled_mask]
-                unsampled_particles_frames[particle_idx] = all_times[unsampled_mask]
+#                unsampled_particles_positions[particle_idx] = all_positions[unsampled_mask]
+#                unsampled_particles_rotations[particle_idx] = all_rotations[unsampled_mask]
+#                unsampled_particles_frames[particle_idx] = all_times[unsampled_mask]
 
-        particles_data.massive.save_unsampled(frame_idx, unsampled_particles_positions, unsampled_particles_rotations, unsampled_particles_frames)
+#        particles_data.massive.save_unsampled(frame_idx, unsampled_particles_positions, unsampled_particles_rotations, unsampled_particles_frames)
+                return frame_idx, particle_idx, all_positions[unsampled_mask], all_rotations[unsampled_mask], all_times[unsampled_mask]
+            return frame_idx, particle_idx, particles_positions[3, particle_idx], particles_rotations[3, particle_idx], frame_times[3]
 
     @delayed                 
     def _unsampled_data(self, particles_data: ParticlesTrajectoryData, particle_idx: int, frame_indices: np.ndarray) -> Optional[ParticlesTrajectoryData]:
@@ -233,8 +261,8 @@ class ParticlesTrajectorySolver:
         particles_states = np.zeros((frame_indices.shape[0],))
         for frame_idx in frame_indices:
             # Extract particle data across all frames
-            particles_positions[frame_idx] = particles_data.get_positions(sample_idx=frame_idx, particle_idx=particle_idx)
-            particles_rotations[frame_idx] = particles_data.get_rotations(sample_idx=frame_idx, particle_idx=particle_idx)
+            particles_positions[frame_idx] = particles_data.get_position(sample_idx=frame_idx, particle_idx=particle_idx)
+            particles_rotations[frame_idx] = particles_data.get_rotation(sample_idx=frame_idx, particle_idx=particle_idx)
             particles_states[frame_idx] = particles_data.get_states(sample_idx=frame_idx, particle_idx=particle_idx)
 
         unsampled_positions = self._detect_unsampled_positions(positions=particles_positions, times=frame_times)
@@ -245,7 +273,7 @@ class ParticlesTrajectorySolver:
             
             # Create combined data with unsampled positions
             all_times = np.sort(np.concatenate([frame_times, [p['time'] for p in unsampled_positions]]))
-            self.total_sampled_times = np.unique(np.sort(np.concatenate([self.total_sampled_times, all_times])))
+            total_sampled_times = np.unique(np.sort(np.concatenate([self.total_sampled_times, all_times])))
                 
             # Interpolate positions at all times
             all_positions = self._interpolate_positions(times=frame_times, positions=particles_positions[particle_idx], eval_times=all_times, unsampled_positions=unsampled_positions)
@@ -253,21 +281,9 @@ class ParticlesTrajectorySolver:
             # Estimate rotations at unsampled positions using RotationSolver algorithm
             all_rotations = self._estimate_rotations(times=frame_times, rotations=particles_rotations[particle_idx], positions=particles_positions[particle_idx], eval_times=all_times, unsampled_positions=unsampled_positions)
 
-            # Create interpolation functions
-            for coord_idx in range(3):
-                particles_data.positions[particle_idx, coord_idx] = CubicSpline(all_times, all_positions[:, coord_idx], extrapolate=1)
-                particles_data.rotations[particle_idx, coord_idx] = CubicSpline(all_times, all_rotations[:, coord_idx], extrapolate=1)
+            return particle_idx, all_positions, all_rotations, all_times, particles_states, total_sampled_times
         else:
-            # No unsampled positions - use original data
-            for coord_idx in range(3):
-                particles_data.positions[particle_idx, coord_idx] = CubicSpline(frame_times, particles_positions[particle_idx][:, coord_idx], extrapolate=1)
-                particles_data.rotations[particle_idx, coord_idx] = CubicSpline(frame_times, particles_rotations[particle_idx][:, coord_idx], extrapolate=1)
-            
-        particles_data.sampled_frames = self.total_sampled_times
-        particles_data.sizes = sizes
-        particles_data.states = particles_states.astype(np.int8)
-
-        return particles_data
+            return particle_idx, particles_positions, particles_rotations, frame_times, particles_states, total_sampled_times
         
     def _detect_unsampled_positions(self, positions: np.ndarray, times: np.ndarray) -> List[Dict]:
         """
@@ -437,7 +453,7 @@ class ParticlesTrajectorySolver:
         
         for eval_time_idx in range(n_eval):
             if eval_times[eval_time_idx] in times:
-                time_idx = np.where(times == eval_times[eval_time_idx])
+                time_idx = np.where(times == eval_times[eval_time_idx])[0][0]
                 for coord_idx in range(3):
                     result[eval_time_idx, coord_idx] = positions[time_idx, coord_idx]
             else:

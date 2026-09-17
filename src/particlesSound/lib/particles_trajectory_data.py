@@ -56,9 +56,9 @@ class ParticlesTrajectoryData:
             particle_cloud = []
             for particle_idx in range(self.particles_count):
                 if self.frames.shape[0] > 1 and sample_idx < self.frames[-1]:
-                    idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
+                    idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))[0][0]
                 elif self.frames.shape[0] > 1:
-                    idx = np.where(self.frames == self.frames[-1])
+                    idx = np.where(self.frames == self.frames[-1])[0][0]
                 particle_cloud.append(self.states[particle_idx][idx])
             return np.array(particle_cloud)
             
@@ -67,9 +67,9 @@ class ParticlesTrajectoryData:
         elif self.is_static and sample_idx == self.frames[0]:
             return self.states[particle_idx]
         elif self.frames.shape[0] > 1 and sample_idx < self.frames[-1]:
-            idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
+            idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))[0][0]
         elif self.frames.shape[0] > 1:
-            idx = np.where(self.frames == self.frames[-1])
+            idx = np.where(self.frames == self.frames[-1])[0][0]
         return self.states[particle_idx][idx]
 
     def get_sizes(self, sample_idx: float, particle_idx: int = None) -> np.ndarray:
@@ -81,9 +81,9 @@ class ParticlesTrajectoryData:
             particle_cloud = []
             for particle_idx in range(self.particles_count):
                 if self.frames.shape[0] > 1 and sample_idx < self.frames[-1]:
-                    idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
+                    idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))[0][0]
                 elif self.frames.shape[0] > 1:
-                    idx = np.where(self.frames == self.frames[-1])
+                    idx = np.where(self.frames == self.frames[-1])[0][0]
                 particle_cloud.append(self.sizes[particle_idx][idx])
             return np.array(particle_cloud).reshape(-1,3)
 
@@ -92,9 +92,9 @@ class ParticlesTrajectoryData:
         elif self.is_static and sample_idx == self.frames[0]:
             return self.sizes[particle_idx]
         elif self.frames.shape[0] > 1 and sample_idx < self.frames[-1]:
-            idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
+            idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))[0][0]
         elif self.frames.shape[0] > 1:
-            idx = np.where(self.frames == self.frames[-1])
+            idx = np.where(self.frames == self.frames[-1])[0][0]
         return self.sizes[particle_idx][idx].reshape(-1)
 
     def get_position(self, sample_idx: float, particle_idx: int = None) -> np.ndarray:
@@ -125,10 +125,10 @@ class ParticlesTrajectoryData:
                     y = self.positions[particle_idx, 1](sample_idx)
                     z = self.positions[particle_idx, 2](sample_idx)
                     particle_cloud.append([x,y,z])
-            elif self.positions.dtype == float:
-                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
+            elif self.positions.dtype in ['float32','float64'] and self.positions.shape[0] > 0:
+                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))[0][0]
                 for particle_idx in range(self.particles_count):
-                    particle_cloud.append(self.positions[frame_idx][particle_idx])
+                    particle_cloud.append(self.positions[frame_idx, particle_idx])
             return np.array(particle_cloud)
 
         elif self.massive is not None:
@@ -140,9 +140,9 @@ class ParticlesTrajectoryData:
                 x = self.positions[particle_idx, 0](sample_idx)
                 y = self.positions[particle_idx, 1](sample_idx)
                 z = self.positions[particle_idx, 2](sample_idx)
-            elif self.positions.dtype == float:
-                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
-                x,y,z = self.positions[frame_idx][particle_idx]
+            elif self.positions.dtype in ['float32','float64'] and self.positions.shape[0] > 0:
+                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))[0][0]
+                x,y,z = self.positions[frame_idx, particle_idx]
             return np.array([x, y, z])
     
     def get_rotation(self, sample_idx: float, particle_idx: int = None) -> np.ndarray:
@@ -173,10 +173,10 @@ class ParticlesTrajectoryData:
                     y = self.rotations[particle_idx, 1](sample_idx)
                     z = self.rotations[particle_idx, 2](sample_idx)
                     particle_cloud.append([x,y,z])
-            elif self.rotations.dtype == float:
-                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
+            elif self.rotations.dtype in ['float32','float64'] and self.rotations.shape[0] > 0:
+                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))[0][0]
                 for particle_idx in range(self.particles_count):
-                    particle_cloud.append(self.rotations[frame_idx][particle_idx])
+                    particle_cloud.append(self.rotations[frame_idx, particle_idx])
             return np.array(particle_cloud)
 
         elif self.massive is not None:
@@ -188,9 +188,9 @@ class ParticlesTrajectoryData:
                 x = self.rotations[particle_idx, 0](sample_idx)
                 y = self.rotations[particle_idx, 1](sample_idx)
                 z = self.rotations[particle_idx, 2](sample_idx)
-            elif self.rotations.dtype == float:
-                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
-                x,y,z = self.rotations[frame_idx][particle_idx]
+            elif self.rotations.dtype in ['float32','float64'] and self.rotations.shape[0] > 0:
+                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))[0][0]
+                x,y,z = self.rotations[frame_idx, particle_idx]
 
             return np.array([x, y, z])
     
@@ -225,8 +225,8 @@ class ParticlesTrajectoryData:
                     y = self.positions[particle_idx, 1](sample_idx, 1) * self.sample_rate
                     z = self.positions[particle_idx, 2](sample_idx, 1) * self.sample_rate
                     particle_cloud.append([x,y,z])
-            elif self.positions.dtype == float:
-                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
+            elif self.positions.dtype in ['float32','float64'] and self.positions.shape[0] > 0:
+                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))[0][0]
                 frame_idx = frame_idx if frame_idx > self.frames[0] else frame_idx + 1
                 frame_idx = frame_idx if frame_idx < self.frames[-1] else frame_idx - 1
                 for particle_idx in range(self.particles_count):
@@ -247,8 +247,8 @@ class ParticlesTrajectoryData:
                 x = self.positions[particle_idx, 0](sample_idx, 1) * self.sample_rate
                 y = self.positions[particle_idx, 1](sample_idx, 1) * self.sample_rate
                 z = self.positions[particle_idx, 2](sample_idx, 1) * self.sample_rate
-            elif self.positions.dtype == float:
-                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
+            elif self.positions.dtype in ['float32','float64'] and self.positions.shape[0] > 0:
+                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))[0][0]
                 frame_idx = frame_idx if frame_idx > self.frames[0] else frame_idx + 1
                 frame_idx = frame_idx if frame_idx < self.frames[-1] else frame_idx - 1
                 pos_after = self.positions[frame_idx + 1][particle_idx]
@@ -287,13 +287,13 @@ class ParticlesTrajectoryData:
                     y = self.positions[particle_idx, 1](sample_idx, 2) * self.sample_rate**2
                     z = self.positions[particle_idx, 2](sample_idx, 2) * self.sample_rate**2
                 particle_cloud.append([x,y,z])
-            elif self.positions.dtype == float:
-                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
+            elif self.positions.dtype in ['float32','float64'] and self.positions.shape[0] > 0:
+                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))[0][0]
                 frame_idx = frame_idx if frame_idx > self.frames[0] else frame_idx + 1
                 frame_idx = frame_idx if frame_idx < self.frames[-1] else frame_idx - 1
                 for particle_idx in range(self.particles_count):
                     pos_after = self.positions[frame_idx + 1][particle_idx]
-                    pos = self.positions[frame_idx][particle_idx]
+                    pos = self.positions[frame_idx, particle_idx]
                     pos_before = self.positions[frame_idx - 1][particle_idx]
                     x,y,z = (pos_after - 2*pos + pos_before) * self.sfps**2.0
                     particle_cloud.append([x,y,z])
@@ -312,12 +312,12 @@ class ParticlesTrajectoryData:
                 y = self.positions[particle_idx, 1](sample_idx, 2) * self.sample_rate**2
                 z = self.positions[particle_idx, 2](sample_idx, 2) * self.sample_rate**2
                 return np.array([x, y, z])
-            elif self.positions.dtype == float:
-                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
+            elif self.positions.dtype in ['float32','float64'] and self.positions.shape[0] > 0:
+                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))[0][0]
                 frame_idx = frame_idx if frame_idx > self.frames[0] else frame_idx + 1
                 frame_idx = frame_idx if frame_idx < self.frames[-1] else frame_idx - 1
                 pos_after = self.positions[frame_idx + 1][particle_idx]
-                pos = self.positions[frame_idx][particle_idx]
+                pos = self.positions[frame_idx, particle_idx]
                 pos_before = self.positions[frame_idx - 1][particle_idx]
                 x,y,z = (pos_after - 2*pos + pos_before) * self.sfps**2.0
             return np.array([x, y, z])
@@ -352,8 +352,8 @@ class ParticlesTrajectoryData:
                     y = self.rotations[particle_idx, 1](sample_idx, 1) * self.sample_rate
                     z = self.rotations[particle_idx, 2](sample_idx, 1) * self.sample_rate
                     particle_cloud.append([x,y,z])
-            elif self.rotations.dtype == float:
-                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
+            elif self.rotations.dtype in ['float32','float64'] and self.rotations.shape[0] > 0:
+                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))[0][0]
                 frame_idx = frame_idx if frame_idx > self.frames[0] else frame_idx + 1
                 frame_idx = frame_idx if frame_idx < self.frames[-1] else frame_idx - 1
                 for particle_idx in range(self.particles_count):
@@ -374,8 +374,8 @@ class ParticlesTrajectoryData:
                 x = self.rotations[particle_idx, 0](sample_idx, 1) * self.sample_rate
                 y = self.rotations[particle_idx, 1](sample_idx, 1) * self.sample_rate
                 z = self.rotations[particle_idx, 2](sample_idx, 1) * self.sample_rate
-            elif self.rotations.dtype == float:
-                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
+            elif self.rotations.dtype in ['float32','float64'] and self.rotations.shape[0] > 0:
+                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))[0][0]
                 frame_idx = frame_idx if frame_idx > self.frames[0] else frame_idx + 1
                 frame_idx = frame_idx if frame_idx < self.frames[-1] else frame_idx - 1
                 rot_after = self.rotations[frame_idx + 1][particle_idx]
@@ -415,13 +415,13 @@ class ParticlesTrajectoryData:
                     y = self.rotations[particle_idx, 1](sample_idx, 2) * self.sample_rate**2
                     z = self.rotations[particle_idx, 2](sample_idx, 2) * self.sample_rate**2
                     particle_cloud.append([x,y,z])
-            elif self.rotations.dtype == float:
-                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
+            elif self.rotations.dtype in ['float32','float64'] and self.rotations.shape[0] > 0:
+                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))[0][0]
                 frame_idx = frame_idx if frame_idx > self.frames[0] else frame_idx + 1
                 frame_idx = frame_idx if frame_idx < self.frames[-1] else frame_idx - 1
                 for particle_idx in range(self.particles_count):
                     rot_after = self.rotations[frame_idx + 1][particle_idx]
-                    rot = self.rotations[frame_idx][particle_idx]
+                    rot = self.rotations[frame_idx, particle_idx]
                     rot_before = self.rotations[frame_idx - 1][particle_idx]
                     x,y,z = (rot_after - 2*rot + rot_before) * self.sfps**2.0
                     particle_cloud.append([x,y,z])
@@ -439,12 +439,12 @@ class ParticlesTrajectoryData:
                 x = self.rotations[particle_idx, 0](sample_idx, 2) * self.sample_rate**2
                 y = self.rotations[particle_idx, 1](sample_idx, 2) * self.sample_rate**2
                 z = self.rotations[particle_idx, 2](sample_idx, 2) * self.sample_rate**2
-            elif self.rotations.dtype == float:
-                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))
+            elif self.rotations.dtype in ['float32','float64'] and self.rotations.shape[0] > 0:
+                frame_idx = np.where(self.frames == np.min(self.frames[0 < self.frames - sample_idx]))[0][0]
                 frame_idx = frame_idx if frame_idx > self.frames[0] else frame_idx + 1
                 frame_idx = frame_idx if frame_idx < self.frames[-1] else frame_idx - 1
                 rot_after = self.rotations[frame_idx + 1][particle_idx]
-                rot = self.rotations[frame_idx][particle_idx]
+                rot = self.rotations[frame_idx, particle_idx]
                 rot_before = self.rotations[frame_idx - 1][particle_idx]
                 x,y,z = (rot_after - 2* + rot_before) * self.sfps**2.0
             return np.array([x, y, z])

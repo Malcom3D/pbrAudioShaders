@@ -64,7 +64,7 @@ class SurfaceVoxelObject:
         mesh = trimesh.Trimesh(vertices=vertices, vertex_normals=normals, faces=faces)
         return mesh.voxelized(pitch=self.voxel_size).fill()
 
-    def _get_surface_voxel(self, sample_idx: float = None, voxel_grid: trimesh.VoxelGrid: None):
+    def _get_surface_voxel(self, sample_idx: float = None, voxel_grid: trimesh.voxel.base.VoxelGrid = None):
         if sample_idx is None and voxel_grid is None:
            return np.array([])
         voxel_grid = voxel_grid if voxel_grid is not None else self._get_voxel_grid(sample_idx)
@@ -78,4 +78,4 @@ class SurfaceVoxelObject:
                         voxel_k = voxel_grid.matrix[i,j,k-1] if k == voxel_grid.matrix.shape[2] -1 else voxel_grid.matrix[i,j,k-1] and voxel_grid.matrix[i,j,k+1]
                         if voxel_i and voxel_j and voxel_k:
                             surface_voxels.append([i,j,k])
-       return np.array(surface_voxels)
+        return np.array(surface_voxels)

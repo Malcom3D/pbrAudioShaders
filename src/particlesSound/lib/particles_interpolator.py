@@ -122,7 +122,7 @@ class ParticlesInterpolator:
                                 alpha = 1.0
                             for j in range(3):
                                 result[i, j] = pos0[i, j] * (1.0 - alpha) + posU[i, j] * alpha
-                        else:
+                        elif t > t_i:
                             denom = 1.0 - t_i
                             if denom > 0.0:
                                 alpha = (t - t_i) / denom
@@ -153,7 +153,7 @@ class ParticlesInterpolator:
                         else:
                             # Interpolate between sizeU[i] (at t=tU[i]) and size1[i] (at t=1)
                             if tU[i] < 1.0:
-                                alpha = (t - tU[i]) / (1..0 - tU[i])
+                                alpha = (t - tU[i]) / (1.0 - tU[i])
                                 result[i] = sizeU[i] * (1.0 - alpha) + size1[i] * alpha
                             else:
                                 result[i] = size1[i]
@@ -237,7 +237,7 @@ class ParticlesInterpolator:
                         result[i, 3] = s0 * a3 + s1 * b3
 
                         # Normalize result
-                        norm = np.sqrt(result[i, 0] ** 2 + result[i, 1] ** 2 + result result[i, 2] ** 2 + result[i, 3] ** 2)
+                        norm = np.sqrt(result[i, 0] ** 2 + result[i, 1] ** 2 + result[i, 2] ** 2 + result[i, 3] ** 2)
 
                         if norm > 0:
                             result[i, 0] /= norm
@@ -371,7 +371,7 @@ class ParticlesInterpolator:
             self._particle_count = first_frame['particle_count']
             debug_print(f"ParticleInterpolator: Found {self._particle_count} particles across {len(self._frames)} frames")
 
-    def save_unsampled(self, frame_idx: int, unsampled_positions: np.ndarray, unsampled_rotations: np.ndarray, unsampled_frames: np.ndarray)
+    def save_unsampled(self, frame_idx: int, unsampled_positions: np.ndarray, unsampled_rotations: np.ndarray, unsampled_frames: np.ndarray):
         """
         Save unsampled particle data between frame_idx and frame_idx + 1
         """
@@ -425,14 +425,20 @@ class ParticlesInterpolator:
             return None
         
         # Load data
-        if unsampled:
+        if unsampled and file_path.exists():
+            frame_data = {
+                'positions': np.array([]), 
+                'rotations': np.array([]),
+                'sizes': np.array([]),
+                'times': np.array([]),
+            }
             try:
                 with np.load(file_path) as data:
                     frame_data = {
-                        'positions': data['positions'].astype(np.float64),
-                        'rotations': data['rotations'].astype(np.float64),
+                        'positions': data[data.files[0]].astype(np.float64),
+                        'rotations': data[data.files[1]].astype(np.float64),
                         'sizes': np.array([]),
-                        'times': data['times'].astype(np.float64)
+                        'times': data[data.files[2]].astype(np.float64)
                     }
 
                     # Convert euler rotations to quaternions for better interpolation
@@ -442,22 +448,18 @@ class ParticlesInterpolator:
 
             except Exception as e:
                 debug_print(f"Error loading frame {frame}: {e}")
-                return frame_data = {
-                        'positions': np.array([]),
-                        'rotations': np.array([]),
-                        'sizes': np.array([]),
-                        'times': np.array([]),
-                    }
-
+                return frame_data
+        elif unsampled and not file_path.exists():
+            return frame_data
         else:
             try:
                 with np.load(file_path) as data:
                     frame_data = {
-                        'positions': data['positions'].astype(np.float64),
-                        'rotations': data['rotations'].astype(np.float64),
-                        'sizes': data['sizes'].astype(np.float64),
-                        'states': data['states'].astype(np.int8) if 'states' in data else np.ones(data['positions'].shape[0], dtype=np.int8),
-                        'particle_count': int(data['particle_count']) if 'particle_count' in data else data['positions'].shape[0]
+                        'positions': data[data.files[0]].astype(np.float64),
+                        'rotations': data[data.files[1]].astype(np.float64),
+                        'sizes': data[data.files[2]].astype(np.float64),
+                        'states': data[data.files[3]].astype(np.int8) if 'states' in data else np.ones(data[data.files[0]].shape[0], dtype=np.int8),
+                        'particle_count': int(data['particle_count']) if 'particle_count' in data else data[data.files[0]].shape[0]
                     }
                 
                     # Convert euler rotations to quaternions for better interpolation
