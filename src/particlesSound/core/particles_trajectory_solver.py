@@ -35,6 +35,8 @@ from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 from ..lib.particles_trajectory_data import ParticlesTrajectoryData
 from ..lib.particles_interpolator import ParticlesInterpolator
 
+from ..lib.numba_interpolator_kernel import _intersection_point_numba, _intersection_time_numba, _estimate_rotations_numba
+
 @dataclass
 class ParticlesTrajectorySolver:
     """
@@ -311,10 +313,12 @@ class ParticlesTrajectorySolver:
         
         for index in range(2, positions.shape[0] - 2):
             # Find intersection point using the algorithm from PositionSolver
-            intersection_point = self._intersection_point(positions, index)
+#            intersection_point = self._intersection_point(positions, index)
+            intersection_point = _intersection_point_numba(positions, index)
             
             if intersection_point is not None:
-                intersection_time = self._intersection_time(positions=positions, times=times, frame=index, intersection_point=intersection_point)
+#                intersection_time = self._intersection_time(positions=positions, times=times, frame=index, intersection_point=intersection_point)
+                intersection_time = _intersection_time_numba(positions=positions, times=times, frame=index, intersection_point=intersection_point)
                     
                 # Check if this time is sufficiently far from existing samples
                 time_diffs = np.abs(times - intersection_time)
@@ -468,109 +472,119 @@ class ParticlesTrajectorySolver:
         """
         Estimate rotations at evaluation times using the RotationSolver algorithm.
         
-        For unsampled positions, we estimate the rotation by:
-        1. Interpolating between known rotations
-        2. Accounting for angular velocity changes at intersection points
-        
-        Parameters:
-        -----------
-        times : np.ndarray
-            Original time points
-        rotations : np.ndarray
-            Original rotations as Euler angles (n_times, 3)
-        positions : np.ndarray
-            Original positions (n_times, 3)
-        eval_times : np.ndarray
-            Times to evaluate at
-        unsampled_positions : List[Dict]
-            List of unsampled positions with 'time' and 'position'
-            
-        Returns:
-        --------
-        np.ndarray
-            Estimated rotations (n_eval_times, 3)
+        This method now calls the Numba-accelerated kernel.
         """
-        n_eval = len(eval_times)
-        result = np.zeros((n_eval, 3))
+        # Extract the times of the unsampled positions for the numba function
+        unsampled_times = np.array([p['time'] for p in unsampled_positions])
         
-        # Convert rotations to Rotation objects for interpolation
-        rotations_objects = Rotation.from_euler('XYZ', rotations)
-        
-        # Create Slerp interpolator for smooth rotation interpolation
-        if len(times) >= 2:
-            slerp = Slerp(times, rotations_objects)
-        else:
-            # Not enough data - return first rotation repeated
-            for i in range(n_eval):
-                result[i] = rotations[0]
-            return result
-        
-        # Interpolate rotations at all evaluation times
-        for i, eval_time in enumerate(eval_times):
-            # Check if this is an unsampled position
-            is_unsampled = False
-            for unsampled_pos in unsampled_positions:
-                if abs(unsampled_pos['time'] - eval_time) < 1e-6:
-                    is_unsampled = True
-                    break
-            
-            if is_unsampled:
-                # Estimate rotation at unsampled position using the RotationSolver algorithm approach
-                # Find surrounding frame indices
-                before_idx = np.searchsorted(times, eval_time) - 1
-                after_idx = min(before_idx + 1, len(times) - 1)
-                before_idx = max(before_idx, 0)
-                
-                if before_idx == after_idx:
-                    # At the boundary
-                    result[i] = rotations[before_idx]
-                else:
-                    # Time between frames
-                    dt = times[after_idx] - times[before_idx]
-                    if dt > 0:
-                        # Fraction of the way between frames
-                        frac = (eval_time - times[before_idx]) / dt
-                        
-                        # Get rotations
-                        rot_before = Rotation.from_euler('XYZ', rotations[before_idx])
-                        rot_after = Rotation.from_euler('XYZ', rotations[after_idx])
-                        
-                        # Estimate angular velocity
-                        # delta_rot = rot_after * rot_before.inv()
-                        # ang_vel = delta_rot.as_rotvec() / dt
-                        delta_rot = rot_after * rot_before.inv()
-                        ang_vel = delta_rot.as_rotvec() / dt
-                        
-                        # Integrate from before to eval_time
-                        time_to_eval = eval_time - times[before_idx]
-                        delta_rot_vec = ang_vel * time_to_eval
-                        delta_rot = Rotation.from_rotvec(delta_rot_vec)
-                        
-                        # Estimated rotation
-                        estimated_rot = rot_before * delta_rot
-                        result[i] = estimated_rot.as_euler('XYZ')
-                    else:
-                        result[i] = rotations[before_idx]
-            else:
-                # Regular interpolation using Slerp
-                try:
-                    rot = slerp(eval_time)
-                    result[i] = rot.as_euler('XYZ')
-                except:
-                    # Fallback to linear interpolation
-                    before_idx = np.searchsorted(times, eval_time) - 1
-                    after_idx = min(before_idx + 1, len(times) - 1)
-                    before_idx = max(before_idx, 0)
-                    
-                    if before_idx == after_idx:
-                        result[i] = rotations[before_idx]
-                    else:
-                        dt = times[after_idx] - times[before_idx]
-                        if dt > 0:
-                            frac = (eval_time - times[before_idx]) / dt
-                            result[i] = rotations[before_idx] * (1 - frac) + rotations[after_idx] * frac
-                        else:
-                            result[i] = rotations[before_idx]
-        
-        return result
-
+        # Call the Numba version
+        return _estimate_rotations_numba(times, rotations, eval_times, unsampled_times)
+#        """
+#        Estimate rotations at evaluation times using the RotationSolver algorithm.
+#        
+#        For unsampled positions, we estimate the rotation by:
+#        1. Interpolating between known rotations
+#        2. Accounting for angular velocity changes at intersection points
+#        
+#        Parameters:
+#        -----------
+#        times : np.ndarray
+#            Original time points
+#        rotations : np.ndarray
+#            Original rotations as Euler angles (n_times, 3)
+#        positions : np.ndarray
+#            Original positions (n_times, 3)
+#        eval_times : np.ndarray
+#            Times to evaluate at
+#        unsampled_positions : List[Dict]
+#            List of unsampled positions with 'time' and 'position'
+#            
+#        Returns:
+#        --------
+#        np.ndarray
+#            Estimated rotations (n_eval_times, 3)
+#        """
+#        n_eval = len(eval_times)
+#        result = np.zeros((n_eval, 3))
+#        
+#        # Convert rotations to Rotation objects for interpolation
+#        rotations_objects = Rotation.from_euler('XYZ', rotations)
+#        
+#        # Create Slerp interpolator for smooth rotation interpolation
+#        if len(times) >= 2:
+#            slerp = Slerp(times, rotations_objects)
+#        else:
+#            # Not enough data - return first rotation repeated
+#            for i in range(n_eval):
+#                result[i] = rotations[0]
+#            return result
+#        
+#        # Interpolate rotations at all evaluation times
+#        for i, eval_time in enumerate(eval_times):
+#            # Check if this is an unsampled position
+#            is_unsampled = False
+#            for unsampled_pos in unsampled_positions:
+#                if abs(unsampled_pos['time'] - eval_time) < 1e-6:
+#                    is_unsampled = True
+#                    break
+#            
+#            if is_unsampled:
+#                # Estimate rotation at unsampled position using the RotationSolver algorithm approach
+#                # Find surrounding frame indices
+#                before_idx = np.searchsorted(times, eval_time) - 1
+#                after_idx = min(before_idx + 1, len(times) - 1)
+#                before_idx = max(before_idx, 0)
+#                
+#                if before_idx == after_idx:
+#                    # At the boundary
+#                    result[i] = rotations[before_idx]
+#                else:
+#                    # Time between frames
+#                    dt = times[after_idx] - times[before_idx]
+#                    if dt > 0:
+#                        # Fraction of the way between frames
+#                        frac = (eval_time - times[before_idx]) / dt
+#                        
+#                        # Get rotations
+#                        rot_before = Rotation.from_euler('XYZ', rotations[before_idx])
+#                        rot_after = Rotation.from_euler('XYZ', rotations[after_idx])
+#                        
+#                        # Estimate angular velocity
+#                        # delta_rot = rot_after * rot_before.inv()
+#                        # ang_vel = delta_rot.as_rotvec() / dt
+#                        delta_rot = rot_after * rot_before.inv()
+#                        ang_vel = delta_rot.as_rotvec() / dt
+#                        
+#                        # Integrate from before to eval_time
+#                        time_to_eval = eval_time - times[before_idx]
+#                        delta_rot_vec = ang_vel * time_to_eval
+#                        delta_rot = Rotation.from_rotvec(delta_rot_vec)
+#                        
+#                        # Estimated rotation
+#                        estimated_rot = rot_before * delta_rot
+#                        result[i] = estimated_rot.as_euler('XYZ')
+#                    else:
+#                        result[i] = rotations[before_idx]
+#            else:
+#                # Regular interpolation using Slerp
+#                try:
+#                    rot = slerp(eval_time)
+#                    result[i] = rot.as_euler('XYZ')
+#                except:
+#                    # Fallback to linear interpolation
+#                    before_idx = np.searchsorted(times, eval_time) - 1
+#                    after_idx = min(before_idx + 1, len(times) - 1)
+#                    before_idx = max(before_idx, 0)
+#                    
+#                    if before_idx == after_idx:
+#                        result[i] = rotations[before_idx]
+#                    else:
+#                        dt = times[after_idx] - times[before_idx]
+#                        if dt > 0:
+#                            frac = (eval_time - times[before_idx]) / dt
+#                            result[i] = rotations[before_idx] * (1 - frac) + rotations[after_idx] * frac
+#                        else:
+#                            result[i] = rotations[before_idx]
+#        
+#        return result
+#
