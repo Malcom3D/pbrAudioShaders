@@ -22,7 +22,7 @@ import trimesh
 from scipy.spatial import KDTree
 from scipy.interpolate import CubicSpline
 from dataclasses import dataclass
-from typing import List, Dict, Tuple, Optional, Any
+from typing import List, Dict, Tuple, Optional, Any, Union
 import math
 
 from pbrAudioCommon import EntityManager, ContactType, ForceData, ForceDataSequence, HertzianContact
@@ -143,26 +143,34 @@ class ForceSolver:
 
                     if forces_frames.shape[0] > 1:
                         # create interpolator
-                        restitution = CubicSpline(forces_frames, restitution, extrapolate=1)
-                        relative_velocity = [CubicSpline(forces_frames, relative_velocity[:, i], extrapolate=1) for i in range(relative_velocity.shape[1])]
-                        normal_velocity = [CubicSpline(forces_frames, normal_velocity[:, i], extrapolate=1) for i in range(normal_velocity.shape[1])]
-                        normal_force = [CubicSpline(forces_frames, normal_force[:, i], extrapolate=1) for i in range(normal_force.shape[1])]
-                        tangential_force = [CubicSpline(forces_frames, tangential_force[:, i], extrapolate=1) for i in range(tangential_force.shape[1])]
-                        tangential_velocity = [CubicSpline(forces_frames, tangential_velocity[:, i], extrapolate=1) for i in range(tangential_velocity.shape[1])]
-                        normal_force_magnitude = CubicSpline(forces_frames, normal_force_magnitude, extrapolate=1)
-                        tangential_force_magnitude = CubicSpline(forces_frames, tangential_force_magnitude, extrapolate=1)
-                        stochastic_normal_force = [CubicSpline(forces_frames, stochastic_normal_force[:, i], extrapolate=1) for i in range(stochastic_normal_force.shape[1])]
-                        stochastic_tangential_force = [CubicSpline(forces_frames, stochastic_tangential_force[:, i], extrapolate=1) for i in range(stochastic_tangential_force.shape[1])]
-                        contact_point = [CubicSplineWithNaN(forces_frames, contact_point[:, i], extrapolate=1) for i in range(contact_point.shape[1])]
-                        contact_radius = CubicSplineWithNaN(forces_frames, contact_radius, extrapolate=1)
-                        rolling_radius = CubicSplineWithNaN(forces_frames, rolling_radius, extrapolate=1)
-                        contact_pressure = CubicSplineWithNaN(forces_frames, contact_pressure, extrapolate=1)
-                        penetration_depth = CubicSplineWithNaN(forces_frames, penetration_depth, extrapolate=1)
-                        coupling_strength = CubicSpline(forces_frames, coupling_strength, extrapolate=1)
+                        restitution = self._interpolate(forces_frames, restitution, extrapolate=1)
+                        relative_velocity = [self._interpolate(forces_frames, relative_velocity[:, i], extrapolate=1) for i in range(relative_velocity.shape[1])]
+                        normal_velocity = [self._interpolate(forces_frames, normal_velocity[:, i], extrapolate=1) for i in range(normal_velocity.shape[1])]
+                        normal_force = [self._interpolate(forces_frames, normal_force[:, i], extrapolate=1) for i in range(normal_force.shape[1])]
+                        tangential_force = [self._interpolate(forces_frames, tangential_force[:, i], extrapolate=1) for i in range(tangential_force.shape[1])]
+                        tangential_velocity = [self._interpolate(forces_frames, tangential_velocity[:, i], extrapolate=1) for i in range(tangential_velocity.shape[1])]
+                        normal_force_magnitude = self._interpolate(forces_frames, normal_force_magnitude, extrapolate=1)
+                        tangential_force_magnitude = self._interpolate(forces_frames, tangential_force_magnitude, extrapolate=1)
+                        stochastic_normal_force = [self._interpolate(forces_frames, stochastic_normal_force[:, i], extrapolate=1) for i in range(stochastic_normal_force.shape[1])]
+                        stochastic_tangential_force = [self._interpolate(forces_frames, stochastic_tangential_force[:, i], extrapolate=1) for i in range(stochastic_tangential_force.shape[1])]
+                        contact_point = [self._interpolate(forces_frames, contact_point[:, i], extrapolate=1) for i in range(contact_point.shape[1])]
+                        contact_radius = self._interpolate(forces_frames, contact_radius, extrapolate=1)
+                        rolling_radius = self._interpolate(forces_frames, rolling_radius, extrapolate=1)
+                        contact_pressure = self._interpolate(forces_frames, contact_pressure, extrapolate=1)
+                        penetration_depth = self._interpolate(forces_frames, penetration_depth, extrapolate=1)
+                        coupling_strength = self._interpolate(forces_frames, coupling_strength, extrapolate=1)
 
                     force_data_sequence = ForceDataSequence(frames=forces_frames, obj_idx=obj_idx, other_obj_idx=other_obj_idx, restitution=restitution, relative_velocity=relative_velocity, normal_velocity=normal_velocity, normal_force=normal_force, tangential_force=tangential_force, tangential_velocity=tangential_velocity, normal_force_magnitude=normal_force_magnitude, tangential_force_magnitude=tangential_force_magnitude, stochastic_normal_force=stochastic_normal_force, stochastic_tangential_force=stochastic_tangential_force, contact_type=contact_type, contact_point=contact_point, contact_radius=contact_radius, rolling_radius=rolling_radius, impact_duration=impact_duration, contact_pressure=contact_pressure, penetration_depth=penetration_depth, coupling_strength=coupling_strength)
 
                     _ = self.entity_manager.register('forces', force_data_sequence)
+
+    def _interpolate(self, times: np.ndarray, data: np.ndarray, extrapolate: int = 1) -> Union[CubicSpline, CubicSplineWithNaN]:
+        """ Select bewtween CubicSpline and CubicSplineWithNaN interpolator based on data values """
+        try:
+            interpolator = CubicSpline(times, data, extrapolate=extrapolate)
+        except:
+            interpolator = CubicSplineWithNaN(times, data, extrapolate=extrapolate)
+        return interpolator
 
     def _calculate_forces(self, frame: float, obj_idx: int, config_obj: Any, trajectory: Any, sfps: int, sample_rate: int) -> Optional[List[ForceData]]:
         """
