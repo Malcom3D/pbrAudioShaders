@@ -88,7 +88,7 @@ class SurfaceVoxelSize:
         self.voxel_size = np.percentile(all_feature_sizes, self.target_percentile)
 
         # Clamp the voxel size to a reasonable range to prevent extremes
-        self.voxel_size = np.clip(self.voxel_size, 0.01, 1) # 1cm to 1m
+        self.voxel_size = np.clip(self.voxel_size, 0.01, 0.25) # 1cm to 25cm
 
         debug_print(f"Computed scene-wide surface voxel size: {self.voxel_size:.5f}m")
         return self.voxel_size
