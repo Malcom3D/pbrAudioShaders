@@ -22,16 +22,13 @@ from typing import List, Tuple, Any, Dict, Optional
 from dataclasses import dataclass, field
 from dask import delayed, compute
 
-from pbrAudioCommon import EntityManager, CollisionData, ForceDataSequence
+from pbrAudioCommon import EntityManager, CollisionData, ForceDataSequence, TrajectoryData, ResumeData
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
-
-from pbrAudioCommon import TrajectoryData
 
 from ..lib.fracture_data import FractureEvent, FractureType
 from ..lib.fracture_detector import FractureDetector
 from ..lib.fracture_modal import FractureModalModel
 from ..lib.fracture_synth import FractureSynth
-
 
 @dataclass
 class fractureEngine:
@@ -59,6 +56,8 @@ class fractureEngine:
         set_debug(config.system.debug)
         set_debug_prefix(self.__class__.__name__)
 
+        resume_data = ResumeData(self.entity_manager)
+
         self.collisions_dir = f"{config.system.cache_path}/collisions"
         self.trajectories_dir = f"{config.system.cache_path}/trajectories"
         self.forces_dir = f"{config.system.cache_path}/forces_data"
@@ -77,33 +76,12 @@ class fractureEngine:
         self.detector = FractureDetector(self.entity_manager)
         self.modal_model = FractureModalModel(self.entity_manager)
         self.synth = FractureSynth(self.entity_manager)
-        
-        # Load existing trajectories
-        self._load_trajectories()
+
+        # Get fracture_events
+        self.fracture_events = self.entity_manager.get('fracture_events')
+
+        # Set total samples
         self.total_samples = self._set_total_samples()
-
-        # Load existing collisions
-        self._load_collisions()
-
-        # Load existing forces
-        self._load_forces()
-
-        # Load existing fracture events
-        self._load_fracture_events()
-
-    def _load_trajectories(self):
-        """Load previously computed trajectories"""
-        trajectories = self.entity_manager.get('trajectories')
-        if len(trajectories) == 0:
-            if os.path.exists(f"{self.trajectories_dir}") and not len(os.listdir(f"{self.trajectories_dir}")) == 0:
-                for filename in os.listdir(f"{self.trajectories_dir}"):
-                    trajectory = None
-                    if filename.endswith('.pkl') and os.path.isfile(f"{self.trajectories_dir}/corrected/{filename}"):
-                        trajectory = TrajectoryData.load(f"{self.trajectories_dir}/corrected/{filename}")
-                    elif filename.endswith('.pkl') and not os.path.isfile(f"{self.trajectories_dir}/corrected/{filename}"):
-                        trajectory = TrajectoryData.load(f"{self.trajectories_dir}/{filename}")
-                    if trajectory is not None:
-                        _ = self.entity_manager.register('trajectories', trajectory)
 
     def _set_total_samples(self):
         trajectories = self.entity_manager.get('trajectories')
@@ -111,35 +89,6 @@ class fractureEngine:
             if isinstance(trajectories[t_idx], TrajectoryData) and not trajectories[t_idx].static:
                 trajectory = trajectories[t_idx]
                 return int(trajectory.get_x()[-1])
-    
-    def _load_collisions(self):
-        collisions = self.entity_manager.get('collisions')
-        if len(collisions) == 0:
-            if os.path.exists(f"{self.collisions_dir}") and not len(os.listdir(f"{self.collisions_dir}")) == 0:
-                for filename in os.listdir(f"{self.collisions_dir}"):
-                    if filename.endswith('.pkl'):
-                        collisions = CollisionData.load(f"{self.collisions_dir}/{filename}")
-                        _ = self.entity_manager.register('collisions', collisions)
-
-    def _load_forces(self):
-        forces = self.entity_manager.get('forces')
-        if len(forces) == 0:
-            if os.path.exists(f"{self.forces_dir}") and not len(os.listdir(f"{self.forces_dir}")) == 0:
-                for filename in os.listdir(f"{self.forces_dir}"):
-                    if filename.endswith('.pkl'):
-                        forces = ForceDataSequence.load(f"{self.forces_dir}/{filename}")
-                        _ = self.entity_manager.register('forces', forces)
-
-    def _load_fracture_events(self):
-        """Load previously computed fracture events."""
-        if os.path.exists(self.fracture_dir):
-            for filename in os.listdir(self.fracture_dir):
-                if filename.endswith('.pkl'):
-                    try:
-                        event = FractureEvent.load(f"{self.fracture_dir}/{filename}")
-                        self.fracture_events.append(event)
-                    except Exception as e:
-                        debug_print(f"Error loading fracture event {filename}: {e}")
     
     def bake(self) -> None:
         """

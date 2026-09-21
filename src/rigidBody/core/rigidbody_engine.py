@@ -27,7 +27,7 @@ from dask import config as dask_config
 #dask_config.set(num_workers=1024)
 dask_config.set({'num_workers': 1024, 'optimization.fuse.active': True, 'optimization.fuse.max_depth': 10,})
 
-from pbrAudioCommon import EntityManager, ScoreTrack, ForceDataSequence, ModalVertices, CollisionData
+from pbrAudioCommon import EntityManager, ScoreTrack, ForceDataSequence, ModalVertices, CollisionData, ResumeData
 from pbrAudioCommon import _update_status
 from pbrAudioCommon import TrajectoryData
 
@@ -52,12 +52,11 @@ class rigidBodyEngine:
     total_samples: int = 1
 
     def __post_init__(self):
+        resume_data = ResumeData(self.entity_manager)
+
         config = self.entity_manager.get('config')
         self.physical_core = config.system.physical_core
         self.status_dir = f"{config.system.cache_path}/status/{__class__.__name__}"
-        self.collisions_dir = f"{config.system.cache_path}/collisions"
-        self.trajectories_dir = f"{config.system.cache_path}/trajectories"
-        self.forces_dir = f"{config.system.cache_path}/forces_data"
         self.modalvertices_dir = f"{config.system.cache_path}/modalvertices"
         self.scoretracks_dir = f"{config.system.cache_path}/scoretracks"
         self.progress = 0
@@ -273,10 +272,6 @@ class rigidBodyEngine:
     @delayed
     def save_modal_vertices(self, modal_vertices: Any, filename: str):
         modal_vertices.save(f"{self.modalvertices_dir}/{filename}")
-
-#    @delayed
-#    def save_score_tracks(self, score_track: Any, filename: str):
-#        score_track.save(f"{self.scoretracks_dir}/{filename}")
 
     @delayed
     def bake_luthier(self, obj_idx: int):

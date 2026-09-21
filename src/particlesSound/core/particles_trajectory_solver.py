@@ -28,11 +28,10 @@ from dask import delayed, compute
 from dask import config as dask_config
 dask_config.set({'num_workers': 1024, 'optimization.fuse.active': True, 'optimization.fuse.max_depth': 10,})
 
-from pbrAudioCommon import EntityManager
+from pbrAudioCommon import EntityManager, ParticlesTrajectoryData
 from pbrAudioCommon import _load_particle
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
-from ..lib.particles_trajectory_data import ParticlesTrajectoryData
 from ..lib.particles_interpolator import ParticlesInterpolator
 
 @dataclass

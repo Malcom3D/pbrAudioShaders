@@ -25,12 +25,12 @@ from dask import delayed, compute
 from dask import config as dask_config
 dask_config.set({'num_workers': 1024, 'optimization.fuse.active': True, 'optimization.fuse.max_depth': 10,})
 
-from pbrAudioCommon import EntityManager, _update_status
+from pbrAudioCommon import EntityManager, ParticlesTrajectoryData, ResumeData
+from pbrAudioCommon import _update_status
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
 from ..lib.surface_voxel_size import SurfaceVoxelSize
 from ..lib.surface_voxel_object import SurfaceVoxelObject
-from ..lib.particles_trajectory_data import ParticlesTrajectoryData
 from ..core.particles_trajectory_solver import ParticlesTrajectorySolver
 from ..core.particles_collisions import ParticlesCollisions
 from ..core.particles_composer import ParticlesComposer
@@ -48,6 +48,8 @@ class particlesEngine:
         set_debug(config.system.debug)
         set_debug_prefix(self.__class__.__name__)
 
+        resume_data = ResumeData(self.entity_manager)
+
         self.status_dir = f"{config.system.cache_path}/status/{__class__.__name__}"
         os.makedirs(self.status_dir, exist_ok=True)
         
@@ -59,35 +61,60 @@ class particlesEngine:
     def bake(self):
         """Main bake function to run the entire particles sound synthesis pipeline."""
         _update_status(f"{self.status_dir}", "/bake", 0)
-        
+
+        with open(f"{self.status_dir}/step_done", 'r') as file:
+            step_done = file.read().split()
+
+        if '_voxel_size' in step_done:
+            self._voxel_size()
+        if '_voxel_obj' in step_done:
+            self._voxel_size()
+        if '_traj' in step_done:
+            self._traj()
+        if '_colls' in step_done:
+            self._colls()
+        if '_comps' in step_done:
+            self._comps()
+        if '_luthier' in step_done:
+            self._luthier()
+        if '_player' in step_done:
+            self._player()
+
+    def _voxel_size(self):
         # 1. Compute a common voxel size for the scene
         voxel_size_calc = SurfaceVoxelSize(self.entity_manager)
         self.voxel_size = voxel_size_calc.compute()
         _update_status(f"{self.status_dir}", "/bake", 5)
 
+    def _voxel_obj(self):
         # 2. Create and compute SurfaceVoxelObjects for all static/dynamic objects
         self._compute_surface_voxel_objects()
         _update_status(f"{self.status_dir}", "/bake", 20)
 
+    def _traj(self):
         # 3. Compute ParticlesTrajectoryData for all particles objects
         self._compute_particles_trajectories()
         _update_status(f"{self.status_dir}", "/bake", 40)
 
+    def _colls(self):
         # 4. Detect collisions for each particles object
         tasks_collisions = [self._detect_collisions(p_idx) for p_idx in self.particles_obj_indices]
         compute(*tasks_collisions)
         _update_status(f"{self.status_dir}", "/bake", 60)
 
+    def _comps(self):
         # 5. Compose and determine convolver needs
         tasks_composer = [self._compose(p_idx) for p_idx in self.particles_obj_indices]
         compute(*tasks_composer)
         _update_status(f"{self.status_dir}", "/bake", 70)
 
+    def _luthier(self):
         # 6. Luthier: Prepare convolver pools
         tasks_luthier = [self._luthier(p_idx) for p_idx in self.particles_obj_indices]
         compute(*tasks_luthier)
         _update_status(f"{self.status_dir}", "/bake", 80)
 
+    def _player(self):
         # 7. Play: Synthesize the final audio
         tasks_player = [self._play(p_idx) for p_idx in self.particles_obj_indices]
         compute(*tasks_player)
@@ -96,7 +123,6 @@ class particlesEngine:
     def _compute_surface_voxel_objects(self):
         """Creates and computes SurfaceVoxelObject for all mesh objects in the scene."""
         config = self.entity_manager.get('config')
-        tasks = []
         tasks = [self._voxelize_object(config_obj.idx) for config_obj in config.objects]
         compute(*tasks)
 

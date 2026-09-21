@@ -25,10 +25,9 @@ import soundfile as sf
 from typing import Any, Dict, List, Tuple
 from dataclasses import dataclass
 
-from pbrAudioCommon import EntityManager
+from pbrAudioCommon import EntityManager, ParticlesTrajectoryData
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
-from ..lib.particles_trajectory_data import ParticlesTrajectoryData
 from ..lib.particles_collisions_points import ParticlesCollisionsPoints
 from ..lib.particles_collisions_voxels import ParticlesCollisionsVoxels
 from ..lib.voxels_modal_ir_convolver import VoxelsModalIRConvolver

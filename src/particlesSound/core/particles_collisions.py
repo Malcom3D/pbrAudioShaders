@@ -22,11 +22,11 @@ from typing import Any, List, Dict, Tuple
 from dataclasses import dataclass
 from scipy.spatial import cKDTree
 
-from pbrAudioCommon import EntityManager, _load_mesh, _load_particle
+from pbrAudioCommon import EntityManager, ParticlesTrajectoryData
+from pbrAudioCommon import _load_mesh, _load_particle
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 from pbrAudioCommon import TrajectoryData
 
-from ..lib.particles_trajectory_data import ParticlesTrajectoryData
 from ..lib.surface_voxel_object import SurfaceVoxelObject
 from ..lib.particles_collisions_points import ParticlesCollisionsPoints
 from ..lib.particles_collisions_voxels import ParticlesCollisionsVoxels

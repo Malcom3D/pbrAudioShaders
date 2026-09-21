@@ -28,7 +28,6 @@ decimals = 18
 np.set_printoptions(precision=decimals, floatmode='fixed', threshold=np.inf)
 
 from .core.particles_engine import particlesEngine
-from .lib.particles_trajectory_data import ParticlesTrajectoryData
 from .lib.surface_voxel_size import SurfaceVoxelSize
 from .lib.surface_voxel_object import SurfaceVoxelObject
 from .lib.particles_collisions_points import ParticlesCollisionsPoints
@@ -37,7 +36,6 @@ from .lib.voxels_modal_ir_convolver import VoxelsModalIRConvolver
 
 __all__ = [
     'particlesEngine',
-    'ParticlesTrajectoryData',
     'SurfaceVoxelSize',
     'SurfaceVoxelObject',
     'ParticlesCollisionsPoints',
