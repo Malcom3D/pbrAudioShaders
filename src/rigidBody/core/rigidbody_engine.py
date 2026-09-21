@@ -29,8 +29,8 @@ dask_config.set({'num_workers': 1024, 'optimization.fuse.active': True, 'optimiz
 
 from pbrAudioCommon import EntityManager, ScoreTrack, ForceDataSequence, ModalVertices, CollisionData
 from pbrAudioCommon import _update_status
+from pbrAudioCommon import TrajectoryData
 
-from physicsSolver import TrajectoryData
 from ellipsoidalProxy import Modal4Proxy, ProxySynth, ProxyEngine
 from postProcess import PostProcessEngine
 
@@ -80,86 +80,36 @@ class rigidBodyEngine:
                 self.obj_pairs.append([config.objects[i].idx, config.objects[j].idx])
 
         trajectories = self.entity_manager.get('trajectories')
-        if len(trajectories) == 0:
-            if os.path.exists(f"{self.trajectories_dir}") and not len(os.listdir(f"{self.trajectories_dir}")) == 0:
-                for filename in os.listdir(f"{self.trajectories_dir}"):
-                    trajectory = None
-                    if filename.endswith('.pkl') and os.path.isfile(f"{self.trajectories_dir}/corrected/{filename}"):
-                        trajectory = TrajectoryData.load(f"{self.trajectories_dir}/corrected/{filename}")
-                    elif filename.endswith('.pkl') and not os.path.isfile(f"{self.trajectories_dir}/corrected/{filename}"):
-                        trajectory = TrajectoryData.load(f"{self.trajectories_dir}/{filename}")
-                    if trajectory is not None:
-                        _ = self.entity_manager.register('trajectories', trajectory)
-#                        self.entity_manager.register('trajectories', trajectories, trajectories_idx)
-#                        trajectories_idx += 1
-
-        trajectories = self.entity_manager.get('trajectories')
         for t_idx in trajectories.keys():
             if isinstance(trajectories[t_idx], TrajectoryData) and not trajectories[t_idx].static:
                 trajectory = trajectories[t_idx]
                 self.total_samples = int(trajectory.get_x()[-1])
                 break
 
-        collisions = self.entity_manager.get('collisions')
-        if len(collisions) == 0:
-            if os.path.exists(f"{self.collisions_dir}") and not len(os.listdir(f"{self.collisions_dir}")) == 0:
-                for filename in os.listdir(f"{self.collisions_dir}"):
-                    if filename.endswith('.pkl'):
-#                        idx = int(filename.removesuffix('.pkl'))
-                        collisions = CollisionData.load(f"{self.collisions_dir}/{filename}")
-#                        self.entity_manager.register('collisions', collisions, idx)
-                        _ = self.entity_manager.register('collisions', collisions)
-
-        forces = self.entity_manager.get('forces')
-        if len(forces) == 0:
-            if os.path.exists(f"{self.forces_dir}") and not len(os.listdir(f"{self.forces_dir}")) == 0:
-#                forces_idx = 0
-                for filename in os.listdir(f"{self.forces_dir}"):
-                    if filename.endswith('.pkl'):
-                        forces = ForceDataSequence.load(f"{self.forces_dir}/{filename}")
-                        _ = self.entity_manager.register('forces', forces)
-#                        self.entity_manager.register('forces', forces, forces_idx)
-#                        forces_idx += 1
-            forces = self.entity_manager.get('forces')
-
-        modal_vertices = self.entity_manager.get('modal_vertices')
-        if len(modal_vertices) == 0:
-            if os.path.exists(self.modalvertices_dir):
-                filenames = os.listdir(self.modalvertices_dir)
-#                modalvertices_idx = 0
-                for filename in filenames:
-                    if os.path.isfile(f"{self.modalvertices_dir}/{filename}"):
-                        modal_vertices = ModalVertices.load(f"{self.modalvertices_dir}/{filename}")
-                        _ = self.entity_manager.register('modal_vertices', modal_vertices)
-#                    self.entity_manager.register('modal_vertices', modal_vertices, modalvertices_idx)
-#                    modalvertices_idx += 1
-
     def prebake(self):
-        self.progress = _update_status(f"{self.status_dir}", "/prebake", 0)
+        with open(f"{self.status_dir}/step_done", 'r') as file:
+            step_done = file.read().split()
+    
+        if '_modal' not in step_done:
+            self._modal()
+        if '_proxy' not in step_done:
+            self._proxy()
+        if '_save_modal_verts' not in step_done:
+            self._save_modal_verts()
+        if '_save_score_tracks' not in step_done:
+            self._save_score_tracks()
 
-        score_tracks = self.entity_manager.get('score_tracks')
-        if len(score_tracks) == 0:
-            if os.path.exists(self.scoretracks_dir):
-                filenames = os.listdir(self.scoretracks_dir)
-#                scoretracks_idx = 0
-                for filename in filenames:
-                    if os.path.isfile(f"{self.scoretracks_dir}/{filename}"):
-                        score_tracks = ScoreTrack.load(f"{self.scoretracks_dir}/{filename}")
-                        _ = self.entity_manager.register('score_tracks', score_tracks)
-                for filename in filenames:
-                    if os.path.isfile(f"{self.scoretracks_dir}/{filename}"):
-                        os.remove(f"{self.scoretracks_dir}/{filename}")
-#                    self.entity_manager.register('score_tracks', score_tracks, scoretracks_idx)
-#                    scoretracks_idx += 1
-
+    def _modal(self):
         tasks_modal = [self.prebake_modal(obj_idx) for obj_idx in self.obj_modal]
         results_modal = compute(*tasks_modal)
         self.progress = _update_status(f"{self.status_dir}", "/prebake", 30)
 
+    def _proxy(self):
         tasks_proxy = [self.prebake_proxy(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
         results_proxy = compute(*tasks_proxy)
         self.progress = _update_status(f"{self.status_dir}", "/prebake", 45)
 
+    def _proxy(self):
         # Init per object final score track
         config = self.entity_manager.get('config')
         for config_obj in config.objects:
@@ -171,115 +121,126 @@ class rigidBodyEngine:
         results_composer = compute(*tasks_composer)
         self.progress = _update_status(f"{self.status_dir}", "/prebake", 90)
 
-        # Save modal vertices and score tracks data
+    def _save_modal_verts(self):
+        # Save modal vertices data
         modal_vertices = self.entity_manager.get('modal_vertices')
         print('Save modal_vertices: ', len(modal_vertices))
-#        for m_idx in modal_vertices.keys():
-#            modal_vertices[m_idx].save(f"{self.modalvertices_dir}/{m_idx:05d}.json")
         tasks_save_modal_vertices = [self.save_modal_vertices(modal_vertices[m_idx], f"{m_idx:05d}.json") for m_idx in modal_vertices.keys()]
         results_save_modal_vertices = compute(*tasks_save_modal_vertices)
 
         self.progress = _update_status(f"{self.status_dir}", "/prebake", 95)
 
+    def _save_score_tracks(self):
+        # Save score tracks data in /tmp
         score_tracks = self.entity_manager.get('score_tracks')
-        n_score = 0
+        n_score = []
         for s_idx in score_tracks.keys():
             if score_tracks[s_idx].is_final:
-                score_tracks[s_idx].save(f"{self.scoretracks_dir}/{s_idx:05d}.tar.gz")
-                n_score += 1
+                score_tracks[s_idx].save(f"/tmp/{s_idx:05d}.tar.gz")
+                n_score += f"/tmp/{s_idx:05d}.tar.gz"
+
+        # Clean score tracks data
+        if os.path.exists(self.scoretracks_dir):
+            filenames = os.listdir(self.scoretracks_dir)
+            for filename in filenames:
+                if os.path.isfile(f"{self.scoretracks_dir}/{filename}"):
+                    os.remove(f"{self.scoretracks_dir}/{filename}")
+
+        # Move score tracks data files from /tmp
+        for filename in n_score:
+            os.replace(filename,f"{self.scoretracks_dir}/{filename.removeprefix('/tmp/'}")
         print('Saved final score_tracks: ', n_score)
-#        tasks_save_score_tracks = [self.save_score_tracks(score_tracks[s_idx], f"{s_idx:05d}.tar.gz") for s_idx in score_tracks.keys()]
-#        results_save_score_tracks = compute(*tasks_save_score_tracks)
 
         self.progress = _update_status(f"{self.status_dir}", "/prebake", 99)
 
     def bake(self):
-        self.progress = _update_status(f"{self.status_dir}", "/bake", 0)
+        with open(f"{self.status_dir}/step_done", 'r') as file:
+            step_done = file.read().split()
 
-        score_tracks = self.entity_manager.get('score_tracks')
-        if len(score_tracks) == 0:
-            if os.path.exists(self.scoretracks_dir):
-                filenames = os.listdir(self.scoretracks_dir)
-#                scoretracks_idx = 0
-                for filename in filenames:
-                    if os.path.isfile(f"{self.scoretracks_dir}/{filename}"):
-                        score_tracks = ScoreTrack.load(f"{self.scoretracks_dir}/{filename}", final=True)
-                        _ = self.entity_manager.register('score_tracks', score_tracks)
-#                    self.entity_manager.register('score_tracks', score_tracks, scoretracks_idx)
-#                    scoretracks_idx += 1
+        if '_connected_buffer' not in step_done:
+            self._connected_buffer()
 
-#        self.players = [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
-#        tasks_player = [self.bake_player(player) for player in self.players]
-#        tasks_save = [self.bake_save(player) for player in self.players]
+        modal_dyn_idx = list(set(self.obj_dyn) - set(self.obj_proxy_synth))
+        if len(modal_dyn_idx) >= self.physical_core:
+            if '_process_group' not in step_done:
+                self._process_groups()
+        else:
+            if '_luthier' not in step_done:
+                self._luthier()
+            if '_player' not in step_done:
+                self._player()
+            if '_save' not in step_done:
+                self._save()
 
+        if '_proxy_synth' not in step_done:
+            self._proxy_synth()
+        if '_post_process' not in step_done:
+            self._post_process()
+
+    def _process_groups(self):
+        print('rigidBodyEngine: Warning: cpu core are less than non-static objects.')
+        print('rigidBodyEngine: Warning: fallback to groups synthesis: some events can be lost.')
+        modal_dyn_idx = list(set(self.obj_dyn) - set(self.obj_proxy_synth))
+        for x in range(self.physical_core):
+            modal_groups = [modal_dyn_idx[i:i + self.physical_core] for i in range(0, len(modal_dyn_idx), self.physical_core)]
+        players = []
+        for modal_group in modal_groups:
+            self._luthier_group()
+            self._player_group(modal_group)
+            self._reset_group()
+        self.progress = _update_status(f"{self.status_dir}", "/bake", 92)
+
+    def _connected_buffer(self):
         connected_buffer = ConnectedBuffer()
         _ = self.entity_manager.register('connected_buffer', connected_buffer)
         sample_counter = SampleCounter(status_file=f"{self.status_dir}")
         sample_counter.set_total_samples(self.total_samples)
         _ = self.entity_manager.register('sample_counter', sample_counter)
 
-        modal_dyn_idx = list(set(self.obj_dyn) - set(self.obj_proxy_synth))
+    def _luthier_group(self):
+        tasks_luthier = [self.bake_luthier(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
+        results_luthier = compute(*tasks_luthier)
+
+    def _player_group(self, modal_group: List[int]):
         modal_static_idx = list(set(self.obj_static) - set(self.obj_proxy_synth))
-        if len(modal_dyn_idx) >= self.physical_core:
-            print('rigidBodyEngine: Warning: cpu core are less than non-static objects.')
-            print('rigidBodyEngine: Warning: fallback to groups synthesis: some events can be lost.')
-            for x in range(self.physical_core):
-                modal_groups = [modal_dyn_idx[i:i + self.physical_core] for i in range(0, len(modal_dyn_idx), self.physical_core)]
-            players = []
-            for modal_group in modal_groups:
-                tasks_luthier = [self.bake_luthier(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
-                results_luthier = compute(*tasks_luthier)
-#                tasks_luthier = [self.bake_luthier(obj_idx) for obj_idx in modal_group + self.obj_static]
-#                results_luthier = compute(*tasks_luthier)
-                self.progress = _update_status(f"{self.status_dir}", "/bake", 10)
+        group_players = [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in modal_group]
+        group_players += [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in modal_static_idx]
+        tasks_player = [self.bake_player(group_player) for group_player in group_players]
+        results_player = compute(*tasks_player)
 
-                group_players = [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in modal_group]
-                group_players += [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in modal_static_idx]
-                tasks_player = [self.bake_player(group_player) for group_player in group_players]
-                results_player = compute(*tasks_player)
+        print('rigidBodyEngine: Save player')
+        tasks_save = [self.bake_save(group_player) for group_player in group_players]
+        results_save = compute(*tasks_save)
 
-                print('rigidBodyEngine: Save player')
-                tasks_save = [self.bake_save(group_player) for group_player in group_players]
-                results_save = compute(*tasks_save)
-                self.progress = _update_status(f"{self.status_dir}", "/bake", 92)
+    def _reset_group(self)
+        self.entity_manager.unregister('sample_counter')
+        self.entity_manager.unregister('connected_buffer')
 
-                self.entity_manager.unregister('sample_counter')
-                self.entity_manager.unregister('connected_buffer')
+        connected_buffer = ConnectedBuffer()
+        _ = self.entity_manager.register('connected_buffer', connected_buffer)
+        sample_counter = SampleCounter(status_file=f"{self.status_dir}/bake")
+        sample_counter.set_total_samples(self.total_samples)
+        _ = self.entity_manager.register('sample_counter', sample_counter)
 
-                connected_buffer = ConnectedBuffer()
-                _ = self.entity_manager.register('connected_buffer', connected_buffer)
-                sample_counter = SampleCounter(status_file=f"{self.status_dir}/bake")
-                sample_counter.set_total_samples(self.total_samples)
-                _ = self.entity_manager.register('sample_counter', sample_counter)
+    def _luthier(self):
+        tasks_luthier = [self.bake_luthier(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
+        results_luthier = compute(*tasks_luthier)
+        self.progress = _update_status(f"{self.status_dir}", "/bake", 10)
 
-        else:
-            connected_buffer = ConnectedBuffer()
-            _ = self.entity_manager.register('connected_buffer', connected_buffer)
-            sample_counter = SampleCounter(status_file=f"{self.status_dir}/bake")
-            sample_counter.set_total_samples(self.total_samples)
-            _ = self.entity_manager.register('sample_counter', sample_counter)
+    def _player(self):
+        modal_obj_idx = list(set(self.obj_dyn + self.obj_static) - set(self.obj_proxy_synth))
+        players = [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in modal_obj_idx]
+        tasks_player = [self.bake_player(player) for player in players]
+        results_player = compute(*tasks_player)
+        self.progress = _update_status(f"{self.status_dir}", "/bake", 60)
 
-            tasks_luthier = [self.bake_luthier(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
-            results_luthier = compute(*tasks_luthier)
-            self.progress = _update_status(f"{self.status_dir}", "/bake", 10)
+    def _save(self):
+        print('rigidBodyEngine: Save player')
+        tasks_save = [self.bake_save(player) for player in players]
+        results_save = compute(*tasks_save)
+        self.progress = _update_status(f"{self.status_dir}", "/bake", 92)
 
-            modal_obj_idx = list(set(self.obj_dyn + self.obj_static) - set(self.obj_proxy_synth))
-            players = [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in modal_obj_idx]
-            tasks_player = [self.bake_player(player) for player in players]
-            results_player = compute(*tasks_player)
-            self.progress = _update_status(f"{self.status_dir}", "/bake", 60)
-
-            print('rigidBodyEngine: Save player')
-            tasks_save = [self.bake_save(player) for player in players]
-            results_save = compute(*tasks_save)
-            self.progress = _update_status(f"{self.status_dir}", "/bake", 92)
-
-
-#        # ProxySynth
-#        if not len(self.obj_proxy_synth) == 0:
-#            tasks_proxy_synth = [self.bake_proxy_synth(obj_idx) for obj_idx in self.obj_proxy_synth]
-#            results_proxy_synth = compute(*tasks_proxy_synth)
-
+    def _proxy_synth(self):
         # ProxySynth
         if not len(self.obj_proxy_synth) == 0:
             proxy_engine = ProxyEngine(self.entity_manager)
@@ -288,6 +249,7 @@ class rigidBodyEngine:
 
         self.progress = _update_status(f"{self.status_dir}", "/bake", 90)
 
+    def _post_process(self):
         post_engine = PostProcessEngine(self.entity_manager)
         post_engine.process_with_modal_player()
 
@@ -312,9 +274,9 @@ class rigidBodyEngine:
     def save_modal_vertices(self, modal_vertices: Any, filename: str):
         modal_vertices.save(f"{self.modalvertices_dir}/{filename}")
 
-    @delayed
-    def save_score_tracks(self, score_track: Any, filename: str):
-        score_track.save(f"{self.scoretracks_dir}/{filename}")
+#    @delayed
+#    def save_score_tracks(self, score_track: Any, filename: str):
+#        score_track.save(f"{self.scoretracks_dir}/{filename}")
 
     @delayed
     def bake_luthier(self, obj_idx: int):

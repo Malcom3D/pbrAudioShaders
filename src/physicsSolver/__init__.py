@@ -37,7 +37,6 @@ from .core.force_synth import ForceSynth
 from .core.collision_solver import CollisionSolver
 from .core.physics_engine import physicsEngine
 from .lib.contact_geometry import ContactGeometry
-from .lib.trajectory_data import tmpTrajectoryData, TrajectoryData
 
 
 __all__ = [
@@ -52,6 +51,4 @@ __all__ = [
     'CollisionSolver',
     'physicsEngine',
     'ContactGeometry',
-    'tmpTrajectoryData',
-    'TrajectoryData',
 ]

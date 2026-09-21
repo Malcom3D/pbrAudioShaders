@@ -25,7 +25,7 @@ from scipy.spatial import cKDTree
 
 from pbrAudioCommon import EntityManager, _load_mesh
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
-from physicsSolver import TrajectoryData
+from pbrAudioCommon import TrajectoryData
 
 @dataclass
 class SurfaceVoxelObject:

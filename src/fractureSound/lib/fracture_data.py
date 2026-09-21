@@ -23,7 +23,7 @@ from enum import Enum
 from typing import List, Tuple, Dict, Any, Optional
 from dataclasses import dataclass, field
 
-from physicsSolver import TrajectoryData
+from pbrAudioCommon import TrajectoryData
 from pbrAudioCommon import CollisionData, ForceDataSequence
 
 class FractureType(Enum):

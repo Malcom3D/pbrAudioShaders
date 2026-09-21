@@ -27,7 +27,7 @@ from dask import config as dask_config
 #dask_config.set(scheduler='processes', num_workers=1024)
 dask_config.set({'num_workers': 1024, 'optimization.fuse.active': True, 'optimization.fuse.max_depth': 10,})
 
-from pbrAudioCommon import EntityManager, CollisionData, ForceDataSequence, ModalVertices
+from pbrAudioCommon import EntityManager, CollisionData, ForceDataSequence tmpTrajectoryData, ResumeData
 from pbrAudioCommon import _update_status
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
@@ -43,8 +43,6 @@ from ..core.force_solver import ForceSolver
 from ..core.collision_solver import CollisionSolver
 from ..core.force_synth import ForceSynth
 
-from ..lib.trajectory_data import TrajectoryData, tmpTrajectoryData
-
 @dataclass
 class physicsEngine:
     entity_manager: EntityManager
@@ -57,6 +55,8 @@ class physicsEngine:
 
         set_debug(config.system.debug)
         set_debug_prefix(self.__class__.__name__)
+
+        resume_data = ResumeData(self.entity_manager)
 
         self.status_dir = f"{config.system.cache_path}/status/{__class__.__name__}"
         self.collisions_dir = f"{config.system.cache_path}/collisions"
@@ -82,30 +82,33 @@ class physicsEngine:
 
     def bake(self):
         self.progress = _update_status(f"{self.status_dir}", "/bake", self.progress)
-#        self.ps = PositionSolver(self.entity_manager)
-#        self.rs = RotationSolver(self.entity_manager)
-#        self.vs = VertexSolver(self.entity_manager)
-#        self.ns = NormalSolver(self.entity_manager)
-#        self.fp = FlightPath(self.entity_manager)
-#        self.ds = DistanceSolver(self.entity_manager)
-#        self.fs = ForceSolver(self.entity_manager)
 
-#        tasks_static = [self.fp.compute(obj_idx) for obj_idx in self.obj_static]
-#        results_static = compute(*tasks_static)
+        with open(f"{self.status_dir}/step_done", 'r') as file:
+            step_done = file.read().split()
 
-        self._proxy()
-        self._static()
-        self._pos()
-        self._rot()
-        self._vertex()
-        self._traj()
-        self._pp_traj()
-        self._dists()
-        self._force()
-        self._collision()
-        self._force_synth()
-        self._post_process()
-        self._save()
+        if '_proxy' not in step_done:
+            self._proxy()
+        if '_static' not in step_done:
+            self._static()
+        if '_traj' not in step_done:
+            self._pos()
+            self._rot()
+            self._vertex()
+            self._traj()
+        if '_pp_traj' not in step_done:
+            self._pp_traj()
+        if '_dists' not in step_done:
+            self._dists()
+        if '_force' not in step_done:
+            self._force()
+        if '_collision' not in step_done:
+            self._collision()
+        if '_force_synth' not in step_done:
+            self._force_synth()
+        if '_post_process' not in step_done:
+            self._post_process()
+        if '_save' not in step_done:
+            self._save()
 
     def _proxy(self):
         tasks_proxy = [self.proxy(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
@@ -213,8 +216,6 @@ class physicsEngine:
         # Save modal vertices and score tracks data
         modal_vertices = self.entity_manager.get('modal_vertices')
         print('Saved modal_vertices: ', len(modal_vertices))
-#        for m_idx in modal_vertices.keys():
-#            modal_vertices[m_idx].save(f"{self.modalvertices_dir}/{m_idx:05d}.json")
         tasks_save_modal_vertices = [self.save_modal_vertices(modal_vertices[m_idx], f"{m_idx:05d}.json") for m_idx in modal_vertices.keys()]
         results_save_modal_vertices = compute(*tasks_save_modal_vertices)
 
@@ -222,8 +223,6 @@ class physicsEngine:
         print('Saved score_tracks: ', len(score_tracks))
         for s_idx in score_tracks.keys():
             score_tracks[s_idx].save(f"{self.scoretracks_dir}/{s_idx:05d}.tar.gz")
-#        tasks_save_score_tracks = [self.save_score_tracks(score_tracks[s_idx], f"{s_idx:05d}.tar.gz") for s_idx in score_tracks.keys()]
-#        results_save_score_tracks = compute(*tasks_save_score_tracks)
 
         self.progress = _update_status(f"{self.status_dir}/bake", self.progress + self.progress_ratio)
 

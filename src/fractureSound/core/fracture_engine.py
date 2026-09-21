@@ -25,7 +25,7 @@ from dask import delayed, compute
 from pbrAudioCommon import EntityManager, CollisionData, ForceDataSequence
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
-from physicsSolver import TrajectoryData
+from pbrAudioCommon import TrajectoryData
 
 from ..lib.fracture_data import FractureEvent, FractureType
 from ..lib.fracture_detector import FractureDetector
