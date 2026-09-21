@@ -58,40 +58,40 @@ class particlesEngine:
 
     def bake(self):
         """Main bake function to run the entire particles sound synthesis pipeline."""
-        _update_status(f"{self.status_dir}/bake", 0)
+        _update_status(f"{self.status_dir}", "/bake", 0)
         
         # 1. Compute a common voxel size for the scene
         voxel_size_calc = SurfaceVoxelSize(self.entity_manager)
         self.voxel_size = voxel_size_calc.compute()
-        _update_status(f"{self.status_dir}/bake", 5)
+        _update_status(f"{self.status_dir}", "/bake", 5)
 
         # 2. Create and compute SurfaceVoxelObjects for all static/dynamic objects
         self._compute_surface_voxel_objects()
-        _update_status(f"{self.status_dir}/bake", 20)
+        _update_status(f"{self.status_dir}", "/bake", 20)
 
         # 3. Compute ParticlesTrajectoryData for all particles objects
         self._compute_particles_trajectories()
-        _update_status(f"{self.status_dir}/bake", 40)
+        _update_status(f"{self.status_dir}", "/bake", 40)
 
         # 4. Detect collisions for each particles object
         tasks_collisions = [self._detect_collisions(p_idx) for p_idx in self.particles_obj_indices]
         compute(*tasks_collisions)
-        _update_status(f"{self.status_dir}/bake", 60)
+        _update_status(f"{self.status_dir}", "/bake", 60)
 
         # 5. Compose and determine convolver needs
         tasks_composer = [self._compose(p_idx) for p_idx in self.particles_obj_indices]
         compute(*tasks_composer)
-        _update_status(f"{self.status_dir}/bake", 70)
+        _update_status(f"{self.status_dir}", "/bake", 70)
 
         # 6. Luthier: Prepare convolver pools
         tasks_luthier = [self._luthier(p_idx) for p_idx in self.particles_obj_indices]
         compute(*tasks_luthier)
-        _update_status(f"{self.status_dir}/bake", 80)
+        _update_status(f"{self.status_dir}", "/bake", 80)
 
         # 7. Play: Synthesize the final audio
         tasks_player = [self._play(p_idx) for p_idx in self.particles_obj_indices]
         compute(*tasks_player)
-        _update_status(f"{self.status_dir}/bake", 100)
+        _update_status(f"{self.status_dir}", "/bake", 100)
 
     def _compute_surface_voxel_objects(self):
         """Creates and computes SurfaceVoxelObject for all mesh objects in the scene."""

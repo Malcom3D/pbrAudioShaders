@@ -25,7 +25,7 @@ from pbrAudioCommon import _update_status
 
 @dataclass
 class SampleCounter:
-    status_file: str = None
+    status_dir: str = None
     total_samples: int = None
     current_sample: int = 0
     num_players: int = 0
@@ -76,7 +76,7 @@ class SampleCounter:
                 self.current_sample += 1
                 print('SampleCounter: ', self.current_sample, self.total_samples, self.get_progress())
                 if self.current_sample % int(self.total_samples/100) == 0:
-                   _update_status(self.status_file, int(self.get_progress()))
+                   _update_status(self.status_dir, "/bake", int(self.get_progress()))
                 # Execute all registered callbacks
                 for callback in self._ready_callbacks:
 #                    print('SampleCounter execute callback')

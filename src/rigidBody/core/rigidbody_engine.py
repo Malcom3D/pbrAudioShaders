@@ -135,7 +135,7 @@ class rigidBodyEngine:
 #                    modalvertices_idx += 1
 
     def prebake(self):
-        self.progress = _update_status(f"{self.status_dir}/prebake", 0)
+        self.progress = _update_status(f"{self.status_dir}", "/prebake", 0)
 
         score_tracks = self.entity_manager.get('score_tracks')
         if len(score_tracks) == 0:
@@ -154,11 +154,11 @@ class rigidBodyEngine:
 
         tasks_modal = [self.prebake_modal(obj_idx) for obj_idx in self.obj_modal]
         results_modal = compute(*tasks_modal)
-        self.progress = _update_status(f"{self.status_dir}/prebake", 30)
+        self.progress = _update_status(f"{self.status_dir}", "/prebake", 30)
 
         tasks_proxy = [self.prebake_proxy(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
         results_proxy = compute(*tasks_proxy)
-        self.progress = _update_status(f"{self.status_dir}/prebake", 45)
+        self.progress = _update_status(f"{self.status_dir}", "/prebake", 45)
 
         # Init per object final score track
         config = self.entity_manager.get('config')
@@ -169,7 +169,7 @@ class rigidBodyEngine:
         collisions = self.entity_manager.get('collisions')
         tasks_composer = [self.prebake_composer(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
         results_composer = compute(*tasks_composer)
-        self.progress = _update_status(f"{self.status_dir}/prebake", 90)
+        self.progress = _update_status(f"{self.status_dir}", "/prebake", 90)
 
         # Save modal vertices and score tracks data
         modal_vertices = self.entity_manager.get('modal_vertices')
@@ -179,7 +179,7 @@ class rigidBodyEngine:
         tasks_save_modal_vertices = [self.save_modal_vertices(modal_vertices[m_idx], f"{m_idx:05d}.json") for m_idx in modal_vertices.keys()]
         results_save_modal_vertices = compute(*tasks_save_modal_vertices)
 
-        self.progress = _update_status(f"{self.status_dir}/prebake", 95)
+        self.progress = _update_status(f"{self.status_dir}", "/prebake", 95)
 
         score_tracks = self.entity_manager.get('score_tracks')
         n_score = 0
@@ -191,10 +191,10 @@ class rigidBodyEngine:
 #        tasks_save_score_tracks = [self.save_score_tracks(score_tracks[s_idx], f"{s_idx:05d}.tar.gz") for s_idx in score_tracks.keys()]
 #        results_save_score_tracks = compute(*tasks_save_score_tracks)
 
-        self.progress = _update_status(f"{self.status_dir}/prebake", 99)
+        self.progress = _update_status(f"{self.status_dir}", "/prebake", 99)
 
     def bake(self):
-        self.progress = _update_status(f"{self.status_dir}/bake", 0)
+        self.progress = _update_status(f"{self.status_dir}", "/bake", 0)
 
         score_tracks = self.entity_manager.get('score_tracks')
         if len(score_tracks) == 0:
@@ -214,7 +214,7 @@ class rigidBodyEngine:
 
         connected_buffer = ConnectedBuffer()
         _ = self.entity_manager.register('connected_buffer', connected_buffer)
-        sample_counter = SampleCounter(status_file=f"{self.status_dir}/bake")
+        sample_counter = SampleCounter(status_file=f"{self.status_dir}")
         sample_counter.set_total_samples(self.total_samples)
         _ = self.entity_manager.register('sample_counter', sample_counter)
 
@@ -231,7 +231,7 @@ class rigidBodyEngine:
                 results_luthier = compute(*tasks_luthier)
 #                tasks_luthier = [self.bake_luthier(obj_idx) for obj_idx in modal_group + self.obj_static]
 #                results_luthier = compute(*tasks_luthier)
-                self.progress = _update_status(f"{self.status_dir}/bake", 10)
+                self.progress = _update_status(f"{self.status_dir}", "/bake", 10)
 
                 group_players = [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in modal_group]
                 group_players += [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in modal_static_idx]
@@ -241,7 +241,7 @@ class rigidBodyEngine:
                 print('rigidBodyEngine: Save player')
                 tasks_save = [self.bake_save(group_player) for group_player in group_players]
                 results_save = compute(*tasks_save)
-                self.progress = _update_status(f"{self.status_dir}/bake", 92)
+                self.progress = _update_status(f"{self.status_dir}", "/bake", 92)
 
                 self.entity_manager.unregister('sample_counter')
                 self.entity_manager.unregister('connected_buffer')
@@ -261,18 +261,18 @@ class rigidBodyEngine:
 
             tasks_luthier = [self.bake_luthier(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
             results_luthier = compute(*tasks_luthier)
-            self.progress = _update_status(f"{self.status_dir}/bake", 10)
+            self.progress = _update_status(f"{self.status_dir}", "/bake", 10)
 
             modal_obj_idx = list(set(self.obj_dyn + self.obj_static) - set(self.obj_proxy_synth))
             players = [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in modal_obj_idx]
             tasks_player = [self.bake_player(player) for player in players]
             results_player = compute(*tasks_player)
-            self.progress = _update_status(f"{self.status_dir}/bake", 60)
+            self.progress = _update_status(f"{self.status_dir}", "/bake", 60)
 
             print('rigidBodyEngine: Save player')
             tasks_save = [self.bake_save(player) for player in players]
             results_save = compute(*tasks_save)
-            self.progress = _update_status(f"{self.status_dir}/bake", 92)
+            self.progress = _update_status(f"{self.status_dir}", "/bake", 92)
 
 
 #        # ProxySynth
@@ -286,12 +286,12 @@ class rigidBodyEngine:
             tasks_proxy_synth = [proxy_engine.compute(obj_idx, self.total_samples) for obj_idx in self.obj_proxy_synth]
             results_proxy_synth = compute(*tasks_proxy_synth)
 
-        self.progress = _update_status(f"{self.status_dir}/bake", 90)
+        self.progress = _update_status(f"{self.status_dir}", "/bake", 90)
 
         post_engine = PostProcessEngine(self.entity_manager)
         post_engine.process_with_modal_player()
 
-        self.progress = _update_status(f"{self.status_dir}/bake", 99)
+        self.progress = _update_status(f"{self.status_dir}", "/bake", 99)
 
     @delayed
     def prebake_modal(self, obj_idx: int):
