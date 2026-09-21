@@ -147,7 +147,7 @@ class rigidBodyEngine:
 
         # Move score tracks data files from /tmp
         for filename in n_score:
-            os.replace(filename,f"{self.scoretracks_dir}/{filename.removeprefix('/tmp/'}")
+            os.replace(filename,f"{self.scoretracks_dir}/{filename.removeprefix('/tmp/')}")
         print('Saved final score_tracks: ', n_score)
 
         self.progress = _update_status(f"{self.status_dir}", "/prebake", 99)
@@ -211,7 +211,7 @@ class rigidBodyEngine:
         tasks_save = [self.bake_save(group_player) for group_player in group_players]
         results_save = compute(*tasks_save)
 
-    def _reset_group(self)
+    def _reset_group(self):
         self.entity_manager.unregister('sample_counter')
         self.entity_manager.unregister('connected_buffer')
 

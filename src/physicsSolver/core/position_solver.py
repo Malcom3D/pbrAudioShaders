@@ -22,11 +22,9 @@ import math
 from typing import List, Tuple, Dict
 from dataclasses import dataclass, field
 
-from pbrAudioCommon import EntityManager
+from pbrAudioCommon import EntityManager, tmpTrajectoryData
 from pbrAudioCommon import _load_pose
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
-
-from ..lib.trajectory_data import tmpTrajectoryData
 
 @dataclass
 class PositionSolver:
