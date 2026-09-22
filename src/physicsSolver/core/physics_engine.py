@@ -16,6 +16,10 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import sys
+# Increase recursion limit for large mesh files
+sys.setrecursionlimit(10000)
+
 import os
 import numpy as np
 from typing import List, Tuple, Any, Dict
@@ -224,7 +228,7 @@ class physicsEngine:
         for s_idx in score_tracks.keys():
             score_tracks[s_idx].save(f"{self.scoretracks_dir}/{s_idx:05d}.tar.gz")
 
-        self.progress = _update_status(f"{self.status_dir}/bake", self.progress + self.progress_ratio)
+        self.progress = _update_status(f"{self.status_dir}", "/bake", self.progress + self.progress_ratio)
 
 
     def _cleanup_tmp_trajectories(self, obj_idx: int):

@@ -26,12 +26,9 @@ from typing import Any, List, Tuple, Dict, Optional
 from dataclasses import dataclass, field
 import trimesh
 
-from pbrAudioCommon import EntityManager
+from pbrAudioCommon import EntityManager, FractureEvent, FragmentData
 from pbrAudioCommon import _parse_lib, _load_mesh
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
-
-from .fracture_data import FractureEvent, FragmentData
-
 
 @dataclass
 class FractureModalModel:

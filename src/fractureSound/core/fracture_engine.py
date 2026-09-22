@@ -22,10 +22,9 @@ from typing import List, Tuple, Any, Dict, Optional
 from dataclasses import dataclass, field
 from dask import delayed, compute
 
-from pbrAudioCommon import EntityManager, CollisionData, ForceDataSequence, TrajectoryData, ResumeData
+from pbrAudioCommon import EntityManager, ResumeData, CollisionData, ForceDataSequence, TrajectoryData, FractureEvent, FractureType
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
-from ..lib.fracture_data import FractureEvent, FractureType
 from ..lib.fracture_detector import FractureDetector
 from ..lib.fracture_modal import FractureModalModel
 from ..lib.fracture_synth import FractureSynth

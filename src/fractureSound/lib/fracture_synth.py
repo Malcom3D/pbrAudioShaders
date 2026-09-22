@@ -32,11 +32,9 @@ import soundfile as sf
 from scipy import signal
 from scipy.signal import windows
 
-from pbrAudioCommon import EntityManager
+from pbrAudioCommon import EntityManager, FractureEvent, FractureType, FragmentData
 from pbrAudioCommon import _parse_lib
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
-
-from .fracture_data import FractureEvent, FractureType, FragmentData
 
 @dataclass
 class FractureSynth:
