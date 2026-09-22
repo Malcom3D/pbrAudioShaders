@@ -53,6 +53,7 @@ class rigidBodyEngine:
 
     def __post_init__(self):
         resume_data = ResumeData(self.entity_manager)
+        resume_data.load_data()
 
         config = self.entity_manager.get('config')
         self.physical_core = config.system.physical_core

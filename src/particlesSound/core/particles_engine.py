@@ -49,6 +49,7 @@ class particlesEngine:
         set_debug_prefix(self.__class__.__name__)
 
         resume_data = ResumeData(self.entity_manager)
+        resume_data.load_data()
 
         self.status_dir = f"{config.system.cache_path}/status/{__class__.__name__}"
         os.makedirs(self.status_dir, exist_ok=True)

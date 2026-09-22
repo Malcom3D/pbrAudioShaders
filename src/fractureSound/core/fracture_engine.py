@@ -57,6 +57,7 @@ class fractureEngine:
         set_debug_prefix(self.__class__.__name__)
 
         resume_data = ResumeData(self.entity_manager)
+        resume_data.load_data()
 
         self.collisions_dir = f"{config.system.cache_path}/collisions"
         self.trajectories_dir = f"{config.system.cache_path}/trajectories"
