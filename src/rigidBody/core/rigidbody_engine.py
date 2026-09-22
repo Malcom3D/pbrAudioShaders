@@ -87,17 +87,16 @@ class rigidBodyEngine:
                 break
 
     def prebake(self):
-        with open(f"{self.status_dir}/step_done", 'r') as file:
-            step_done = file.read().split()
+        if os.path.exists(f"{self.status_dir}/step_done"):
+            with open(f"{self.status_dir}/step_done", 'r') as file:
+                step_done = file.read().split()
     
-        if '_modal' not in step_done:
-            self._modal()
-        if '_proxy' not in step_done:
-            self._proxy()
-        if '_save_modal_verts' not in step_done:
-            self._save_modal_verts()
-        if '_save_score_tracks' not in step_done:
-            self._save_score_tracks()
+            if '_modal' not in step_done:
+                self._modal()
+                self._save()
+            if '_proxy' not in step_done:
+                self._proxy()
+                self._save()
 
     def _modal(self):
         tasks_modal = [self.prebake_modal(obj_idx) for obj_idx in self.obj_modal]
@@ -121,16 +120,13 @@ class rigidBodyEngine:
         results_composer = compute(*tasks_composer)
         self.progress = _update_status(f"{self.status_dir}", "/prebake", 90)
 
-    def _save_modal_verts(self):
+    def _save(self):
         # Save modal vertices data
         modal_vertices = self.entity_manager.get('modal_vertices')
         print('Save modal_vertices: ', len(modal_vertices))
         tasks_save_modal_vertices = [self.save_modal_vertices(modal_vertices[m_idx], f"{m_idx:05d}.json") for m_idx in modal_vertices.keys()]
         results_save_modal_vertices = compute(*tasks_save_modal_vertices)
 
-        self.progress = _update_status(f"{self.status_dir}", "/prebake", 95)
-
-    def _save_score_tracks(self):
         # Save score tracks data in /tmp
         score_tracks = self.entity_manager.get('score_tracks')
         n_score = []
@@ -154,13 +150,26 @@ class rigidBodyEngine:
         self.progress = _update_status(f"{self.status_dir}", "/prebake", 99)
 
     def bake(self):
-        with open(f"{self.status_dir}/step_done", 'r') as file:
-            step_done = file.read().split()
+        step_done = []
+        if os.path.exists(f"{self.status_dir}/step_done"):
+            with open(f"{self.status_dir}/step_done", 'r') as file:
+                step_done = file.read().split()
 
-        if '_connected_buffer' not in step_done:
-            self._connected_buffer()
+        self._connected_buffer()
+        if '_modal_synth' not in step_done:
+            self._modal_synth()
+        if '_proxy_synth' not in step_done:
+            self._proxy_synth()
+        if '_post_process' not in step_done:
+            self._post_process()
 
+    def _modal_synth(self):
         modal_dyn_idx = list(set(self.obj_dyn) - set(self.obj_proxy_synth))
+        step_done = []
+        if os.path.exists(f"{self.status_dir}/step_done"):
+            with open(f"{self.status_dir}/step_done", 'r') as file:
+                step_done = file.read().split()
+
         if len(modal_dyn_idx) >= self.physical_core:
             if '_process_group' not in step_done:
                 self._process_groups()
@@ -171,11 +180,6 @@ class rigidBodyEngine:
                 self._player()
             if '_save' not in step_done:
                 self._save()
-
-        if '_proxy_synth' not in step_done:
-            self._proxy_synth()
-        if '_post_process' not in step_done:
-            self._post_process()
 
     def _process_groups(self):
         print('rigidBodyEngine: Warning: cpu core are less than non-static objects.')
@@ -193,7 +197,7 @@ class rigidBodyEngine:
     def _connected_buffer(self):
         connected_buffer = ConnectedBuffer()
         _ = self.entity_manager.register('connected_buffer', connected_buffer)
-        sample_counter = SampleCounter(status_file=f"{self.status_dir}")
+        sample_counter = SampleCounter(status_dir=f"{self.status_dir}")
         sample_counter.set_total_samples(self.total_samples)
         _ = self.entity_manager.register('sample_counter', sample_counter)
 

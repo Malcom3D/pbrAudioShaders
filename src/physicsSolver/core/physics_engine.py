@@ -111,8 +111,8 @@ class physicsEngine:
             self._force_synth()
         if '_post_process' not in step_done:
             self._post_process()
-        if '_save' not in step_done:
-            self._save()
+#        if '_save' not in step_done:
+#            self._save()
 
     def _proxy(self):
         tasks_proxy = [self.proxy(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
@@ -147,7 +147,6 @@ class physicsEngine:
     def _traj(self):
         tasks_traj = [self.trajectory(obj_idx) for obj_idx in self.obj_dyn]
         results_traj = compute(*tasks_traj)
-        self.progress = _update_status(f"{self.status_dir}", "/bake", self.progress + self.progress_ratio)
 
         # Remove temporary trajectory data for this object
         for obj_idx in self.obj_dyn + self.obj_static:
@@ -165,6 +164,9 @@ class physicsEngine:
     def _dists(self):
         tasks_dists = [self.distances(objs_idx) for objs_idx in self.obj_pairs]
         results_dists = compute(*tasks_dists)
+
+        # Save collision data
+        self._save()
         self.progress = _update_status(f"{self.status_dir}", "/bake", self.progress + self.progress_ratio)
 
     def _force(self):
@@ -177,25 +179,26 @@ class physicsEngine:
         # ToDo add obj_idx for other synth (e.g. eolian)
         tasks_force = [self.force(obj_idx) for obj_idx in obj_ids]
         results_force = compute(*tasks_force)
-        self.progress = _update_status(f"{self.status_dir}", "/bake", self.progress + self.progress_ratio)
 
-        os.makedirs(self.forces_dir, exist_ok=True)
-        forces = self.entity_manager.get('forces')
-        for force_idx in forces.keys():
-            if isinstance(forces[force_idx], ForceDataSequence):
-                force_obj_idx = forces[force_idx].obj_idx
-                force_other_obj_idx = forces[force_idx].other_obj_idx
-                forces[force_idx].save(f"{self.forces_dir}/{force_obj_idx:05d}_{force_other_obj_idx:05d}.pkl")
+        # Save force data
+        self._save()
+        self.progress = _update_status(f"{self.status_dir}", "/bake", self.progress + self.progress_ratio)
 
     def _collision(self):
         collisions = self.entity_manager.get('collisions')
         tasks_collision = [self.collision(collisions[collision_idx]) for collision_idx in collisions.keys()]
         results_collision = compute(*tasks_collision)
+
+        # Save collision data
+        self._save()
         self.progress = _update_status(f"{self.status_dir}", "/bake", self.progress + self.progress_ratio)
 
     def _force_synth(self):
         tasks_force_synth = [self.force_synth(obj_idx) for obj_idx in self.obj_dyn]
         results_force_synth = compute(*tasks_force_synth)
+
+        # Save data in EntityManager
+        self._save()
         self.progress = _update_status(f"{self.status_dir}", "/bake", self.progress + self.progress_ratio)
 
     def _post_process(self):
@@ -210,23 +213,36 @@ class physicsEngine:
         os.makedirs(self.collisions_dir, exist_ok=True)
         os.makedirs(self.modalvertices_dir, exist_ok=True)
         os.makedirs(self.scoretracks_dir, exist_ok=True)
+        os.makedirs(self.forces_dir, exist_ok=True)
+
+        # Save forces data
+        forces = self.entity_manager.get('forces')
+        for force_idx in forces.keys():
+            if isinstance(forces[force_idx], ForceDataSequence):
+                force_obj_idx = forces[force_idx].obj_idx
+                force_other_obj_idx = forces[force_idx].other_obj_idx
+                forces[force_idx].save(f"{self.forces_dir}/{force_obj_idx:05d}_{force_other_obj_idx:05d}.pkl")
+        print('Saved force data: ', len(forces))
 
         # Save collision data
         collision_data = self.entity_manager.get('collisions')
-        print('Saved collisions: ', len(collision_data))
         for c_idx in collision_data.keys():
             collision_data[c_idx].save(f"{self.collisions_dir}/{c_idx:05d}.pkl")
+        print('Saved collisions: ', len(collision_data))
 
         # Save modal vertices and score tracks data
         modal_vertices = self.entity_manager.get('modal_vertices')
+        for m_idx in modal_vertices.keys():
+            modal_vertices[m_idx].save(f"{self.modalvertices_dir}/{m_idx:05d}.json")
         print('Saved modal_vertices: ', len(modal_vertices))
-        tasks_save_modal_vertices = [self.save_modal_vertices(modal_vertices[m_idx], f"{m_idx:05d}.json") for m_idx in modal_vertices.keys()]
-        results_save_modal_vertices = compute(*tasks_save_modal_vertices)
+
+#        tasks_save_modal_vertices = [self.save_modal_vertices(modal_vertices[m_idx], f"{m_idx:05d}.json") for m_idx in modal_vertices.keys()]
+#        results_save_modal_vertices = compute(*tasks_save_modal_vertices)
 
         score_tracks = self.entity_manager.get('score_tracks')
-        print('Saved score_tracks: ', len(score_tracks))
         for s_idx in score_tracks.keys():
             score_tracks[s_idx].save(f"{self.scoretracks_dir}/{s_idx:05d}.tar.gz")
+        print('Saved score_tracks: ', len(score_tracks))
 
         self.progress = _update_status(f"{self.status_dir}", "/bake", self.progress + self.progress_ratio)
 
