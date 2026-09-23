@@ -79,3 +79,34 @@ class SurfaceVoxelObject:
                         if voxel_i and voxel_j and voxel_k:
                             surface_voxels.append([i,j,k])
         return np.array(surface_voxels)
+
+    def query_collision(self, sample_idx: float, particles_positions: np.ndarray, workers: int = -1) -> Tuple[np.ndarray, float]:
+        """
+        Query wath particles collides with the object's surface at a given sample.
+        Returns the index of the closest voxel and the distance.
+        """
+        config = self.entity_manager.get('config')
+        n_samples = config.system.samples_per_object
+
+        vertices = self.trajectory.get_vertices(sample_idx)
+        normals = self.trajectory.get_normals(sample_idx)
+        faces = self.trajectory.get_faces(sample_idx)
+
+        mesh = trimesh.Trimesh(vertices=vertices, vertex_normals=normals, faces=faces)
+        sampled_mesh = mesh.sample(n_samples)
+
+        # Create KDTree for sampled mesh
+        tree = cKDTree(sampled_mesh)
+
+        # Query distances from sampled mesh points to particles
+        distances, indices = tree.query(particles_positons, workers=workers)
+
+        # Find minimum distance
+        min_dist_ids = distances < config.system.collision_margin * 1.5
+        min_distances = distances[min_dist_ids]
+
+        # Find nearest points
+        near_points = sampled_mesh[min_dist_ids]
+
+        # Return involved voxels
+        return near_points, self.get_involved_voxel(sample_idx, near_points)

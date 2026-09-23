@@ -32,18 +32,16 @@ class ParticlesCollisionsVoxels:
     # The voxel_idx_tuple is (obj_idx, *voxel_index) to be globally unique
     collisions: Dict[float, Dict[Tuple[int, ...], Dict[str, Any]]] = field(default_factory=dict)
 
-    def add_collision(self, frame: float, obj_idx: int, voxel_idx: np.ndarray, force: float):
+    def add_collision(self, sample_idx: float, obj_idx: int, voxel_ids: np.ndarray, velocity: np.ndarray, forces: np.ndarray):
         """Adds a collision event to a specific voxel."""
-        if frame not in self.collisions:
-            self.collisions[frame] = {}
-        
-        voxel_key = (obj_idx, *voxel_idx)
-        
-        if voxel_key not in self.collisions[frame]:
-            self.collisions[frame][voxel_key] = {'obj_idx': obj_idx, 'force': 0.0, 'count': 0}
-        
-        self.collisions[frame][voxel_key]['force'] += force
-        self.collisions[frame][voxel_key]['count'] += 1
+        if sample_idx not in self.collisions:
+            self.collisions[sample_idx] = {}
+        self.collisions[sample_idx][obj_idx] = {
+            'obj_idx': obj_idx,
+            'voxel_ids': voxel_ids,
+            'velocity': velocity,
+            'forces': forces
+        }
 
     def save(self, filepath: str):
         """Saves the collision data to a pickle file."""

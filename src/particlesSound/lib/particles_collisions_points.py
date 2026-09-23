@@ -31,15 +31,15 @@ class ParticlesCollisionsPoints:
     # Frame -> {particle_idx -> {'obj_idx': int, 'position': np.ndarray, 'velocity': np.ndarray, 'force': float}}
     collisions: Dict[float, Dict[int, Dict[str, Any]]] = field(default_factory=dict)
 
-    def add_collision(self, frame: float, particle_idx: int, obj_idx: int, position: np.ndarray, velocity: np.ndarray, force: float):
+    def add_collision(self, sample_idx: float, obj_idx: int, collision_positions: np.ndarray, velocity: np.ndarray, forces: np.ndarray):
         """Adds a single collision event."""
-        if frame not in self.collisions:
-            self.collisions[frame] = {}
-        self.collisions[frame][particle_idx] = {
+        if sample_idx not in self.collisions:
+            self.collisions[sample_idx] = {}
+        self.collisions[sample_idx][obj_idx] = {
             'obj_idx': obj_idx,
-            'position': position,
+            'positions': collision_positions,
             'velocity': velocity,
-            'force': force
+            'forces': forces
         }
 
     def save(self, filepath: str):

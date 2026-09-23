@@ -66,19 +66,19 @@ class particlesEngine:
         with open(f"{self.status_dir}/step_done", 'r') as file:
             step_done = file.read().split()
 
-        if '_voxel_size' in step_done:
+        if not '_voxel_size' in step_done:
             self._voxel_size()
-        if '_voxel_obj' in step_done:
+        if not '_voxel_obj' in step_done:
             self._voxel_size()
-        if '_traj' in step_done:
+        if not '_traj' in step_done:
             self._traj()
-        if '_colls' in step_done:
+        if not '_colls' in step_done:
             self._colls()
-        if '_comps' in step_done:
+        if not '_comps' in step_done:
             self._comps()
-        if '_luthier' in step_done:
+        if not '_luthier' in step_done:
             self._luthier()
-        if '_player' in step_done:
+        if not '_player' in step_done:
             self._player()
 
     def _voxel_size(self):

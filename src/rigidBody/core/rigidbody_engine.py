@@ -17,6 +17,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import os
+import shutil
 import numpy as np
 from typing import List, Tuple, Any, Dict
 from dataclasses import dataclass, field
@@ -102,13 +103,11 @@ class rigidBodyEngine:
         tasks_modal = [self.prebake_modal(obj_idx) for obj_idx in self.obj_modal]
         results_modal = compute(*tasks_modal)
         self.progress = _update_status(f"{self.status_dir}", "/prebake", 30)
-        self._save_data()
 
     def _proxy(self):
         tasks_proxy = [self.prebake_proxy(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
         results_proxy = compute(*tasks_proxy)
         self.progress = _update_status(f"{self.status_dir}", "/prebake", 45)
-        self._save_data()
 
     def _composer(self):
         # Init per object final score track
@@ -136,7 +135,7 @@ class rigidBodyEngine:
         for s_idx in score_tracks.keys():
             if score_tracks[s_idx].is_final:
                 score_tracks[s_idx].save(f"/tmp/{s_idx:05d}.tar.gz")
-                n_score += f"/tmp/{s_idx:05d}.tar.gz"
+                n_score += [f"/tmp/{s_idx:05d}.tar.gz"]
 
         # Clean score tracks data
         if os.path.exists(self.scoretracks_dir):
@@ -147,8 +146,8 @@ class rigidBodyEngine:
 
         # Move score tracks data files from /tmp
         for filename in n_score:
-            os.replace(filename,f"{self.scoretracks_dir}/{filename.removeprefix('/tmp/')}")
-        print('Saved final score_tracks: ', n_score)
+            shutil.move(filename, f"{self.scoretracks_dir}/{filename.removeprefix('/tmp/')}")
+        print('Saved final score_tracks: ', len(n_score))
 
 #        self.progress = _update_status(f"{self.status_dir}", "/prebake", 99)
 
@@ -181,8 +180,6 @@ class rigidBodyEngine:
                 self._luthier()
             if '_player' not in step_done:
                 self._player()
-            if '_save_synth_tracks' not in step_done:
-                self._save_synth_tracks()
 
     def _process_groups(self):
         print('rigidBodyEngine: Warning: cpu core are less than non-static objects.')
@@ -239,13 +236,11 @@ class rigidBodyEngine:
         players = [ModalPlayer(self.entity_manager, obj_idx) for obj_idx in modal_obj_idx]
         tasks_player = [self.bake_player(player) for player in players]
         results_player = compute(*tasks_player)
-        self.progress = _update_status(f"{self.status_dir}", "/bake", 60)
 
-    def _save_synth_tracks(self):
-        print('rigidBodyEngine: Save player')
         tasks_save = [self.bake_save(player) for player in players]
         results_save = compute(*tasks_save)
         self.progress = _update_status(f"{self.status_dir}", "/bake", 92)
+        print(f'rigidBodyEngine: Saved tracks for {len(players)} player')
 
     def _proxy_synth(self):
         # ProxySynth

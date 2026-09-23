@@ -51,61 +51,49 @@ class ParticlesCollisions:
             return
 
         # Get the particles trajectory data
-        particles_traj = self.entity_manager.get('trajectories').get(particles_obj_idx)
-        if not isinstance(particles_traj, ParticlesTrajectoryData):
+        particles_trajectories = self.entity_manager.get('trajectories')
+        for p_key in particles_trajectories.keys():
+            if isinstance(particles_trajectories[p_key], ParticlesTrajectoryData):
+                if particles_trajectories[p_key].particles_idx == particles_obj_idx:
+                    particles_traj = particles_trajectories[p_key]
+                    break
             debug_print(f"No ParticlesTrajectoryData found for idx {particles_obj_idx}")
             return
 
         # Get all other objects' trajectories and voxel data
-        scene_objects = {}
-        trajectories = self.entity_manager.get('trajectories')
-        voxel_objects = self.entity_manager.get('surface_voxel_objects')
+        voxel_objects = {} 
+        objects = self.entity_manager.get('surface_voxel_objects')
+        for o_idx in objects.keys():
+            if isinstance(objects[o_idx], SurfaceVoxelObject):
+                voxel_objects[objects[o_idx].obj_idx] = objects[o_idx]
         
-        for obj_idx, traj in trajectories.items():
-            if isinstance(traj, TrajectoryData) and obj_idx != particles_obj_idx:
-                scene_objects[obj_idx] = {
-                    'trajectory': traj,
-                    'voxel_object': voxel_objects.get(obj_idx)
-                }
-
-        if not scene_objects:
-            debug_print("No scene objects to collide with.")
-            return
-
         if particles_config_obj.proxy: # Massive particles
             collision_data = ParticlesCollisionsVoxels(particles_obj_idx=particles_obj_idx)
         else: # Hero particles
             collision_data = ParticlesCollisionsPoints(particles_obj_idx=particles_obj_idx)
 
-        frames = particles_traj.get_x()
-        num_particles = len(particles_traj.positions)
+#        frames = particles_traj.get_x()
+#        num_particles = len(particles_traj.positions)
+        frames = particles_traj.sampled_frames if not particles_config_obj.proxy else particles_config_obj.massive.get_sample_range()
+        num_particles = particles_traj.positions.shape[0] if not particles_config_obj.proxy else particles_config_obj.massive.get_particle_count()
 
-        for frame in frames:
+        points, voxel_ids = ({} for _ in range(2))
+        for sample_idx in frames:
             # Get particle positions at this frame
-            particle_positions = np.array([particles_traj.get_position(i, frame) for i in range(num_particles)])
-            
-            for obj_idx, obj_data in scene_objects.items():
-                voxel_obj = obj_data['voxel_object']
-                if not voxel_obj:
-                    continue
+            particle_positions = particles_traj.get_position(sample_idx)
+            for o_idx in voxel_objects.keys():
+                points, voxel_ids = voxel_objects[o_idx].query_collision(sample_idx, particle_positions)
+                if len(points) > 0 or len(voxel_ids) > 0:
+                    particles_vel = particles_traj.get_velocity(sample_idx)
+                    particles_sizes = particles_traj.get_sizes(sample_idx)
+                    particles_density = particles_config_obj.acoustic_shader.density
+                    particles_mass = np.prod(particles_sizes, axis=0)
+                    forces = np.linalg.norm(particles_vel, axis=0) * particles_mass
 
-                # Query collisions
-                for p_idx, p_pos in enumerate(particle_positions):
-                    if particles_traj.get_state(p_idx, frame) != 1: # Not alive
-                        continue
-                    
-                    voxel_idx, distance = voxel_obj.query_collision(frame, p_pos)
-                    
-                    if voxel_idx.size > 0:
-                        # Collision detected
-                        particle_vel = (particles_traj.get_position(p_idx, frame + 1) - p_pos) * particles_traj.sample_rate
-                        # Approximate force (Hertzian-like)
-                        force = np.linalg.norm(particle_vel) * 0.001 # Placeholder for mass
-                        
-                        if isinstance(collision_data, ParticlesCollisionsPoints):
-                            collision_data.add_collision(frame, p_idx, obj_idx, p_pos, particle_vel, force)
-                        else:
-                            collision_data.add_collision(frame, obj_idx, voxel_idx, force)
+                if len(points) > 0 and not particles_config_obj.proxy:
+                    collision_data.add_collision(sample_idx, o_idx, points, particles_vel, forces)
+                if len(voxel_ids) > 0 and particles_config_obj.proxy:
+                    collision_data.add_collision(sample_idx, o_idx, voxel_ids, particles_vel, forces)
 
         # Save the results
         if isinstance(collision_data, ParticlesCollisionsPoints):
@@ -114,5 +102,5 @@ class ParticlesCollisions:
             filepath = f"{self.collisions_dir}/voxels_{particles_obj_idx}.pkl"
         
         collision_data.save(filepath)
-        self.entity_manager.register('particles_collisions', collision_data)
+        self.entity_manager.register('collisions', collision_data)
 
