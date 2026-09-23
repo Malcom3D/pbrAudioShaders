@@ -91,24 +91,26 @@ class rigidBodyEngine:
             with open(f"{self.status_dir}/step_done", 'r') as file:
                 step_done = file.read().split()
     
-            if '_modal' not in step_done:
-                self._modal()
-                self._save()
-            if '_proxy' not in step_done:
-                self._proxy()
-                self._save()
+                if '_modal' not in step_done:
+                    self._modal()
+                if '_proxy' not in step_done:
+                    self._proxy()
+                if '_composer' not in step_done:
+                    self._composer()
 
     def _modal(self):
         tasks_modal = [self.prebake_modal(obj_idx) for obj_idx in self.obj_modal]
         results_modal = compute(*tasks_modal)
         self.progress = _update_status(f"{self.status_dir}", "/prebake", 30)
+        self._save_data()
 
     def _proxy(self):
         tasks_proxy = [self.prebake_proxy(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
         results_proxy = compute(*tasks_proxy)
         self.progress = _update_status(f"{self.status_dir}", "/prebake", 45)
+        self._save_data()
 
-    def _proxy(self):
+    def _composer(self):
         # Init per object final score track
         config = self.entity_manager.get('config')
         for config_obj in config.objects:
@@ -119,8 +121,9 @@ class rigidBodyEngine:
         tasks_composer = [self.prebake_composer(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
         results_composer = compute(*tasks_composer)
         self.progress = _update_status(f"{self.status_dir}", "/prebake", 90)
+        self._save_data()
 
-    def _save(self):
+    def _save_data(self):
         # Save modal vertices data
         modal_vertices = self.entity_manager.get('modal_vertices')
         print('Save modal_vertices: ', len(modal_vertices))
@@ -147,7 +150,7 @@ class rigidBodyEngine:
             os.replace(filename,f"{self.scoretracks_dir}/{filename.removeprefix('/tmp/')}")
         print('Saved final score_tracks: ', n_score)
 
-        self.progress = _update_status(f"{self.status_dir}", "/prebake", 99)
+#        self.progress = _update_status(f"{self.status_dir}", "/prebake", 99)
 
     def bake(self):
         step_done = []
@@ -155,13 +158,13 @@ class rigidBodyEngine:
             with open(f"{self.status_dir}/step_done", 'r') as file:
                 step_done = file.read().split()
 
-        self._connected_buffer()
-        if '_modal_synth' not in step_done:
-            self._modal_synth()
-        if '_proxy_synth' not in step_done:
-            self._proxy_synth()
-        if '_post_process' not in step_done:
-            self._post_process()
+                self._connected_buffer()
+                if '_modal_synth' not in step_done:
+                    self._modal_synth()
+                if '_proxy_synth' not in step_done:
+                    self._proxy_synth()
+                if '_post_process' not in step_done:
+                    self._post_process()
 
     def _modal_synth(self):
         modal_dyn_idx = list(set(self.obj_dyn) - set(self.obj_proxy_synth))
@@ -178,8 +181,8 @@ class rigidBodyEngine:
                 self._luthier()
             if '_player' not in step_done:
                 self._player()
-            if '_save' not in step_done:
-                self._save()
+            if '_save_synth_tracks' not in step_done:
+                self._save_synth_tracks()
 
     def _process_groups(self):
         print('rigidBodyEngine: Warning: cpu core are less than non-static objects.')
@@ -238,7 +241,7 @@ class rigidBodyEngine:
         results_player = compute(*tasks_player)
         self.progress = _update_status(f"{self.status_dir}", "/bake", 60)
 
-    def _save(self):
+    def _save_synth_tracks(self):
         print('rigidBodyEngine: Save player')
         tasks_save = [self.bake_save(player) for player in players]
         results_save = compute(*tasks_save)

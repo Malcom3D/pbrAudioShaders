@@ -111,8 +111,6 @@ class physicsEngine:
             self._force_synth()
         if '_post_process' not in step_done:
             self._post_process()
-#        if '_save' not in step_done:
-#            self._save()
 
     def _proxy(self):
         tasks_proxy = [self.proxy(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
@@ -166,7 +164,7 @@ class physicsEngine:
         results_dists = compute(*tasks_dists)
 
         # Save collision data
-        self._save()
+        self._save_data()
         self.progress = _update_status(f"{self.status_dir}", "/bake", self.progress + self.progress_ratio)
 
     def _force(self):
@@ -181,7 +179,7 @@ class physicsEngine:
         results_force = compute(*tasks_force)
 
         # Save force data
-        self._save()
+        self._save_data()
         self.progress = _update_status(f"{self.status_dir}", "/bake", self.progress + self.progress_ratio)
 
     def _collision(self):
@@ -190,7 +188,7 @@ class physicsEngine:
         results_collision = compute(*tasks_collision)
 
         # Save collision data
-        self._save()
+        self._save_data()
         self.progress = _update_status(f"{self.status_dir}", "/bake", self.progress + self.progress_ratio)
 
     def _force_synth(self):
@@ -198,7 +196,7 @@ class physicsEngine:
         results_force_synth = compute(*tasks_force_synth)
 
         # Save data in EntityManager
-        self._save()
+        self._save_data()
         self.progress = _update_status(f"{self.status_dir}", "/bake", self.progress + self.progress_ratio)
 
     def _post_process(self):
@@ -208,7 +206,7 @@ class physicsEngine:
             pp = AudioForcePostProcessEngine(self.entity_manager)
             pp.process()
 
-    def _save(self):
+    def _save_data(self):
         # Ensure directory exists
         os.makedirs(self.collisions_dir, exist_ok=True)
         os.makedirs(self.modalvertices_dir, exist_ok=True)
