@@ -20,12 +20,10 @@ import os
 import numpy as np
 from typing import Any, List, Dict, Tuple, Union
 from dataclasses import dataclass
-from scipy.spatial import cKDTree
 
 from pbrAudioCommon import EntityManager, ParticlesTrajectoryData
 from pbrAudioCommon import _load_mesh, _load_particle
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
-from pbrAudioCommon import TrajectoryData
 
 from ..lib.surface_voxel_object import SurfaceVoxelObject
 from ..lib.particles_collisions_points import ParticlesCollisionsPoints
@@ -62,7 +60,7 @@ class ParticlesCollisions:
 
         # Get all other objects' trajectories and voxel data
         voxel_objects = {} 
-        objects = self.entity_manager.get('surface_voxel_objects')
+        objects = self.entity_manager.get('objects')
         for o_idx in objects.keys():
             if isinstance(objects[o_idx], SurfaceVoxelObject):
                 voxel_objects[objects[o_idx].obj_idx] = objects[o_idx]
@@ -72,8 +70,7 @@ class ParticlesCollisions:
         else: # Hero particles
             collision_data = ParticlesCollisionsPoints(particles_obj_idx=particles_obj_idx)
 
-
-     def _detect_collisions(self, particles_config_obj: Any, particles_traj: ParticlesTrajectoryData, voxel_objects: List[Any], collision_data: Union[ParticlesCollisionsPoints, ParticlesCollisionsVoxels]):
+    def _detect_collisions(self, particles_config_obj: Any, particles_traj: ParticlesTrajectoryData, voxel_objects: List[Any], collision_data: Union[ParticlesCollisionsPoints, ParticlesCollisionsVoxels]):
         frames = particles_traj.sampled_frames if not particles_config_obj.proxy else particles_traj.massive.get_sampled_frames()
         num_particles = particles_traj.positions.shape[0] if not particles_config_obj.proxy else particles_traj.massive.get_particle_count()
 

@@ -65,21 +65,19 @@ class particlesEngine:
 
         with open(f"{self.status_dir}/step_done", 'r') as file:
             step_done = file.read().split()
+            self._voxel_size()
+            self._voxel_obj()
 
-        if not '_voxel_size' in step_done:
-            self._voxel_size()
-        if not '_voxel_obj' in step_done:
-            self._voxel_size()
-        if not '_traj' in step_done:
-            self._traj()
-        if not '_colls' in step_done:
-            self._colls()
-        if not '_comps' in step_done:
-            self._comps()
-        if not '_luthier' in step_done:
-            self._luthier()
-        if not '_player' in step_done:
-            self._player()
+            if not '_traj' in step_done:
+                self._traj()
+            if not '_colls' in step_done:
+                self._colls()
+            if not '_comps' in step_done:
+                self._comps()
+            if not '_luthier' in step_done:
+                self._luthier()
+            if not '_player' in step_done:
+                self._player()
 
     def _voxel_size(self):
         # 1. Compute a common voxel size for the scene
