@@ -18,7 +18,7 @@
 
 import os
 import numpy as np
-from typing import Any, List, Dict, Tuple
+from typing import Any, List, Dict, Tuple, Union
 from dataclasses import dataclass
 from scipy.spatial import cKDTree
 
@@ -72,10 +72,10 @@ class ParticlesCollisions:
         else: # Hero particles
             collision_data = ParticlesCollisionsPoints(particles_obj_idx=particles_obj_idx)
 
-#        frames = particles_traj.get_x()
-#        num_particles = len(particles_traj.positions)
-        frames = particles_traj.sampled_frames if not particles_config_obj.proxy else particles_config_obj.massive.get_sample_range()
-        num_particles = particles_traj.positions.shape[0] if not particles_config_obj.proxy else particles_config_obj.massive.get_particle_count()
+
+     def _detect_collisions(self, particles_config_obj: Any, particles_traj: ParticlesTrajectoryData, voxel_objects: List[Any], collision_data: Union[ParticlesCollisionsPoints, ParticlesCollisionsVoxels]):
+        frames = particles_traj.sampled_frames if not particles_config_obj.proxy else particles_traj.massive.get_sampled_frames()
+        num_particles = particles_traj.positions.shape[0] if not particles_config_obj.proxy else particles_traj.massive.get_particle_count()
 
         points, voxel_ids = ({} for _ in range(2))
         for sample_idx in frames:
@@ -103,4 +103,3 @@ class ParticlesCollisions:
         
         collision_data.save(filepath)
         self.entity_manager.register('collisions', collision_data)
-
