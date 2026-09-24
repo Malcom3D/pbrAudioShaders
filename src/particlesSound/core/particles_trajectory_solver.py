@@ -190,7 +190,7 @@ class ParticlesTrajectorySolver:
         unsampled_particles_positions, unsampled_particles_rotations, unsampled_particles_frames = self._unsampled_particle_SIMD(particles_positions, particles_rotations, frame_times, frame_idx)
         unsampled_mask = unsampled_particles_positions != particles_positions[3]
         debug_print(f"Massive particles objects: Found {np.count_nonzero(unsampled_mask)} unsampled positions at frame {frame_idx}")
-        if unsampled_particle_positions is not None and unsampled_particle_rotations is not None and unsampled_particle_frames is not None and unsampled_mask.shape[0] > 0:
+        if unsampled_particles_positions is not None and unsampled_particles_rotations is not None and unsampled_particles_frames is not None and unsampled_mask.shape[0] > 0:
             particles_data.massive.save_unsampled(frame_idx, unsampled_particles_positions, unsampled_particles_rotations, unsampled_particles_frames)
 
         sampled_frame = particles_data.frames if particles_data.sampled_frames is None else particles_data.sampled_frames
