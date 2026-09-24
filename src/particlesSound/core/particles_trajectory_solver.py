@@ -167,9 +167,9 @@ class ParticlesTrajectorySolver:
         Optional[ParticlesTrajectoryData]
             Computed particle trajectory data, or None if failed
         """
-        # init results array
-        unsampled_particles_positions, unsampled_particles_rotations = (np.zeros((particles_data.particles_count, 3)) for _ in range(2))
-        unsampled_particles_frames = np.zeros((particles_data.particles_count,)) 
+#        # init results array
+#        unsampled_particles_positions, unsampled_particles_rotations = (np.zeros((particles_data.particles_count, 3)) for _ in range(2))
+#        unsampled_particles_frames = np.zeros((particles_data.particles_count,)) 
 
         # init temp array
         particles_positions, particles_rotations = (np.zeros((5, particles_data.particles_count, 3)) for _ in range(2))
@@ -185,16 +185,21 @@ class ParticlesTrajectorySolver:
             particles_rotations[surround] = particles_data.get_rotation(sample_idx=sample_idx)
 
         frame_times = np.array(frame_times)
-        unsampled_particle_positions, unsampled_particle_rotations, unsampled_particle_frames = self._unsampled_particle_SIMD(particles_positions, particles_rotations, frame_times, frame_idx)
-        unsampled_mask = unsampled_particle_positions != particles_positions[3]
+#        unsampled_particle_positions, unsampled_particle_rotations, unsampled_particle_frames = self._unsampled_particle_SIMD(particles_positions, particles_rotations, frame_times, frame_idx)
+#        unsampled_mask = unsampled_particle_positions != particles_positions[3]
+        unsampled_particles_positions, unsampled_particles_rotations, unsampled_particles_frames = self._unsampled_particle_SIMD(particles_positions, particles_rotations, frame_times, frame_idx)
+        unsampled_mask = unsampled_particles_positions != particles_positions[3]
         debug_print(f"Massive particles objects: Found {np.count_nonzero(unsampled_mask)} unsampled positions at frame {frame_idx}")
         if unsampled_particle_positions is not None and unsampled_particle_rotations is not None and unsampled_particle_frames is not None and unsampled_mask.shape[0] > 0:
             particles_data.massive.save_unsampled(frame_idx, unsampled_particles_positions, unsampled_particles_rotations, unsampled_particles_frames)
 
+        sampled_frame = particles_data.frames if particles_data.sampled_frames is None else particles_data.sampled_frames
+        particles_data.sampled_frames = np.unique(np.sort(np.concatenate((sampled_frame, unsampled_particles_frames))))
+
     def _unsampled_particle_SIMD(self, particles_positions: np.ndarray, particles_rotations: np.ndarray, frame_times: np.ndarray, frame_idx: int):
         unsampled_positions, unsampled_frames = self._detect_unsampled_positions_SIMD(positions=particles_positions, times=frame_times)
 
-        # If unsampled positions found, insert them into the data
+        # If unsampled positions found, find unsampled rotations
         if len(unsampled_positions) > 0:
             unsampled_rotations = self._estimate_rotations_SIMD(times=frame_times, rotations=particles_rotations, positions=particles_positions, eval_times=unsampled_frames, unsampled_positions=unsampled_positions)
 
