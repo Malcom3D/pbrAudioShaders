@@ -54,7 +54,7 @@ class SurfaceVoxelObject:
         surface_voxels = self._get_surface_voxel(voxel_grid=voxel_grid)
         voxel_indices = voxel_grid.points_to_indices(points)
         mask = (surface_voxels[:, None, :] == voxel_indices[None, :, :]).all(axis=2).any(axis=1)
-        return np.where(mask)[0]
+        return points[voxel_indices == surface_voxels[np.where(mask)[0]]], np.where(mask)[0]
 
     def _get_voxel_grid(self, sample_idx: float):
         vertices = self.trajectory.get_vertices(sample_idx)
@@ -109,4 +109,4 @@ class SurfaceVoxelObject:
         near_points = particles_positions[min_dist_ids]
 
         # Return involved voxels
-        return near_points, self.get_involved_voxel(sample_idx, near_points)
+        return self.get_involved_voxel(sample_idx, near_points)
