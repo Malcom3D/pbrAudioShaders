@@ -43,7 +43,9 @@ class ParticlesCollisionSolver:
     def compute(self, particles_obj_idx: int):
         config = self.entity_manager.get('config')
 
-        particles_config_obj = next((p for p in config.particles if p.idx == particles_obj_idx), None)
+        for particles_config_obj in config.particles:
+            if particles_config_obj.idx == particles_obj_idx:
+                break
         if not particles_config_obj:
             debug_print(f"No particles config found for idx {particles_obj_idx}")
             return

@@ -53,8 +53,9 @@ class SurfaceVoxelObject:
         voxel_grid = self._get_voxel_grid(sample_idx)
         surface_voxels = self._get_surface_voxel(voxel_grid=voxel_grid)
         voxel_indices = voxel_grid.points_to_indices(points)
-        mask = (surface_voxels[:, None, :] == voxel_indices[None, :, :]).all(axis=2).any(axis=1)
-        return points[voxel_indices == surface_voxels[np.where(mask)[0]]], np.where(mask)[0]
+        voxels_mask = (surface_voxels[:, None, :] == voxel_indices[None, :, :]).all(axis=2).any(axis=1)
+        points_mask = (voxel_indices[:, None, :] == surface_voxels[np.where(voxels_mask)[0]][None, :, :]).all(axis=2).any(axis=1)
+        return points[points_mask], np.where(voxels_mask)[0]
 
     def _get_voxel_grid(self, sample_idx: float):
         vertices = self.trajectory.get_vertices(sample_idx)
