@@ -194,7 +194,7 @@ class ParticlesTrajectorySolver:
             particles_data.massive.save_unsampled(frame_idx, unsampled_particles_positions, unsampled_particles_rotations, unsampled_particles_frames)
 
         sampled_frame = particles_data.frames if particles_data.sampled_frames is None else particles_data.sampled_frames
-        particles_data.sampled_frames = np.unique(np.sort(np.concatenate((sampled_frame, unsampled_particles_frames))))
+        particles_data.sampled_frames = np.unique(np.sort(np.concatenate(sampled_frame, unsampled_particles_frames).astype(np.int32)))
 
     def _unsampled_particle_SIMD(self, particles_positions: np.ndarray, particles_rotations: np.ndarray, frame_times: np.ndarray, frame_idx: int):
         unsampled_positions, unsampled_frames = self._detect_unsampled_positions_SIMD(positions=particles_positions, times=frame_times)
