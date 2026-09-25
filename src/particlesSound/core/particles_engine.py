@@ -32,7 +32,7 @@ from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 from ..lib.surface_voxel_size import SurfaceVoxelSize
 from ..lib.surface_voxel_object import SurfaceVoxelObject
 from ..core.particles_trajectory_solver import ParticlesTrajectorySolver
-from ..core.particles_collisions import ParticlesCollisions
+from ..core.particles_collisions_solver import ParticlesCollisionSolver
 from ..core.particles_composer import ParticlesComposer
 from ..core.particles_luthier import ParticlesLuthier
 from ..core.particles_player import ParticlesPlayer
@@ -141,7 +141,7 @@ class particlesEngine:
     @delayed
     def _detect_collisions(self, particles_obj_idx: int):
         """Delayed task for collision detection."""
-        collision_detector = ParticlesCollisions(self.entity_manager)
+        collision_detector = ParticlesCollisionSolver(self.entity_manager)
         collision_detector.compute(particles_obj_idx)
 
     @delayed

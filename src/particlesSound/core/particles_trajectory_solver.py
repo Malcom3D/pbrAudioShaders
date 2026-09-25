@@ -173,6 +173,7 @@ class ParticlesTrajectorySolver:
 
         # init temp array
         particles_positions, particles_rotations = (np.zeros((5, particles_data.particles_count, 3)) for _ in range(2))
+        particles_sizes = particles_data.get_sizes(sample_idx=frame_idx * self.sample_rate / self.sfps)
 
         # Detect unsampled intermediate positions using PositionSolver algorithm
 #        frame_times = particles_data.frames
@@ -191,10 +192,10 @@ class ParticlesTrajectorySolver:
         unsampled_mask = unsampled_particles_positions != particles_positions[3]
         debug_print(f"Massive particles objects: Found {np.count_nonzero(unsampled_mask)} unsampled positions at frame {frame_idx}")
         if unsampled_particles_positions is not None and unsampled_particles_rotations is not None and unsampled_particles_frames is not None and unsampled_mask.shape[0] > 0:
-            particles_data.massive.save_unsampled(frame_idx, unsampled_particles_positions, unsampled_particles_rotations, unsampled_particles_frames)
+            particles_data.massive.save_unsampled(frame_idx, unsampled_particles_positions, unsampled_particles_rotations, unsampled_particles_frames, particles_sizes)
 
         sampled_frame = particles_data.frames if particles_data.sampled_frames is None else particles_data.sampled_frames
-        particles_data.sampled_frames = np.unique(np.sort(np.concatenate(sampled_frame, unsampled_particles_frames).astype(np.int32)))
+        particles_data.sampled_frames = np.unique(np.sort(np.concatenate((sampled_frame, unsampled_particles_frames.astype(np.int32)))))
 
     def _unsampled_particle_SIMD(self, particles_positions: np.ndarray, particles_rotations: np.ndarray, frame_times: np.ndarray, frame_idx: int):
         unsampled_positions, unsampled_frames = self._detect_unsampled_positions_SIMD(positions=particles_positions, times=frame_times)

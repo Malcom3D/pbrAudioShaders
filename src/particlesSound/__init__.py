@@ -16,7 +16,7 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-__version__ = "0.1.4"
+__version__ = "0.1.5"
 __author__ = "Malcom3D"
 __description__ = "Physically plausible particles collision sound synthesis"
 

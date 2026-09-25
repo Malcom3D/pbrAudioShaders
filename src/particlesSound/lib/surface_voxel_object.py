@@ -99,14 +99,14 @@ class SurfaceVoxelObject:
         tree = cKDTree(sampled_mesh)
 
         # Query distances from sampled mesh points to particles
-        distances, indices = tree.query(particles_positons, workers=workers)
+        distances, indices = tree.query(particles_positions, workers=workers)
 
         # Find minimum distance
         min_dist_ids = distances < config.system.collision_margin * 1.5
         min_distances = distances[min_dist_ids]
 
         # Find nearest points
-        near_points = sampled_mesh[min_dist_ids]
+        near_points = particles_positions[min_dist_ids]
 
         # Return involved voxels
         return near_points, self.get_involved_voxel(sample_idx, near_points)
