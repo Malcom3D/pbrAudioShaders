@@ -54,6 +54,8 @@ class SurfaceVoxelObject:
         surface_voxels = self._get_surface_voxel(voxel_grid=voxel_grid)
         voxel_indices = voxel_grid.points_to_indices(points)
         voxels_mask = (surface_voxels[:, None, :] == voxel_indices[None, :, :]).all(axis=2).any(axis=1)
+        if np.count_nonzero(voxels_mask) < 1:
+            return np.zeros((0, 3), dtype=np.float32), np.array([], dtype=np.int32)
         points_mask = (voxel_indices[:, None, :] == surface_voxels[np.where(voxels_mask)[0]][None, :, :]).all(axis=2).any(axis=1)
         return points[points_mask], np.where(voxels_mask)[0]
 
@@ -67,19 +69,65 @@ class SurfaceVoxelObject:
 
     def _get_surface_voxel(self, sample_idx: float = None, voxel_grid: trimesh.voxel.base.VoxelGrid = None):
         if sample_idx is None and voxel_grid is None:
-           return np.array([])
+            return np.empty((0, 3), dtype=np.int32)
         voxel_grid = voxel_grid if voxel_grid is not None else self._get_voxel_grid(sample_idx)
+    
+        matrix = voxel_grid.matrix
+        nx, ny, nz = matrix.shape
+    
         surface_voxels = []
-        for i in range(voxel_grid.matrix.shape[0]):
-            for j in range(voxel_grid.matrix.shape[1]):
-                for k in range(voxel_grid.matrix.shape[2]):
-                    if voxel_grid.matrix[i,j,k]:
-                        voxel_i = voxel_grid.matrix[i-1,j,k] if i == voxel_grid.matrix.shape[0] -1 else voxel_grid.matrix[i-1,j,k] and voxel_grid.matrix[i+1,j,k]
-                        voxel_j = voxel_grid.matrix[i,j-1,k] if j == voxel_grid.matrix.shape[1] -1 else voxel_grid.matrix[i,j-1,k] and voxel_grid.matrix[i,j+1,k]
-                        voxel_k = voxel_grid.matrix[i,j,k-1] if k == voxel_grid.matrix.shape[2] -1 else voxel_grid.matrix[i,j,k-1] and voxel_grid.matrix[i,j,k+1]
-                        if voxel_i and voxel_j and voxel_k:
-                            surface_voxels.append([i,j,k])
-        return np.array(surface_voxels)
+        for i in range(nx):
+            for j in range(ny):
+                for k in range(nz):
+                    if not matrix[i, j, k]:
+                        continue
+                
+                    # Check if this voxel is on the surface (has at least one empty neighbor)
+                    # Consider boundaries as empty (outside the grid)
+                    is_surface = False
+                    
+                    # Check -i direction
+                    if i == 0 or not matrix[i - 1, j, k]:
+                        is_surface = True
+                    # Check +i direction
+                    elif i == nx - 1 or not matrix[i + 1, j, k]:
+                        is_surface = True
+                    # Check -j direction
+                    elif j == 0 or not matrix[i, j - 1, k]:
+                        is_surface = True
+                    # Check +j direction
+                    elif j == ny - 1 or not matrix[i, j + 1, k]:
+                        is_surface = True
+                    # Check -k direction
+                    elif k == 0 or not matrix[i, j, k - 1]:
+                        is_surface = True
+                    # Check +k direction
+                    elif k == nz - 1 or not matrix[i, j, k + 1]:
+                        is_surface = True
+                
+                    if is_surface:
+                        surface_voxels.append([i, j, k])
+    
+        if len(surface_voxels) == 0:
+            return np.empty((0, 3), dtype=np.int32)
+    
+        return np.array(surface_voxels, dtype=np.int32)
+
+#    def _get_surface_voxel(self, sample_idx: float = None, voxel_grid: trimesh.voxel.base.VoxelGrid = None):
+#        if sample_idx is None and voxel_grid is None:
+#           return np.array([])
+#        voxel_grid = voxel_grid if voxel_grid is not None else self._get_voxel_grid(sample_idx)
+#        surface_voxels = []
+#        for i in range(voxel_grid.matrix.shape[0]):
+#            for j in range(voxel_grid.matrix.shape[1]):
+#                for k in range(voxel_grid.matrix.shape[2]):
+#                    if voxel_grid.matrix[i,j,k]:
+#                        voxel_i = voxel_grid.matrix[i-1,j,k] if i == voxel_grid.matrix.shape[0] -1 else voxel_grid.matrix[i-1,j,k] and voxel_grid.matrix[i+1,j,k]
+#                        voxel_j = voxel_grid.matrix[i,j-1,k] if j == voxel_grid.matrix.shape[1] -1 else voxel_grid.matrix[i,j-1,k] and voxel_grid.matrix[i,j+1,k]
+#                        voxel_k = voxel_grid.matrix[i,j,k-1] if k == voxel_grid.matrix.shape[2] -1 else voxel_grid.matrix[i,j,k-1] and voxel_grid.matrix[i,j,k+1]
+#                        if voxel_i and voxel_j and voxel_k:
+#                            surface_voxels.append([i,j,k])
+#        return np.array(surface_voxels)
 
     def query_collision(self, sample_idx: float, particles_positions: np.ndarray, workers: int = -1) -> Tuple[np.ndarray, float]:
         """

@@ -46,9 +46,9 @@ class ParticlesCollisionSolver:
         for particles_config_obj in config.particles:
             if particles_config_obj.idx == particles_obj_idx:
                 break
-        if not particles_config_obj:
-            debug_print(f"No particles config found for idx {particles_obj_idx}")
-            return
+#        if not particles_config_obj:
+#            debug_print(f"No particles config found for idx {particles_obj_idx}")
+#            return
 
         # Get the particles trajectory data
         particles_trajectories = self.entity_manager.get('trajectories')
@@ -57,8 +57,8 @@ class ParticlesCollisionSolver:
                 if particles_trajectories[p_key].particles_idx == particles_obj_idx:
                     particles_traj = particles_trajectories[p_key]
                     break
-            debug_print(f"No ParticlesTrajectoryData found for idx {particles_obj_idx}")
-            return
+#            debug_print(f"No ParticlesTrajectoryData found for idx {particles_obj_idx}")
+#            return
 
         # Get all other objects' trajectories and voxel data
         voxel_objects = {} 
@@ -72,8 +72,11 @@ class ParticlesCollisionSolver:
         else: # Hero particles
             collision_data = ParticlesCollisionsPoints(particles_obj_idx=particles_obj_idx)
 
+        # Detect collisions
+        self._detect_collisions(particles_config_obj, particles_traj, voxel_objects, collision_data)
+
     def _detect_collisions(self, particles_config_obj: Any, particles_traj: ParticlesTrajectoryData, voxel_objects: List[Any], collision_data: Union[ParticlesCollisionsPoints, ParticlesCollisionsVoxels]):
-        frames = particles_traj.sampled_frames if not particles_config_obj.proxy else particles_traj.massive.get_sampled_frames()
+        frames = particles_traj.sampled_frames
         num_particles = particles_traj.positions.shape[0] if not particles_config_obj.proxy else particles_traj.massive.get_particle_count()
 
         points, voxel_ids = ({} for _ in range(2))
