@@ -101,9 +101,9 @@ class ParticlesCollisionSolver:
 
         # Save the results
         if isinstance(collision_data, ParticlesCollisionsPoints):
-            filepath = f"{self.collisions_dir}/points_{particles_obj_idx}.pkl"
+            filepath = f"{self.collisions_dir}/points_{particles_config_obj.name}.pkl"
         else:
-            filepath = f"{self.collisions_dir}/voxels_{particles_obj_idx}.pkl"
+            filepath = f"{self.collisions_dir}/voxels_{particles_config_obj.name}.pkl"
         
         collision_data.save(filepath)
         self.entity_manager.register('collisions', collision_data)
