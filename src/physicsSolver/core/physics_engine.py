@@ -194,7 +194,6 @@ class physicsEngine:
     def _force_synth(self):
         tasks_force_synth = [self.force_synth(obj_idx) for obj_idx in self.obj_dyn]
         results_force_synth = compute(*tasks_force_synth)
-
         # Save data in EntityManager
         self._save_data()
         self.progress = _update_status(f"{self.status_dir}", "/bake", self.progress + self.progress_ratio)
