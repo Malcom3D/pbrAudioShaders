@@ -32,6 +32,8 @@ from pbrAudioCommon import EntityManager, ScoreTrack, ForceDataSequence, ModalVe
 from pbrAudioCommon import _update_status
 from pbrAudioCommon import TrajectoryData
 
+from pbrAudioStorage import TrackDescriptor, TrackRegistry, NodeKind, EdgeTransform, DAGNode
+
 from ellipsoidalProxy import Modal4Proxy, ProxySynth, ProxyEngine
 from postProcess import PostProcessEngine
 
@@ -86,6 +88,26 @@ class rigidBodyEngine:
                 trajectory = trajectories[t_idx]
                 self.total_samples = int(trajectory.get_x()[-1])
                 break
+
+        self._register_track_descriptors()
+
+    def _register_track_descriptors(self):
+        """Registers the track descriptors for the rigidbody engine."""
+        track_names = ["rigidbody", "rolling", "sliding", "scraping", "rolling_sound", "sliding_sound", "scraping_sound"]
+
+        def _create_modal_transform(em: 'EntityManager', node: DAGNode) -> EdgeTransform:
+            obj_idx = int(node.name.split('/')[0].replace('obj', ''))
+            
+            def op(chunk: np.ndarray, **params) -> np.ndarray:
+                # This would read the modal synth tracks and and apply the filterbank.
+                # Placeholder implementation.
+                n_disp, T = chunk.shape
+                bands = params["bands"]
+                return np.zeros((n_disp, bands, T), dtype=chunk.dtype)
+
+            return EdgeTransform(name="modal_filterbank", op=op, params={"bands": self.bands, "sample_range": self.sample_range})
+
+        TrackRegistry.register(TrackDescriptor(name="rigidbody_modal", node_kind=NodeKind.PROCESSED, track_names=track_names, transform_factory=_create_modal_transform, meta={"engine": "rigidBody", "modes": 1024}))
 
     def prebake(self):
         if os.path.exists(f"{self.status_dir}/step_done"):

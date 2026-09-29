@@ -35,6 +35,8 @@ from pbrAudioCommon import EntityManager, CollisionData, ForceDataSequence, tmpT
 from pbrAudioCommon import _update_status
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
+from pbrAudioStorage import TrackDescriptor, TrackRegistry, NodeKind, EdgeTransform, DAGNode
+
 from ellipsoidalProxy import ProxyMesh
 
 from ..core.position_solver import PositionSolver
@@ -60,6 +62,8 @@ class physicsEngine:
         set_debug(config.system.debug)
         set_debug_prefix(self.__class__.__name__)
 
+        self._register_track_descriptors()
+
         resume_data = ResumeData(self.entity_manager)
         resume_data.load_data()
 
@@ -83,6 +87,24 @@ class physicsEngine:
         for i in range(len(config.objects)):
             for j in range(i + 1, len(config.objects)):
                 self.obj_pairs.append([config.objects[i].idx, config.objects[j].idx])
+
+    def _register_track_descriptors(self):
+        """Registers the track descriptors for the physics engine."""
+        track_names = ["non_collision", "impact", "rolling", "sliding", "scraping", "coupling_strength", "rolling_sound", "sliding_sound", "scraping_sound"]
+
+        # Define the transform factory for physics forces
+        def _create_physics_transform(em: 'EntityManager', node: DAGNode) -> EdgeTransform:
+            obj_idx = int(node.name.split('/')[0].replace('obj', ''))
+            
+            def op(chunk: np.ndarray, **params) -> np.ndarray:
+                n_forces, T = chunk.shape
+                bands = params["bands"]
+                return np.zeros((n_forces, bands, T), dtype=chunk.dtype)
+
+            return EdgeTransform(name="filterbank_split", op=op, params={"bands": self.bands, "sample_rate": self.sample_rate})
+
+        # Register the descriptor
+        TrackRegistry.register(TrackDescriptor(name="physics_forces", node_kind=NodeKind.PROCESSED, track_names=track_names, transform_factory=_create_physics_transform, meta={"engine": "physicsSolver"}))
 
     def bake(self):
         self.progress = _update_status(f"{self.status_dir}", "/bake", self.progress)
