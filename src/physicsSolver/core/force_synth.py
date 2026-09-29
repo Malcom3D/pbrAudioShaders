@@ -25,6 +25,8 @@ import scipy.signal as signal
 from dataclasses import dataclass 
 from typing import List, Dict, Tuple, Optional, Any
 
+from pbrAudioStorage import StorageEngine, NodeKind
+
 from pbrAudioCommon import EntityManager, HertzianContact, ContactType
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
@@ -54,6 +56,8 @@ class ForceSynth:
         sample_rate = config.system.sample_rate
         sfps = ( fps / fps_base ) * subframes # subframes per seconds
         spsf = sample_rate / sfps # Samples Per SubFrame
+
+        storage_engine = StorageEngine(entity_manager=self.entity_manager)
 
         collisions = []
         collision_data = self.entity_manager.get('collisions')
@@ -89,6 +93,26 @@ class ForceSynth:
         # Calculate total duration in samples
         frames = trajectory.get_x()
         total_samples = int(trajectory.get_x()[-1])
+        duration_s = total_samples / sample_rate
+
+        # Build and materialize the DAG for this object.
+        root_node = storage_engine.build_and_process(obj_idx=obj_idx, duration_s=duration_s)        
+
+        # Write to the *source* node
+        source_node_name = f"obj{obj_idx}/physics_forces_source"
+        source_node_obj = None
+        for node in storage_engine._toposort(root_node):
+            if node.name == source_node_name:
+                source_node_obj = node
+                break
+        
+        if source_node_obj is None:
+            debug_print(f"Could not find source node '{source_node_name}' in DAG.")
+            return
+            
+        # Find the indices of the track names
+        track_names = source_node_obj.meta.get("track_names", [])
+        track_map = {name: i for i, name in enumerate(track_names)}
 
         # Init tracks
         impact_track = np.zeros(total_samples)
@@ -131,35 +155,48 @@ class ForceSynth:
                                 for key in synthesized_impact_track.keys():
                                     synthesized_track[key] += synthesized_impact_track[key]
 
-                    # Add to tracks
-                    impact_track += synthesized_track['impact']
-                    sliding_track += synthesized_track['sliding']
-                    scraping_track += synthesized_track['scraping']
-                    rolling_track += synthesized_track['rolling']
-                    non_collision_track += synthesized_track['non_collision']
-                    coupling_strength_track += synthesized_track['coupling_strength']
-                    sliding_sound += synthesized_track['sliding_sound']
-                    scraping_sound += synthesized_track['scraping_sound']
-                    rolling_sound += synthesized_track['rolling_sound']
+                    # Write the synthesized sample to the storage engine
+                    for track_name, value in synthesized_track.items():
+                        if track_name in track_map:
+                            track_index = track_map[track_name]
+                            # Write to the source node at the correct track and sample index
+                            storage_engine.write_node(name=source_node_name, data=np.array([value], dtype=np.float32), slices=(track_index, int(sample_idx)))
 
-        # Create tracks dictionary
-        tracks = {
-            'impact': impact_track,
-            'sliding': sliding_track,
-            'scraping': scraping_track,
-            'rolling': rolling_track,
-            'sliding_sound': sliding_sound,
-            'scraping_sound': scraping_sound,
-            'rolling_sound': rolling_sound,
-            'non_collision': non_collision_track,
-            'coupling_strength': coupling_strength_track
-        }
+        # Apply any registered transforms (like the placeholder filterbank).
+        storage_engine.process_graph()
+        
+        # 5. Close the engine to flush all data.
+        storage_engine.close()
 
-        if config.system.enable_denoiser:
-            # Save unprocessed tracks
-            self._save_tracks(config_obj, tracks, total_samples, int(sample_rate), unprocessed=True)
-
-        self._save_tracks(config_obj, tracks, total_samples, int(sample_rate))
+#                    # Add to tracks
+#                    impact_track += synthesized_track['impact']
+#                    sliding_track += synthesized_track['sliding']
+#                    scraping_track += synthesized_track['scraping']
+#                    rolling_track += synthesized_track['rolling']
+#                    non_collision_track += synthesized_track['non_collision']
+#                    coupling_strength_track += synthesized_track['coupling_strength']
+#                    sliding_sound += synthesized_track['sliding_sound']
+#                    scraping_sound += synthesized_track['scraping_sound']
+#                    rolling_sound += synthesized_track['rolling_sound']
+#
+#        # Create tracks dictionary
+#        tracks = {
+#            'impact': impact_track,
+#            'sliding': sliding_track,
+#            'scraping': scraping_track,
+#            'rolling': rolling_track,
+#            'sliding_sound': sliding_sound,
+#            'scraping_sound': scraping_sound,
+#            'rolling_sound': rolling_sound,
+#            'non_collision': non_collision_track,
+#            'coupling_strength': coupling_strength_track
+#        }
+#
+#        if config.system.enable_denoiser:
+#            # Save unprocessed tracks
+#            self._save_tracks(config_obj, tracks, total_samples, int(sample_rate), unprocessed=True)
+#
+#        self._save_tracks(config_obj, tracks, total_samples, int(sample_rate))
 
     def _synthesize_impact(self, force: Any, collision: Any, config_obj: Any, other_config_obj: Any, sample_idx: float, total_samples: int, sample_rate: int) -> Dict[str, Any]:
         """Synthesize Hertzian impact audio-force."""
