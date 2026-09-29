@@ -103,7 +103,7 @@ class physicsEngine:
             return EdgeTransform(name="no_mixeq", op=op, params={})
 
         # Register the descriptor
-        TrackRegistry.register(TrackDescriptor(name="physics_forces", node_kind=NodeKind.SOURCE, track_names=track_names, transform_factory=_create_physics_transform, meta={"engine": "physicsSolver"}))
+        TrackRegistry.register(TrackDescriptor(name="physics_forces", node_kind=NodeKind.PROCESSED, track_names=track_names, transform_factory=_create_physics_transform, meta={"engine": "physicsSolver"}))
 
     def bake(self):
         self.progress = _update_status(f"{self.status_dir}", "/bake", self.progress)
