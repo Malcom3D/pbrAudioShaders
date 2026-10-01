@@ -202,6 +202,7 @@ class ForceSynth:
 
     def _synthesize_impact(self, force: Any, collision: Any, config_obj: Any, other_config_obj: Any, sample_idx: float, total_samples: int, sample_rate: int) -> Dict[str, Any]:
         """Synthesize Hertzian impact audio-force."""
+        config = self.entity_manager.get('config')
         # Hertzian impact parameters
         if config_obj.stochastic_variation:
             normal_force_mag = np.linalg.norm(force.get_stochastic_normal_force(sample_idx))
@@ -342,6 +343,7 @@ class ForceSynth:
         
     def _synthesize_non_collision(self, force: Any, config_obj: Any, sample_idx: float, total_samples: int, sample_rate: int):
         """Synthesize non-collision audio-forces (air resistance, etc.)."""
+        config = self.entity_manager.get('config')
         # Create tracks
         non_collision = np.zeros(total_samples)
         result = {
@@ -361,6 +363,7 @@ class ForceSynth:
 
     def _synthesize_scraping(self, trajectory: Any, force: Any, collision: Any, config_obj: Any, other_config_obj: Any, sample_idx: float, total_samples: int, sample_rate: int):
         """Synthesize scraping sound using fractal noise with resonant filter."""
+        config = self.entity_manager.get('config')
     
         # Get material properties
         roughness = config_obj.acoustic_shader.roughness
@@ -528,6 +531,7 @@ class ForceSynth:
 
     def _synthesize_sliding(self, trajectory: Any, force: Any, collision: Any, config_obj: Any, other_config_obj: Any, sample_idx: float, total_samples: int, sample_rate: int):
         """Synthesize sliding sound using fractal noise with resonant filter."""
+        config = self.entity_manager.get('config')
 
         # Root Mean Square Roughness
         roughness = config_obj.acoustic_shader.roughness
@@ -643,6 +647,8 @@ class ForceSynth:
     
     def _synthesize_rolling(self, trajectory: Any, force: Any, collision: Any, config_obj: Any, other_config_obj: Any, sample_idx: float, total_samples: int, sample_rate: int):
         """Synthesize rolling sound using Poisson pulse sequence filtered by second-order resonant filter."""
+        config = self.entity_manager.get('config')
+
         # Extract parameters
         n_samples = int(collision.frame_range)
         rolling_vibration, rolling_signal, coupling_strength = (np.zeros(total_samples) for _ in range(3))
