@@ -161,7 +161,8 @@ class ForceSynth:
                         if track_name in track_map:
                             track_index = track_map[track_name]
                             # Write to the source node at the correct track and sample index
-                            storage_engine.write_node(name=source_node_name, data=np.array([value], dtype=np.float32), slices=(track_index, int(sample_idx)))
+                            scalar = float(np.asarray(value).reshape(-1)[int(sample_idx)])
+                            storage_engine.write_node(name=source_node_name, data=np.array([scalar], dtype=np.float32), slices=(track_index, int(sample_idx)))
 
         # Apply any registered transforms (like the placeholder filterbank).
         storage_engine.process_graph()
