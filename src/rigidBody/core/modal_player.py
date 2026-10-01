@@ -105,7 +105,7 @@ class ModalPlayer:
         debug_print('ModalPlayer t60: ', self.t60_samples)
 
         sound_path = f"{config.system.cache_path}/audio_force"
-        if config.enable_noise_enhancement:
+        if config.system.enable_noise_enhancement:
             self.sliding_sound, self.scraping_sound, self.rolling_sound = self._load_sound_tracks(sound_path, config_obj.name)
 
     def compute(self) -> None:
@@ -181,10 +181,10 @@ class ModalPlayer:
 #                            t60_empty += 1
                     # Noise
                     if not contact_area == 0:
-                        if synth_type in [2,3] and config.enable_noise_enhancement:
+                        if synth_type in [2,3] and config.system.enable_noise_enhancement:
                             scraping_output += self.scraping_sound[sample_idx] * contact_area
                             sliding_output += self.sliding_sound[sample_idx] * contact_area
-                        if synth_type == 4 and config.enable_noise_enhancement:
+                        if synth_type == 4 and config.system.enable_noise_enhancement:
                             rolling_output += self.rolling_sound[sample_idx] * contact_area
                     # Non-contact synthesis
                     elif synth_type in [0,6]: # ToDo: add non-contact sound synth for type == 0

@@ -121,7 +121,7 @@ class ForceSynth:
         rolling_track = np.zeros(total_samples)
         non_collision_track = np.zeros(total_samples)
         coupling_strength_track = np.zeros(total_samples)
-        if config.enable_noise_enhancement:
+        if config.system.enable_noise_enhancement:
             sliding_sound = np.zeros(total_samples)
             scraping_sound = np.zeros(total_samples)
             rolling_sound = np.zeros(total_samples)
@@ -256,7 +256,7 @@ class ForceSynth:
             'non_collision': np.zeros(total_samples),
             'coupling_strength': coupling_strength
         }
-        if config.enable_noise_enhancement:
+        if config.system.enable_noise_enhancement:
             result['sliding_sound'] = np.zeros(total_samples)
             result['scraping_sound'] = np.zeros(total_samples)
             result['rolling_sound'] = np.zeros(total_samples)
@@ -351,7 +351,7 @@ class ForceSynth:
             'non_collision': non_collision,
             'coupling_strength': np.zeros(total_samples)
         }
-        if config.enable_noise_enhancement:
+        if config.system.enable_noise_enhancement:
             result['sliding_sound'] = np.zeros(total_samples)
             result['scraping_sound'] = np.zeros(total_samples)
             result['rolling_sound'] = np.zeros(total_samples)
@@ -518,7 +518,7 @@ class ForceSynth:
             'non_collision': np.zeros(total_samples),
             'coupling_strength': coupling_strength
         }
-        if config.enable_noise_enhancement:
+        if config.system.enable_noise_enhancement:
             result['sliding_sound'] = np.zeros(total_samples)
             result['scraping_sound'] = scraping_sound
             result['rolling_sound'] = np.zeros(total_samples)
@@ -633,7 +633,7 @@ class ForceSynth:
             'non_collision': np.zeros(total_samples),
             'coupling_strength': coupling_strength
         }
-        if config.enable_noise_enhancement:
+        if config.system.enable_noise_enhancement:
             result['sliding_sound'] = sliding_sound
             result['scraping_sound'] = np.zeros(total_samples)
             result['rolling_sound'] = np.zeros(total_samples)
@@ -800,7 +800,7 @@ class ForceSynth:
             'non_collision': np.zeros(total_samples),
             'coupling_strength': coupling_strength
         }
-        if config.enable_noise_enhancement:
+        if config.system.enable_noise_enhancement:
             result['sliding_sound'] = np.zeros(total_samples)
             result['scraping_sound'] = np.zeros(total_samples)
             result['rolling_sound'] = rolling_vibration
@@ -925,6 +925,7 @@ class ForceSynth:
 
     def _create_empty_tracks(self, total_samples: int) -> Dict:
         """Create empty tracks for silent sections."""
+        config = self.entity_manager.get('config')
         result = {
             'impact': np.zeros(total_samples),
             'sliding': np.zeros(total_samples),
@@ -933,7 +934,7 @@ class ForceSynth:
             'non_collision': np.zeros(total_samples),
             'coupling_strength': np.zeros(total_samples)
         }
-        if config.enable_noise_enhancement:
+        if config.system.enable_noise_enhancement:
             result['sliding_sound'] = np.zeros(total_samples)
             result['scraping_sound'] = np.zeros(total_samples)
             result['rolling_sound'] = np.zeros(total_samples)
