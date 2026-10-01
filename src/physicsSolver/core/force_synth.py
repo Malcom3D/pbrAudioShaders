@@ -127,6 +127,7 @@ class ForceSynth:
             rolling_sound = np.zeros(total_samples)
 
         synthesized_track = self._create_empty_tracks(total_samples)
+        final_tracks = self._create_empty_tracks(total_samples)
         for sample_idx in frames:
             if (fracture_frame == None or sample_idx < fracture_frame) and (is_shard_frame == None or is_shard_frame <= sample_idx):
 #                # Synthesize non-collision forces (air resistance, etc etc.)
@@ -156,13 +157,18 @@ class ForceSynth:
                                 for key in synthesized_impact_track.keys():
                                     synthesized_track[key] += synthesized_impact_track[key]
 
-                    # Write the synthesized sample to the storage engine
-                    for track_name, value in synthesized_track.items():
-                        if track_name in track_map:
-                            track_index = track_map[track_name]
-                            # Write to the source node at the correct track and sample index
-                            scalar = float(np.asarray(value).reshape(-1)[int(sample_idx)])
-                            storage_engine.write_node(name=source_node_name, data=np.array([scalar], dtype=np.float32), slices=(track_index, int(sample_idx)))
+                    for key in synthesized_track.keys():
+                        final_tracks[key] += synthesized_track[key]
+
+        # Write the synthesized sample to the storage engine
+        for track_name, data in final_tracks.items():
+            if track_name in track_map:
+                track_index = track_map[track_name]
+                # Write to the source node at the correct track and sample index
+#                scalar = float(np.asarray(data).reshape(-1)[int(sample_idx)])
+#                scalar = float(np.asarray(data).reshape(-1))
+#                storage_engine.write_node(name=source_node_name, data=np.array([scalar], dtype=np.float32), slices=(track_index, int(sample_idx)))
+                storage_engine.write_node(name=source_node_name, data=data, slices=(track_index, slice(None)))
 
         # Apply any registered transforms (like the placeholder filterbank).
         storage_engine.process_graph()
