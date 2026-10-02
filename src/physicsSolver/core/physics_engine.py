@@ -90,7 +90,11 @@ class physicsEngine:
 
     def _register_track_descriptors(self):
         """Registers the track descriptors for the physics engine."""
-        track_names = ["non_collision", "impact", "rolling", "sliding", "scraping", "coupling_strength", "rolling_sound", "sliding_sound", "scraping_sound"]
+        config = self.entity_manager.get('config')
+        if config.system.enable_noise_enhancement:
+            track_names = ["non_collision", "impact", "rolling", "sliding", "scraping", "coupling_strength", "rolling_sound", "sliding_sound", "scraping_sound"]
+        elif not config.system.enable_noise_enhancement:
+            track_names = ["non_collision", "impact", "rolling", "sliding", "scraping", "coupling_strength"]
 
         # Define the transform factory for physics forces
         def _create_physics_transform(em: 'EntityManager', node: DAGNode) -> EdgeTransform:
@@ -106,6 +110,7 @@ class physicsEngine:
         TrackRegistry.register(TrackDescriptor(name="physics_forces", node_kind=NodeKind.PROCESSED, track_names=track_names, transform_factory=_create_physics_transform, meta={"engine": "physicsSolver"}))
 
     def bake(self):
+        step_done = []
         self.progress = _update_status(f"{self.status_dir}", "/bake", self.progress)
 
         with open(f"{self.status_dir}/step_done", 'r') as file:

@@ -93,7 +93,11 @@ class rigidBodyEngine:
 
     def _register_track_descriptors(self):
         """Registers the track descriptors for the rigidbody engine."""
-        track_names = ["rigidbody", "rolling", "sliding", "scraping", "rolling_sound", "sliding_sound", "scraping_sound"]
+        config = self.entity_manager.get('config')
+        if config.system.enable_noise_enhancement:
+            track_names = ["rigidbody", "rolling", "sliding", "scraping", "rolling_sound", "sliding_sound", "scraping_sound"]
+        elif not config.system.enable_noise_enhancement:
+            track_names = ["rigidbody", "rolling", "sliding", "scraping"]
 
         def _create_modal_transform(em: 'EntityManager', node: DAGNode) -> EdgeTransform:
             obj_idx = int(node.name.split('/')[0].replace('obj', ''))
@@ -110,16 +114,17 @@ class rigidBodyEngine:
         TrackRegistry.register(TrackDescriptor(name="rigidbody_modal", node_kind=NodeKind.PROCESSED, track_names=track_names, transform_factory=_create_modal_transform, meta={"engine": "rigidBody", "modes": 1024}))
 
     def prebake(self):
+        step_done = []
         if os.path.exists(f"{self.status_dir}/step_done"):
             with open(f"{self.status_dir}/step_done", 'r') as file:
                 step_done = file.read().split()
     
-                if '_modal' not in step_done:
-                    self._modal()
-                if '_proxy' not in step_done:
-                    self._proxy()
-                if '_composer' not in step_done:
-                    self._composer()
+        if '_modal' not in step_done:
+            self._modal()
+        if '_proxy' not in step_done:
+            self._proxy()
+        if '_composer' not in step_done:
+            self._composer()
 
     def _modal(self):
         tasks_modal = [self.prebake_modal(obj_idx) for obj_idx in self.obj_modal]
@@ -179,13 +184,13 @@ class rigidBodyEngine:
             with open(f"{self.status_dir}/step_done", 'r') as file:
                 step_done = file.read().split()
 
-                self._connected_buffer()
-                if '_modal_synth' not in step_done:
-                    self._modal_synth()
-                if '_proxy_synth' not in step_done:
-                    self._proxy_synth()
-                if '_post_process' not in step_done:
-                    self._post_process()
+        self._connected_buffer()
+        if '_modal_synth' not in step_done:
+            self._modal_synth()
+        if '_proxy_synth' not in step_done:
+            self._proxy_synth()
+        if '_post_process' not in step_done:
+            self._post_process()
 
     def _modal_synth(self):
         modal_dyn_idx = list(set(self.obj_dyn) - set(self.obj_proxy_synth))
