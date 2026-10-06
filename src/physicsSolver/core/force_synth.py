@@ -25,8 +25,6 @@ import scipy.signal as signal
 from dataclasses import dataclass 
 from typing import List, Dict, Tuple, Optional, Any
 
-from pbrAudioStorage import StorageEngine, NodeKind
-
 from pbrAudioCommon import EntityManager, HertzianContact, ContactType
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
@@ -57,7 +55,6 @@ class ForceSynth:
         sfps = ( fps / fps_base ) * subframes # subframes per seconds
         spsf = sample_rate / sfps # Samples Per SubFrame
 
-        storage_engine = StorageEngine(entity_manager=self.entity_manager)
 
         collisions = []
         collision_data = self.entity_manager.get('collisions')

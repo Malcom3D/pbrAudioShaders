@@ -35,7 +35,7 @@ from pbrAudioCommon import EntityManager, CollisionData, ForceDataSequence, tmpT
 from pbrAudioCommon import _update_status
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
-from pbrAudioStorage import TrackDescriptor, TrackRegistry, NodeKind, EdgeTransform, DAGNode
+from pbrAudioStorage import StorageEngine
 
 from ellipsoidalProxy import ProxyMesh
 
@@ -62,7 +62,9 @@ class physicsEngine:
         set_debug(config.system.debug)
         set_debug_prefix(self.__class__.__name__)
 
-        self._register_track_descriptors()
+        storage_engine = StorageEngine(entity_manager=self.entity_manager)
+
+        self._register_track_descriptors(storage_engine)
 
         resume_data = ResumeData(self.entity_manager)
         resume_data.load_data()
@@ -88,26 +90,30 @@ class physicsEngine:
             for j in range(i + 1, len(config.objects)):
                 self.obj_pairs.append([config.objects[i].idx, config.objects[j].idx])
 
-    def _register_track_descriptors(self):
+    def _register_track_descriptors(self, storage_engine):
         """Registers the track descriptors for the physics engine."""
         config = self.entity_manager.get('config')
+        fps = config.system.fps
+        fps_base = config.system.fps_base
+        subframes = config.system.subframes
+        sfps = (fps / fps_base) * subframes
+        bit_depth = config.system.bit_depth
+        sample_rate = config.system.sample_rate
+        total_frames = config.system.total_frames
+
+        objs_type = 'objects'
+        engine = 'physicsSolver'
+        track_group = 'audio_forces'
+        source_type = 'sequence'
+        n_sources = 1
+        total_samples = total_frames * sample_rate / sfps
+        metadata = {'format': 'RAW', 'bit_depth': bit_depth, 'sample_rate': sample_rate}
+
         if config.system.enable_noise_enhancement:
             track_names = ["non_collision", "impact", "rolling", "sliding", "scraping", "coupling_strength", "rolling_sound", "sliding_sound", "scraping_sound"]
         elif not config.system.enable_noise_enhancement:
             track_names = ["non_collision", "impact", "rolling", "sliding", "scraping", "coupling_strength"]
-
-        # Define the transform factory for physics forces
-        def _create_physics_transform(em: 'EntityManager', node: DAGNode) -> EdgeTransform:
-            obj_idx = int(node.name.split('/')[0].replace('obj', ''))
-            
-            def op(chunk: np.ndarray, **params) -> np.ndarray:
-                n_forces, T = chunk.shape
-                return np.zeros((n_forces, T), dtype=chunk.dtype)
-
-            return EdgeTransform(name="no_mixeq", op=op, params={})
-
-        # Register the descriptor
-        TrackRegistry.register(TrackDescriptor(name="physics_forces", node_kind=NodeKind.PROCESSED, track_names=track_names, transform_factory=_create_physics_transform, meta={"engine": "physicsSolver"}))
+        storage_engine.register(objs_type=obj_type, engine=engine, track_group=track_group, track_names=track_names, source_type=source_type, n_sources=n_sources, total_samples=total_samples, metadata=metadata)
 
     def bake(self):
         step_done = []
