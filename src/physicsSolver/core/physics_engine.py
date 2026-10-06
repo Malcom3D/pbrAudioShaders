@@ -160,6 +160,7 @@ class physicsEngine:
             track_names=track_names,
             signal_names=[0],                        # We'll use a single signal slot for now
             signal_type="float32",
+            total_samples=total_samples,
             metadata={'description': 'Raw audio-force tracks from ForceSynth'}
         )
 
