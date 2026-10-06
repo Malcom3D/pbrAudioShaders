@@ -33,6 +33,7 @@ from pbrAudioStorage import StorageEngine
 @dataclass
 class ForceSynth:
     entity_manager: EntityManager
+    storage_engine: StorageEngine = None
 
     def __post_init__(self):
         config = self.entity_manager.get('config')
@@ -928,6 +929,9 @@ class ForceSynth:
         """
         Write the synthesized tracks to the StorageEngine.
         """
+        config = self.entity_manager.get('config')
+        sample_rate = config.system.sample_rate
+
         if self.storage_engine is None:
             debug_print("Error: StorageEngine not provided to ForceSynth. Cannot write tracks.")
             return
@@ -951,7 +955,8 @@ class ForceSynth:
                 obj_idx=config_obj.idx,
                 track_name=final_track_name,
                 signal_name=0, # Using signal slot 0
-                sample_start=0 # Write from the beginning
+                sample_start=0, # Write from the beginning
+                metadata={'format': RAW, 'sample_rate': sample_rate, 'bit_depth': 'float32'}
             )
 
         debug_print(f"Successfully wrote tracks for {config_obj.name} to storage.")

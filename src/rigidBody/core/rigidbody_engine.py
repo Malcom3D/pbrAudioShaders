@@ -32,6 +32,8 @@ from pbrAudioCommon import EntityManager, ScoreTrack, ForceDataSequence, ModalVe
 from pbrAudioCommon import _update_status
 from pbrAudioCommon import TrajectoryData
 
+from pbrAudioStorage import StorageEngine
+
 from ellipsoidalProxy import Modal4Proxy, ProxySynth, ProxyEngine
 from postProcess import PostProcessEngine
 
@@ -50,6 +52,7 @@ class rigidBodyEngine:
     obj_pairs: List[int] = field(default_factory=list)
     obj_modal: List[int] = field(default_factory=list)
     obj_proxy_synth: List[int] = field(default_factory=list)
+    storage_engine: StorageEngine = None
     total_samples: int = 1
 
     def __post_init__(self):
@@ -65,6 +68,10 @@ class rigidBodyEngine:
 
         # Ensure status directory exists
         os.makedirs(self.status_dir, exist_ok=True)
+
+        # Initialize StorageEngine
+        self.storage_engine = StorageEngine(self.entity_manager)
+        debug_print("StorageEngine initialized for rigidBodyEngine.")
 
         obj_static, obj_dyn, obj_pairs, obj_modal, obj_proxy_synth = ([] for _ in range(5))
         for config_obj in config.objects:
@@ -92,13 +99,43 @@ class rigidBodyEngine:
         if os.path.exists(f"{self.status_dir}/step_done"):
             with open(f"{self.status_dir}/step_done", 'r') as file:
                 step_done = file.read().split()
-    
+
+        if '_storage_register' not in step_done:
+            self._register_storage_schema()
         if '_modal' not in step_done:
             self._modal()
         if '_proxy' not in step_done:
             self._proxy()
         if '_composer' not in step_done:
             self._composer()
+
+    def _register_storage_schema(self):
+        """
+        Registers the data schema for the final synthesized modal tracks.
+        """
+        config = self.entity_manager.get('config')
+        debug_print("Registering storage schema for modal synth tracks...")
+
+        track_names = ['rigidbody', 'resonance', 'sliding', 'scraping', 'rolling']
+        if config.system.enable_noise_enhancement:
+            track_names += ['sliding_sound', 'scraping_sound', 'rolling_sound']
+
+        # total_samples is determined in __post_init__
+        self.storage_engine.register(
+            collection=config.system.collection,
+            objs_type="objects",
+            engine="rigidBodyEngine",
+            track_group="modal_synth",
+            track_names=track_names,
+            signal_names=[0],
+            signal_type="float32",
+            total_samples=self.total_samples,
+            metadata={'description': 'Final synthesized modal tracks from rigidBodyEngine'}
+        )
+
+        self.storage_engine.materialize()
+        self.progress = _update_status(f"{self.status_dir}", "/prebake", 5) # Update progress
+        debug_print("Modal synth storage schema registered and materialized.")
 
     def _modal(self):
         tasks_modal = [self.prebake_modal(obj_idx) for obj_idx in self.obj_modal]
@@ -213,9 +250,9 @@ class rigidBodyEngine:
         tasks_player = [self.bake_player(group_player) for group_player in group_players]
         results_player = compute(*tasks_player)
 
-        print('rigidBodyEngine: Save player')
-        tasks_save = [self.bake_save(group_player) for group_player in group_players]
-        results_save = compute(*tasks_save)
+#        print('rigidBodyEngine: Save player')
+#        tasks_save = [self.bake_save(group_player) for group_player in group_players]
+#        results_save = compute(*tasks_save)
 
     def _reset_group(self):
         self.entity_manager.unregister('sample_counter')
@@ -284,8 +321,8 @@ class rigidBodyEngine:
 
     @delayed
     def bake_player(self, player: Any):
-        player.compute()
+        player.compute(self.storage_engine)
 
-    @delayed
-    def bake_save(self, player: Any):
-        player.save_synth_tracks()
+#    @delayed
+#    def bake_save(self, player: Any):
+#        player.save_synth_tracks()
