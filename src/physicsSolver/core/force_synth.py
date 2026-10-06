@@ -92,25 +92,6 @@ class ForceSynth:
         total_samples = int(trajectory.get_x()[-1])
         duration_s = total_samples / sample_rate
 
-        # Build and materialize the DAG for this object.
-        root_node = storage_engine.build_and_process(obj_idx=obj_idx, duration_s=duration_s)        
-
-        # Write to the *source* node
-        source_node_name = f"obj{obj_idx}/physics_forces_source"
-        source_node_obj = None
-        for node in storage_engine._toposort(root_node):
-            if node.name == source_node_name:
-                source_node_obj = node
-                break
-        
-        if source_node_obj is None:
-            debug_print(f"Could not find source node '{source_node_name}' in DAG.")
-            return
-            
-        # Find the indices of the track names
-        track_names = source_node_obj.meta.get("track_names", [])
-        track_map = {name: i for i, name in enumerate(track_names)}
-
         # Init tracks
         impact_track = np.zeros(total_samples)
         sliding_track = np.zeros(total_samples)
@@ -157,53 +138,37 @@ class ForceSynth:
                     for key in synthesized_track.keys():
                         final_tracks[key] += synthesized_track[key]
 
-        # Write the synthesized sample to the storage engine
-        for track_name, data in final_tracks.items():
-            if track_name in track_map:
-                track_index = track_map[track_name]
-                # Write to the source node at the correct track and sample index
-#                scalar = float(np.asarray(data).reshape(-1)[int(sample_idx)])
-#                scalar = float(np.asarray(data).reshape(-1))
-#                storage_engine.write_node(name=source_node_name, data=np.array([scalar], dtype=np.float32), slices=(track_index, int(sample_idx)))
-                storage_engine.write_node(name=source_node_name, data=data, slices=(track_index, slice(None)))
+                    # Add to tracks
+                    impact_track += synthesized_track['impact']
+                    sliding_track += synthesized_track['sliding']
+                    scraping_track += synthesized_track['scraping']
+                    rolling_track += synthesized_track['rolling']
+                    non_collision_track += synthesized_track['non_collision']
+                    coupling_strength_track += synthesized_track['coupling_strength']
+                    sliding_sound += synthesized_track['sliding_sound']
+                    scraping_sound += synthesized_track['scraping_sound']
+                    rolling_sound += synthesized_track['rolling_sound']
 
-        # Apply any registered transforms (like the placeholder filterbank).
-        storage_engine.process_graph()
-        
-        # 5. Close the engine to flush all data.
-        storage_engine.close()
+        # Create tracks dictionary
+        tracks = {
+            'impact': impact_track,
+            'sliding': sliding_track,
+            'scraping': scraping_track,
+            'rolling': rolling_track,
+            'sliding_sound': sliding_sound,
+            'scraping_sound': scraping_sound,
+            'rolling_sound': rolling_sound,
+            'non_collision': non_collision_track,
+            'coupling_strength': coupling_strength_track
+        }
 
-#                    # Add to tracks
-#                    impact_track += synthesized_track['impact']
-#                    sliding_track += synthesized_track['sliding']
-#                    scraping_track += synthesized_track['scraping']
-#                    rolling_track += synthesized_track['rolling']
-#                    non_collision_track += synthesized_track['non_collision']
-#                    coupling_strength_track += synthesized_track['coupling_strength']
-#                    sliding_sound += synthesized_track['sliding_sound']
-#                    scraping_sound += synthesized_track['scraping_sound']
-#                    rolling_sound += synthesized_track['rolling_sound']
-#
-#        # Create tracks dictionary
-#        tracks = {
-#            'impact': impact_track,
-#            'sliding': sliding_track,
-#            'scraping': scraping_track,
-#            'rolling': rolling_track,
-#            'sliding_sound': sliding_sound,
-#            'scraping_sound': scraping_sound,
-#            'rolling_sound': rolling_sound,
-#            'non_collision': non_collision_track,
-#            'coupling_strength': coupling_strength_track
-#        }
-#
-#        if config.system.enable_denoiser:
-#            # Save unprocessed tracks
-#            self._save_tracks(config_obj, tracks, total_samples, int(sample_rate), unprocessed=True)
-#
-#        self._save_tracks(config_obj, tracks, total_samples, int(sample_rate))
+        if config.system.enable_denoiser:
+            # Save unprocessed tracks
+            self._save_tracks(config_obj, tracks, total_samples, int(sample_rate), unprocessed=True)
 
-    def _synthesize_impact(self, force: Any, collision: Any, config_obj: Any, other_config_obj: Any, sample_idx: float, total_samples: int, sample_rate: int) -> Dict[str, Any]:
+        self._save_tracks(config_obj, tracks, total_samples, int(sample_rate))
+
+   def _synthesize_impact(self, force: Any, collision: Any, config_obj: Any, other_config_obj: Any, sample_idx: float, total_samples: int, sample_rate: int) -> Dict[str, Any]:
         """Synthesize Hertzian impact audio-force."""
         config = self.entity_manager.get('config')
         # Hertzian impact parameters
@@ -212,14 +177,14 @@ class ForceSynth:
         else:
             normal_force_mag = force.get_normal_force_magnitude(sample_idx)
         relative_velocity_mag = np.linalg.norm(force.get_relative_velocity(sample_idx))
-        
+       
         # Get impact duration using Hertzian theory
         # R_eff = Effective radius, E_star = Effective Young's modulus, impact_duration in seconds
         impact_duration = force.get_impact_duration(sample_idx)
-
+ 
         # Calculate impulse
         impulse = normal_force_mag * impact_duration
-
+ 
         # impact_duration in samples@sample_rate
         total_impact_sample = int(sample_rate*impact_duration)
 
