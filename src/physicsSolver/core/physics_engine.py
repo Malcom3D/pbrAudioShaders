@@ -97,7 +97,7 @@ class physicsEngine:
         with open(f"{self.status_dir}/step_done", 'r') as file:
             step_done = file.read().split()
 
-        if '_storage_register' not in step_done:
+        if '_register_storage_schema' not in step_done:
             self._register_storage_schema()
 
         if '_proxy' not in step_done:
@@ -131,17 +131,12 @@ class physicsEngine:
         debug_print("Registering storage schema for audio-force tracks...")
 
         # Define the tracks that ForceSynth will generate
-        track_names = [
-            'non_collision',
-            'impact',
-            'sliding',
-            'scraping',
-            'rolling',
-            'coupling_strength'
-        ]
+        track_names = ['non_collision', 'impact', 'sliding', 'scraping', 'rolling', 'coupling_strength']
 
         if config.system.enable_noise_enhancement:
             track_names += ['sliding_sound', 'scraping_sound', 'rolling_sound']
+
+        signal_names = ['whole' for _ in range(len(track_names))]
 
         # Determine total samples
         fps = config.system.fps
@@ -158,7 +153,7 @@ class physicsEngine:
             engine="physicsSolver",                  # The name of the engine generating this data
             track_group="audio_force",               # A logical group for these tracks
             track_names=track_names,
-            signal_names=[0],                        # We'll use a single signal slot for now
+            signal_names=['whole' for _ in range(len(track_names))],                        # We'll use a single signal slot for now
             signal_type="float32",
             total_samples=total_samples,
             metadata={'description': 'Raw audio-force tracks from ForceSynth'}
