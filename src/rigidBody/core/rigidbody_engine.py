@@ -62,8 +62,6 @@ class rigidBodyEngine:
         config = self.entity_manager.get('config')
         self.physical_core = config.system.physical_core
         self.status_dir = f"{config.system.cache_path}/status/{__class__.__name__}"
-        self.modalvertices_dir = f"{config.system.cache_path}/modalvertices"
-        self.scoretracks_dir = f"{config.system.cache_path}/scoretracks"
         self.progress = 0
 
         # Ensure status directory exists
@@ -163,32 +161,7 @@ class rigidBodyEngine:
         self._save_data()
 
     def _save_data(self):
-        # Save modal vertices data
-        modal_vertices = self.entity_manager.get('modal_vertices')
-        print('Save modal_vertices: ', len(modal_vertices))
-        tasks_save_modal_vertices = [self.save_modal_vertices(modal_vertices[m_idx], f"{m_idx:05d}.json") for m_idx in modal_vertices.keys()]
-        results_save_modal_vertices = compute(*tasks_save_modal_vertices)
-
-        # Save score tracks data in /tmp
-        score_tracks = self.entity_manager.get('score_tracks')
-        n_score = []
-        for s_idx in score_tracks.keys():
-            if score_tracks[s_idx].is_final:
-                score_tracks[s_idx].save(f"/tmp/{s_idx:05d}.tar.gz")
-                n_score += [f"/tmp/{s_idx:05d}.tar.gz"]
-
-        # Clean score tracks data
-        if os.path.exists(self.scoretracks_dir):
-            filenames = os.listdir(self.scoretracks_dir)
-            for filename in filenames:
-                if os.path.isfile(f"{self.scoretracks_dir}/{filename}"):
-                    os.remove(f"{self.scoretracks_dir}/{filename}")
-
-        # Move score tracks data files from /tmp
-        for filename in n_score:
-            shutil.move(filename, f"{self.scoretracks_dir}/{filename.removeprefix('/tmp/')}")
-        print('Saved final score_tracks: ', len(n_score))
-
+        self.entity_manager.dump(is_score_track_final=True)
 #        self.progress = _update_status(f"{self.status_dir}", "/prebake", 99)
 
     def bake(self):

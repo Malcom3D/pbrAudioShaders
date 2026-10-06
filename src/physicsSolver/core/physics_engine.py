@@ -70,10 +70,6 @@ class physicsEngine:
         resume_data.load_data()
 
         self.status_dir = f"{config.system.cache_path}/status/{__class__.__name__}"
-        self.collisions_dir = f"{config.system.cache_path}/collisions"
-        self.forces_dir = f"{config.system.cache_path}/forces_data"
-        self.modalvertices_dir = f"{config.system.cache_path}/modalvertices"
-        self.scoretracks_dir = f"{config.system.cache_path}/scoretracks"
         self.progress_ratio = 100/13 # 100/num_functions
         self.progress = 0
 
@@ -259,40 +255,41 @@ class physicsEngine:
             pp.process()
 
     def _save_data(self):
-        # Ensure directory exists
-        os.makedirs(self.collisions_dir, exist_ok=True)
-        os.makedirs(self.modalvertices_dir, exist_ok=True)
-        os.makedirs(self.scoretracks_dir, exist_ok=True)
-        os.makedirs(self.forces_dir, exist_ok=True)
-
-        # Save forces data
-        forces = self.entity_manager.get('forces')
-        for force_idx in forces.keys():
-            if isinstance(forces[force_idx], ForceDataSequence):
-                force_obj_idx = forces[force_idx].obj_idx
-                force_other_obj_idx = forces[force_idx].other_obj_idx
-                forces[force_idx].save(f"{self.forces_dir}/{force_obj_idx:05d}_{force_other_obj_idx:05d}.pkl")
-        print('Saved force data: ', len(forces))
-
-        # Save collision data
-        collision_data = self.entity_manager.get('collisions')
-        for c_idx in collision_data.keys():
-            collision_data[c_idx].save(f"{self.collisions_dir}/{c_idx:05d}.pkl")
-        print('Saved collisions: ', len(collision_data))
-
-        # Save modal vertices and score tracks data
-        modal_vertices = self.entity_manager.get('modal_vertices')
-        for m_idx in modal_vertices.keys():
-            modal_vertices[m_idx].save(f"{self.modalvertices_dir}/{m_idx:05d}.json")
-        print('Saved modal_vertices: ', len(modal_vertices))
-
-#        tasks_save_modal_vertices = [self.save_modal_vertices(modal_vertices[m_idx], f"{m_idx:05d}.json") for m_idx in modal_vertices.keys()]
-#        results_save_modal_vertices = compute(*tasks_save_modal_vertices)
-
-        score_tracks = self.entity_manager.get('score_tracks')
-        for s_idx in score_tracks.keys():
-            score_tracks[s_idx].save(f"{self.scoretracks_dir}/{s_idx:05d}.tar.gz")
-        print('Saved score_tracks: ', len(score_tracks))
+        self.entity_manager.dump()
+#        # Ensure directory exists
+#        os.makedirs(self.collisions_dir, exist_ok=True)
+#        os.makedirs(self.modalvertices_dir, exist_ok=True)
+#        os.makedirs(self.scoretracks_dir, exist_ok=True)
+#        os.makedirs(self.forces_dir, exist_ok=True)
+#
+#        # Save forces data
+#        forces = self.entity_manager.get('forces')
+#        for force_idx in forces.keys():
+#            if isinstance(forces[force_idx], ForceDataSequence):
+#                force_obj_idx = forces[force_idx].obj_idx
+#                force_other_obj_idx = forces[force_idx].other_obj_idx
+#                forces[force_idx].save(f"{self.forces_dir}/{force_obj_idx:05d}_{force_other_obj_idx:05d}.pkl")
+#        print('Saved force data: ', len(forces))
+#
+#        # Save collision data
+#        collision_data = self.entity_manager.get('collisions')
+#        for c_idx in collision_data.keys():
+#            collision_data[c_idx].save(f"{self.collisions_dir}/{c_idx:05d}.pkl")
+#        print('Saved collisions: ', len(collision_data))
+#
+#        # Save modal vertices and score tracks data
+#        modal_vertices = self.entity_manager.get('modal_vertices')
+#        for m_idx in modal_vertices.keys():
+#            modal_vertices[m_idx].save(f"{self.modalvertices_dir}/{m_idx:05d}.json")
+#        print('Saved modal_vertices: ', len(modal_vertices))
+#
+##        tasks_save_modal_vertices = [self.save_modal_vertices(modal_vertices[m_idx], f"{m_idx:05d}.json") for m_idx in modal_vertices.keys()]
+##        results_save_modal_vertices = compute(*tasks_save_modal_vertices)
+#
+#        score_tracks = self.entity_manager.get('score_tracks')
+#        for s_idx in score_tracks.keys():
+#            score_tracks[s_idx].save(f"{self.scoretracks_dir}/{s_idx:05d}.tar.gz")
+#        print('Saved score_tracks: ', len(score_tracks))
 
         self.progress = _update_status(f"{self.status_dir}", "/bake", self.progress + self.progress_ratio)
 
