@@ -35,7 +35,7 @@ from pbrAudioCommon import EntityManager, CollisionData, ForceDataSequence, tmpT
 from pbrAudioCommon import _update_status
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
-from pbrAudioStorage import StorageEngine
+from pbrAudioStorage import StorageEngine 
 
 from ellipsoidalProxy import ProxyMesh
 
@@ -55,12 +55,16 @@ class physicsEngine:
     obj_dyn: List[int] = field(default_factory=list)
     obj_static: List[int] = field(default_factory=list)
     obj_pairs: List[int] = field(default_factory=list)
+    storage_engine: StorageEngine = None
 
     def __post_init__(self):
         config = self.entity_manager.get('config')
 
         set_debug(config.system.debug)
         set_debug_prefix(self.__class__.__name__)
+
+        self.storage_engine = StorageEngine(self.entity_manager)
+        debug_print("StorageEngine initialized.")
 
         resume_data = ResumeData(self.entity_manager)
         resume_data.load_data()
@@ -93,6 +97,9 @@ class physicsEngine:
         with open(f"{self.status_dir}/step_done", 'r') as file:
             step_done = file.read().split()
 
+        if '_storage_register' not in step_done:
+            self._register_storage_schema()
+
         if '_proxy' not in step_done:
             self._proxy()
         if '_static' not in step_done:
@@ -114,6 +121,53 @@ class physicsEngine:
             self._force_synth()
         if '_post_process' not in step_done:
             self._post_process()
+
+    def _register_storage_schema(self):
+        """
+        Registers the data schema for raw audio-force tracks with the StorageEngine.
+        This defines how the data is organized on disk.
+        """
+        config = self.entity_manager.get('config')
+        debug_print("Registering storage schema for audio-force tracks...")
+
+        # Define the tracks that ForceSynth will generate
+        track_names = [
+            'non_collision',
+            'impact',
+            'sliding',
+            'scraping',
+            'rolling',
+            'coupling_strength'
+        ]
+
+        if config.system.enable_noise_enhancement:
+            track_names += ['sliding_sound', 'scraping_sound', 'rolling_sound']
+
+        # Determine total samples
+        fps = config.system.fps
+        fps_base = config.system.fps_base
+        subframes = config.system.subframes
+        sample_rate = config.system.sample_rate
+        sfps = ( fps / fps_base ) * subframes # subframes per seconds
+        total_samples = config.system.total_frames * sample_rate / sfps
+
+        # Register the schema with the StorageEngine
+        self.storage_engine.register(
+            collection=config.system.collection,     # A name for this data collection
+            objs_type="objects",                     # The config attribute holding the object list
+            engine="physicsSolver",                  # The name of the engine generating this data
+            track_group="audio_force",               # A logical group for these tracks
+            track_names=track_names,
+            signal_names=[0],                        # We'll use a single signal slot for now
+            signal_type="float32",
+            metadata={'description': 'Raw audio-force tracks from ForceSynth'}
+        )
+
+        # Materialize the storage, which pre-allocates the NDArrays on disk
+        self.storage_engine.materialize()
+        
+        self.progress = _update_status(f"{self.status_dir}", "/bake", self.progress + self.progress_ratio)
+        debug_print("Storage schema registered and materialized.")
 
     def _proxy(self):
         tasks_proxy = [self.proxy(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
@@ -195,7 +249,7 @@ class physicsEngine:
         self.progress = _update_status(f"{self.status_dir}", "/bake", self.progress + self.progress_ratio)
 
     def _force_synth(self):
-        tasks_force_synth = [self.force_synth(obj_idx) for obj_idx in self.obj_dyn]
+        tasks_force_synth = [self.force_synth(obj_idx, self.storage_engine) for obj_idx in self.obj_dyn]
         results_force_synth = compute(*tasks_force_synth)
         # Save data in EntityManager
         self._save_data()
@@ -303,8 +357,8 @@ class physicsEngine:
         fs.compute(obj_idx)
 
     @delayed
-    def force_synth(self, obj_idx: int):
-        fsy = ForceSynth(self.entity_manager)
+    def force_synth(self, obj_idx: int, storage_engine: StorageEngine):
+        fsy = ForceSynth(self.entity_manager, storage_engine)
         fsy.compute(obj_idx)
 
     @delayed

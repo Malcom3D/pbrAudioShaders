@@ -28,6 +28,8 @@ from typing import List, Dict, Tuple, Optional, Any
 from pbrAudioCommon import EntityManager, HertzianContact, ContactType
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
+from pbrAudioStorage import StorageEngine
+
 @dataclass
 class ForceSynth:
     entity_manager: EntityManager
@@ -38,12 +40,12 @@ class ForceSynth:
         set_debug(config.system.debug)
         set_debug_prefix(self.__class__.__name__)
 
-        self.collisions_dir = f"{config.system.cache_path}/collisions"
-        os.makedirs(self.collisions_dir, exist_ok=True)
-        self.audio_force_dir = f"{config.system.cache_path}/audio_force"
-        os.makedirs(self.audio_force_dir, exist_ok=True)
-        if config.system.enable_denoiser:
-            os.makedirs(f"{self.audio_force_dir}/unprocessed", exist_ok=True)
+#        self.collisions_dir = f"{config.system.cache_path}/collisions"
+#        os.makedirs(self.collisions_dir, exist_ok=True)
+#        self.audio_force_dir = f"{config.system.cache_path}/audio_force"
+#        os.makedirs(self.audio_force_dir, exist_ok=True)
+#        if config.system.enable_denoiser:
+#            os.makedirs(f"{self.audio_force_dir}/unprocessed", exist_ok=True)
 
     def compute(self, obj_idx: int) -> None:
         config = self.entity_manager.get('config')
@@ -145,30 +147,36 @@ class ForceSynth:
                     rolling_track += synthesized_track['rolling']
                     non_collision_track += synthesized_track['non_collision']
                     coupling_strength_track += synthesized_track['coupling_strength']
-                    sliding_sound += synthesized_track['sliding_sound']
-                    scraping_sound += synthesized_track['scraping_sound']
-                    rolling_sound += synthesized_track['rolling_sound']
+                    if config.system.enable_noise_enhancement:
+                        sliding_sound += synthesized_track['sliding_sound']
+                        scraping_sound += synthesized_track['scraping_sound']
+                        rolling_sound += synthesized_track['rolling_sound']
 
         # Create tracks dictionary
         tracks = {
+            'non_collision': non_collision_track,
             'impact': impact_track,
             'sliding': sliding_track,
             'scraping': scraping_track,
             'rolling': rolling_track,
-            'sliding_sound': sliding_sound,
-            'scraping_sound': scraping_sound,
-            'rolling_sound': rolling_sound,
-            'non_collision': non_collision_track,
             'coupling_strength': coupling_strength_track
         }
 
+        if config.system.enable_noise_enhancement:
+            tracks['sliding_sound'] = sliding_sound
+            tracks['scraping_sound'] = scraping_sound
+            tracks['rolling_sound'] = rolling_sound
+
         if config.system.enable_denoiser:
-            # Save unprocessed tracks
-            self._save_tracks(config_obj, tracks, total_samples, int(sample_rate), unprocessed=True)
+#            # Save unprocessed tracks
+#            self._save_tracks(config_obj, tracks, total_samples, int(sample_rate), unprocessed=True)
+            # Write unprocessed tracks to a different collection or with a prefix
+            self._write_tracks_to_storage(config_obj, tracks, unprocessed=True)
 
-        self._save_tracks(config_obj, tracks, total_samples, int(sample_rate))
+#        self._save_tracks(config_obj, tracks, total_samples, int(sample_rate))
+        self._write_tracks_to_storage(config_obj, tracks)
 
-   def _synthesize_impact(self, force: Any, collision: Any, config_obj: Any, other_config_obj: Any, sample_idx: float, total_samples: int, sample_rate: int) -> Dict[str, Any]:
+    def _synthesize_impact(self, force: Any, collision: Any, config_obj: Any, other_config_obj: Any, sample_idx: float, total_samples: int, sample_rate: int) -> Dict[str, Any]:
         """Synthesize Hertzian impact audio-force."""
         config = self.entity_manager.get('config')
         # Hertzian impact parameters
@@ -916,42 +924,74 @@ class ForceSynth:
         
         return result
 
-    def _save_tracks(self, config_obj: Any, tracks: Dict[str, np.ndarray], total_samples: int, sample_rate: int, unprocessed: bool = False):
+    def _write_tracks_to_storage(self, config_obj: Any, tracks: Dict[str, np.ndarray], unprocessed: bool = False):
         """
-        Save individual tracks as WAV files.
-        Create a json multitrack project file (e.g., for Reaper, Ardour).
+        Write the synthesized tracks to the StorageEngine.
         """
-        project_data = {
-            'object_name': config_obj.name,
-            'sample_rate': sample_rate,
-            'duration': total_samples / sample_rate,
-            'tracks': []
-        }
+        if self.storage_engine is None:
+            debug_print("Error: StorageEngine not provided to ForceSynth. Cannot write tracks.")
+            return
+
+        debug_print(f"Writing tracks for object {config_obj.name} to storage...")
         
         for track_name, track_data in tracks.items():
-            track_file = f"{config_obj.name}_{track_name}.raw"
+            if not np.any(track_data):
+                continue # Skip silent tracks
+
+            final_track_name = track_name
             if unprocessed:
-                wave_file = f"{self.audio_force_dir}/unprocessed/{track_file}"
-            else:
-                wave_file = f"{self.audio_force_dir}/{track_file}"
-            sf.write(wave_file, track_data, sample_rate, subtype='FLOAT')
-            project_data['tracks'].append({
-                'name': track_name,
-                'file': track_file,
-                'channels': 1,
-                'position': 0.0,
-                'volume': 1.0,
-                'pan': 0.0
-            })
-            debug_print(f"Saved {track_name} tracks to {self.audio_force_dir}")
+                # You could write unprocessed data to a separate collection
+                # or use a naming convention. For now, we'll just log it.
+                debug_print(f"Skipping write of unprocessed track '{track_name}' for now.")
+                continue
 
-        # Save project file
-        if unprocessed:
-            json_file = f"{self.audio_force_dir}/unprocessed/{config_obj.name}.json"
-        else:
-            json_file = f"{self.audio_force_dir}/{config_obj.name}.json"
+            # Write the track to the storage engine
+            self.storage_engine.write(
+                audio_data=track_data,
+                obj_idx=config_obj.idx,
+                track_name=final_track_name,
+                signal_name=0, # Using signal slot 0
+                sample_start=0 # Write from the beginning
+            )
 
-        with open(json_file, 'w') as f:
-            json.dump(project_data, f, indent=2)
+        debug_print(f"Successfully wrote tracks for {config_obj.name} to storage.")
 
-        debug_print(f"Created multitrack project: {json_file}")
+#    def _save_tracks(self, config_obj: Any, tracks: Dict[str, np.ndarray], total_samples: int, sample_rate: int, unprocessed: bool = False):
+#        """
+#        Save individual tracks as WAV files.
+#        Create a json multitrack project file (e.g., for Reaper, Ardour).
+#        """
+#        project_data = {
+#            'object_name': config_obj.name,
+#            'sample_rate': sample_rate,
+#            'duration': total_samples / sample_rate,
+#            'tracks': []
+#        }
+#        
+#        for track_name, track_data in tracks.items():
+#            track_file = f"{config_obj.name}_{track_name}.raw"
+#            if unprocessed:
+#                wave_file = f"{self.audio_force_dir}/unprocessed/{track_file}"
+#            else:
+#                wave_file = f"{self.audio_force_dir}/{track_file}"
+#            sf.write(wave_file, track_data, sample_rate, subtype='FLOAT')
+#            project_data['tracks'].append({
+#                'name': track_name,
+#                'file': track_file,
+#                'channels': 1,
+#                'position': 0.0,
+#                'volume': 1.0,
+#                'pan': 0.0
+#            })
+#            debug_print(f"Saved {track_name} tracks to {self.audio_force_dir}")
+#
+#        # Save project file
+#        if unprocessed:
+#            json_file = f"{self.audio_force_dir}/unprocessed/{config_obj.name}.json"
+#        else:
+#            json_file = f"{self.audio_force_dir}/{config_obj.name}.json"
+#
+#        with open(json_file, 'w') as f:
+#            json.dump(project_data, f, indent=2)
+#
+#        debug_print(f"Created multitrack project: {json_file}")
