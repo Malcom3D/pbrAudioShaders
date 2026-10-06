@@ -62,10 +62,6 @@ class physicsEngine:
         set_debug(config.system.debug)
         set_debug_prefix(self.__class__.__name__)
 
-        storage_engine = StorageEngine(entity_manager=self.entity_manager)
-
-        self._register_track_descriptors(storage_engine)
-
         resume_data = ResumeData(self.entity_manager)
         resume_data.load_data()
 
@@ -89,31 +85,6 @@ class physicsEngine:
         for i in range(len(config.objects)):
             for j in range(i + 1, len(config.objects)):
                 self.obj_pairs.append([config.objects[i].idx, config.objects[j].idx])
-
-    def _register_track_descriptors(self, storage_engine):
-        """Registers the track descriptors for the physics engine."""
-        config = self.entity_manager.get('config')
-        fps = config.system.fps
-        fps_base = config.system.fps_base
-        subframes = config.system.subframes
-        sfps = (fps / fps_base) * subframes
-        bit_depth = config.system.bit_depth
-        sample_rate = config.system.sample_rate
-        total_frames = config.system.total_frames
-
-        objs_type = 'objects'
-        engine = 'physicsSolver'
-        track_group = 'audio_forces'
-        source_type = 'sequence'
-        n_sources = 1
-        total_samples = total_frames * sample_rate / sfps
-        metadata = {'format': 'RAW', 'bit_depth': bit_depth, 'sample_rate': sample_rate}
-
-        if config.system.enable_noise_enhancement:
-            track_names = ["non_collision", "impact", "rolling", "sliding", "scraping", "coupling_strength", "rolling_sound", "sliding_sound", "scraping_sound"]
-        elif not config.system.enable_noise_enhancement:
-            track_names = ["non_collision", "impact", "rolling", "sliding", "scraping", "coupling_strength"]
-        storage_engine.register(objs_type=obj_type, engine=engine, track_group=track_group, track_names=track_names, source_type=source_type, n_sources=n_sources, total_samples=total_samples, metadata=metadata)
 
     def bake(self):
         step_done = []

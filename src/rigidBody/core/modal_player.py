@@ -28,8 +28,6 @@ from pbrAudioCommon import EntityManager
 from pbrAudioCommon import _parse_lib
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
-from pbrAudioStorage import StorageEngine
-
 
 @dataclass
 class ModalPlayer:
@@ -269,205 +267,126 @@ class ModalPlayer:
         # Return the maximum T60 (longest decay time)
         return float(np.max(t60s))
 
-    def save_synth_tracks(self, storage_engine: StorageEngine):
+    def save_synth_tracks(self):
+        config = self.entity_manager.get('config')
+        set_debug_prefix(self.__class__.__name__)
+        self.save_synth_track(self.rigidbody_synth_track, 'rigidbody')
+        self.save_synth_track(self.resonance_synth_track, 'resonance')
+        self.save_synth_track(self.sliding_synth_track, 'sliding')
+        self.save_synth_track(self.scraping_synth_track, 'scraping')
+        self.save_synth_track(self.rolling_synth_track, 'rolling')
+
+    def save_synth_track(self, track: np.ndarray, suffix: str):
         """
-        Writes the synthesized tracks to the source nodes of the StorageEngine's DAG.
+        Save individual tracks as WAV files.
+        Create a json multitrack project file (e.g., for Reaper, Ardour).
         """
         config = self.entity_manager.get('config')
         for conf_obj in config.objects:
             if conf_obj.idx == self.obj_idx:
                 config_obj = conf_obj
-                break
 
-        # Get the source node name from the DAG structure
-        source_node_name = f"obj{self.obj_idx}/rigidbody_modal_source"
-        
-        # Prepare the data as a 2D array (tracks, samples)
-        track_data = np.vstack([
-            self.rigidbody_synth_track,
-            self.rolling_synth_track,
-            self.sliding_synth_track,
-            self.scraping_synth_track
-        ])
+        # skip if track is all zeros
+        if not np.any(track):
+            debug_print(f"Track {suffix} synth track for {config_obj.name} is empty, skipping")
+            return
 
-        if config.system.enable_noise_enhancement:
-            track_data.append(self.rolling_sound)
-            track_data.append(self.sliding_sound)
-            track_data.append(self.scraping_sound)
+#        # Maximize a normalized track from (-1.0, +1.0) to (float32.max and float32.min)
+#        dtype_max = np.finfo(np.float32).max
+#        track *= dtype_max
 
-        try:
-            # Write the data to the source node in one go
-            storage_engine.write_node(source_node_name, track_data)
-            debug_print(f"ModalPlayer: Successfully wrote tracks for {config_obj.name} to storage.")
-        except KeyError:
-            debug_print(f"ModalPlayer: Could not find source node '{source_node_name}' in storage engine for object {config_obj.name}.")
-        except Exception as e:
-            debug_print(f"ModalPlayer: Error writing tracks for {config_obj.name} to storage: {e}")
+#        bit_depth = int(config.system.bit_depth)
+#        file_format = config.system.file_format
 
-    def _load_sound_tracks(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """
-        Loads the final, processed noise tracks from the pbrAudioStorage engine.
-        """
-        config = self.entity_manager.get('config')
-        total_samples = self.sample_counter.total_samples
-        
-        # Initialize empty tracks
-        sliding_sound = np.zeros(total_samples, dtype=np.float32)
-        scraping_sound = np.zeros(total_samples, dtype=np.float32)
-        rolling_sound = np.zeros(total_samples, dtype=np.float32)
+        sample_rate = int(config.system.sample_rate)
+        file_format = 'RAW'
+        subtype = 'FLOAT'
+        track_name = config_obj.name
+        track_file = f"{track_name}_{suffix}.raw"
+        wave_file = f"{self.output_dir}/{track_file}"
+        json_file = f"{self.output_dir}/{config_obj.name}_{suffix}.json"
 
-        # The 'rigidbody_modal' descriptor is named in the rigidBodyEngine.
-        # The track names in the descriptor are: ["rigidbody", "rolling", "sliding", "scraping", "rolling_sound", "sliding_sound", "scraping_sound"]
-        # The processed node is named "obj{obj_idx}_physics_forces_processed"
-        processed_node_name = f"obj{self.obj_idx}_physics_forces_processed"
+        # Find new_min new_max
+        new_max = np.max(track)
+        new_min = np.min(track)
 
-        try:
-            # Read the entire processed track data for this object
-            # Shape is expected to be (n_tracks, n_bands, n_samples)
-            all_tracks_data = self.storage_engine.read_node(processed_node_name)
+        # Load saved data and track from other groups
+        old_max, old_min = (0 for _ in range(2))
+        if os.path.exists(wave_file):
+            old_track, _ = sf.read(wave_file, channels=1, samplerate=sample_rate, subtype=subtype)
+            if suffix == 'rigidbody':
+                with open(json_file, 'r') as f:
+                    old_data = json.load(f)
+                    old_max = old_data['track_max']
+                    old_min = old_data['track_min']
+                # Normalize track to between -1.0 and +1.0
+                track /= np.max(abs(track))
+                # old_track - new_track ratio
+                max_ratio = new_max / old_max
+                min_ratio = new_min / old_min
+                track = (track - np.min(track)) / (np.max(track) - np.min(track)) * (max_ratio - min_ratio) + min_ratio
+            track += old_track
             
-            # The track order is defined by the TrackDescriptor in rigidbody_engine.py
-            # track_names = ["rigidbody", "rolling", "sliding", "scraping", "rolling_sound", "sliding_sound", "scraping_sound"]
-            # We need to sum across the frequency bands (axis=1) to get the final mono track.
-            
-            # Track index 4: rolling_sound
-            rolling_sound = np.sum(all_tracks_data[4, :, :], axis=0)
-            
-            # Track index 5: sliding_sound
-            sliding_sound = np.sum(all_tracks_data[5, :, :], axis=0)
-            
-            # Track index 6: scraping_sound
-            scraping_sound = np.sum(all_tracks_data[6, :, :], axis=0)
+        project_data = {
+            'object_name': config_obj.name,
+            'sample_rate': sample_rate,
+            'file_format': file_format,
+            'bit_depth': subtype,
+            'duration': track.shape[0] / sample_rate,
+            'track_name': suffix,
+            'track_max': new_max if new_max > old_max else old_max,
+            'track_min': new_min if new_min < old_min else old_min,
+            'vertices': self.rigidbody_vertices if suffix == 'rigidbody' else [],
+            'channels': 1,
+            'position': 0.0
+        }
 
-            debug_print(f"Successfully loaded processed sound tracks for object {self.obj_idx} from storage.")
+        # Normalize track to between -1.0 and +1.0
+        if suffix == 'rigidbody':
+            track /= np.max(abs(track))
 
-        except KeyError:
-            debug_print(f"ModalPlayer: Processed node '{processed_node_name}' not found found in storage. Sound tracks will be silent.")
-        except Exception as e:
-            debug_print(f"ModalPlayer: Error reading processed sound tracks for object {self.obj_idx} from storage: {e}")
+#        if file_format == 'RAW':
+#            track_file = f"{track_name}_{suffix}.raw"
+#        elif file_format == 'FLAC':
+#            track_file = f"{track_name}_{suffix}.raw"
+#        else:
+#            track_file = f"{track_name}_{suffix}.wav"
+#
+#        if file_format == 'FLAC' and bit_depth in ['FLOAT', 'DOUBLE', '32']:
+#            subtype = 'PCM_24'
+#        elif file_format == 'FLAC' and bit_depth in ['24', '16']:
+#            subtype = 'PCM_'
+#            subtype += bit_depth
+#        elif bit_depth in ['FLOAT', 'DOUBLE']:
+#            subtype = bit_depth
+#        elif bit_depth in ['32', '24', '16']:
+#            subtype = 'PCM_'
+#            subtype += bit_depth
+
+#        # Normalize between -1.0 and 1.0 for PCM_
+#        if bit_depth in ['32', '24', '16']:
+#            track /= np.max(abs(track))
+#            track *= int((2**int(bit_depth))/2) - 1
+            
+        sf.write(wave_file, track, sample_rate, subtype=subtype)
+        debug_print(f"Saved {track_name} tracks to {self.output_dir}")
+
+        # Save project file
+        with open(json_file, 'w') as f:
+            json.dump(project_data, f, indent=2)
+
+        debug_print(f"Created {suffix} synth track project: {json_file}")
+
+    def _load_sound_tracks(self, sound_path: str, obj_name: str):
+        sliding_sound = np.zeros(self.sample_counter.total_samples, dtype=np.float32)
+        scraping_sound = np.zeros(self.sample_counter.total_samples, dtype=np.float32)
+        rolling_sound = np.zeros(self.sample_counter.total_samples, dtype=np.float32)
+
+        if os.path.exists(f"{sound_path}/{obj_name}_sliding_sound.raw"):
+            sliding_sound += np.fromfile(f"{sound_path}/{obj_name}_sliding_sound.raw", dtype=np.float32)
+        if os.path.exists(f"{sound_path}/{obj_name}_scraping_sound.raw"):
+            scraping_sound += np.fromfile(f"{sound_path}/{obj_name}_scraping_sound.raw", dtype=np.float32)
+        if os.path.exists(f"{sound_path}/{obj_name}_rolling_sound.raw"):
+            rolling_sound += np.fromfile(f"{sound_path}/{obj_name}_rolling_sound.raw", dtype=np.float32)
 
         return sliding_sound, scraping_sound, rolling_sound
-
-#    def save_synth_tracks(self):
-#        config = self.entity_manager.get('config')
-#        set_debug_prefix(self.__class__.__name__)
-#        self.save_synth_track(self.rigidbody_synth_track, 'rigidbody')
-#        self.save_synth_track(self.resonance_synth_track, 'resonance')
-#        self.save_synth_track(self.sliding_synth_track, 'sliding')
-#        self.save_synth_track(self.scraping_synth_track, 'scraping')
-#        self.save_synth_track(self.rolling_synth_track, 'rolling')
-#
-#    def save_synth_track(self, track: np.ndarray, suffix: str):
-#        """
-#        Save individual tracks as WAV files.
-#        Create a json multitrack project file (e.g., for Reaper, Ardour).
-#        """
-#        config = self.entity_manager.get('config')
-#        for conf_obj in config.objects:
-#            if conf_obj.idx == self.obj_idx:
-#                config_obj = conf_obj
-#
-#        # skip if track is all zeros
-#        if not np.any(track):
-#            debug_print(f"Track {suffix} synth track for {config_obj.name} is empty, skipping")
-#            return
-#
-##        # Maximize a normalized track from (-1.0, +1.0) to (float32.max and float32.min)
-##        dtype_max = np.finfo(np.float32).max
-##        track *= dtype_max
-#
-##        bit_depth = int(config.system.bit_depth)
-##        file_format = config.system.file_format
-#
-#        sample_rate = int(config.system.sample_rate)
-#        file_format = 'RAW'
-#        subtype = 'FLOAT'
-#        track_name = config_obj.name
-#        track_file = f"{track_name}_{suffix}.raw"
-#        wave_file = f"{self.output_dir}/{track_file}"
-#        json_file = f"{self.output_dir}/{config_obj.name}_{suffix}.json"
-#
-#        # Find new_min new_max
-#        new_max = np.max(track)
-#        new_min = np.min(track)
-#
-#        # Load saved data and track from other groups
-#        old_max, old_min = (0 for _ in range(2))
-#        if os.path.exists(wave_file):
-#            old_track, _ = sf.read(wave_file, channels=1, samplerate=sample_rate, subtype=subtype)
-#            if suffix == 'rigidbody':
-#                with open(json_file, 'r') as f:
-#                    old_data = json.load(f)
-#                    old_max = old_data['track_max']
-#                    old_min = old_data['track_min']
-#                # Normalize track to between -1.0 and +1.0
-#                track /= np.max(abs(track))
-#                # old_track - new_track ratio
-#                max_ratio = new_max / old_max
-#                min_ratio = new_min / old_min
-#                track = (track - np.min(track)) / (np.max(track) - np.min(track)) * (max_ratio - min_ratio) + min_ratio
-#            track += old_track
-#            
-#        project_data = {
-#            'object_name': config_obj.name,
-#            'sample_rate': sample_rate,
-#            'file_format': file_format,
-#            'bit_depth': subtype,
-#            'duration': track.shape[0] / sample_rate,
-#            'track_name': suffix,
-#            'track_max': new_max if new_max > old_max else old_max,
-#            'track_min': new_min if new_min < old_min else old_min,
-#            'vertices': self.rigidbody_vertices if suffix == 'rigidbody' else [],
-#            'channels': 1,
-#            'position': 0.0
-#        }
-#
-#        # Normalize track to between -1.0 and +1.0
-#        if suffix == 'rigidbody':
-#            track /= np.max(abs(track))
-#
-##        if file_format == 'RAW':
-##            track_file = f"{track_name}_{suffix}.raw"
-##        elif file_format == 'FLAC':
-##            track_file = f"{track_name}_{suffix}.raw"
-##        else:
-##            track_file = f"{track_name}_{suffix}.wav"
-##
-##        if file_format == 'FLAC' and bit_depth in ['FLOAT', 'DOUBLE', '32']:
-##            subtype = 'PCM_24'
-##        elif file_format == 'FLAC' and bit_depth in ['24', '16']:
-##            subtype = 'PCM_'
-##            subtype += bit_depth
-##        elif bit_depth in ['FLOAT', 'DOUBLE']:
-##            subtype = bit_depth
-##        elif bit_depth in ['32', '24', '16']:
-##            subtype = 'PCM_'
-##            subtype += bit_depth
-#
-##        # Normalize between -1.0 and 1.0 for PCM_
-##        if bit_depth in ['32', '24', '16']:
-##            track /= np.max(abs(track))
-##            track *= int((2**int(bit_depth))/2) - 1
-#            
-#        sf.write(wave_file, track, sample_rate, subtype=subtype)
-#        debug_print(f"Saved {track_name} tracks to {self.output_dir}")
-#
-#        # Save project file
-#        with open(json_file, 'w') as f:
-#            json.dump(project_data, f, indent=2)
-#
-#        debug_print(f"Created {suffix} synth track project: {json_file}")
-#
-#    def _load_sound_tracks(self, sound_path: str, obj_name: str):
-#        sliding_sound = np.zeros(self.sample_counter.total_samples, dtype=np.float32)
-#        scraping_sound = np.zeros(self.sample_counter.total_samples, dtype=np.float32)
-#        rolling_sound = np.zeros(self.sample_counter.total_samples, dtype=np.float32)
-#
-#        if os.path.exists(f"{sound_path}/{obj_name}_sliding_sound.raw"):
-#            sliding_sound += np.fromfile(f"{sound_path}/{obj_name}_sliding_sound.raw", dtype=np.float32)
-#        if os.path.exists(f"{sound_path}/{obj_name}_scraping_sound.raw"):
-#            scraping_sound += np.fromfile(f"{sound_path}/{obj_name}_scraping_sound.raw", dtype=np.float32)
-#        if os.path.exists(f"{sound_path}/{obj_name}_rolling_sound.raw"):
-#            rolling_sound += np.fromfile(f"{sound_path}/{obj_name}_rolling_sound.raw", dtype=np.float32)
-#
-#        return sliding_sound, scraping_sound, rolling_sound
