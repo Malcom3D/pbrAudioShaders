@@ -118,7 +118,7 @@ class rigidBodyEngine:
         if config.system.enable_noise_enhancement:
             track_names += ['sliding_sound', 'scraping_sound', 'rolling_sound']
 
-        signal_names = ['whole' for _ in range(len(track_names))]
+        signal_names = [['0'] for _ in range(len(track_names))]
 
         # total_samples is determined in __post_init__
         self.storage_engine.register(
