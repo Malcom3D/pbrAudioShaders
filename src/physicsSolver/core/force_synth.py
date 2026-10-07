@@ -954,7 +954,7 @@ class ForceSynth:
                 audio_data=track_data,
                 obj_idx=config_obj.idx,
                 track_name=final_track_name,
-                signal_name=0, # Using signal slot 0
+                signal_name=final_track_name, # Using signal slot 0
                 sample_start=0, # Write from the beginning
                 metadata={'format': 'RAW', 'sample_rate': sample_rate, 'bit_depth': 'float32'}
             )

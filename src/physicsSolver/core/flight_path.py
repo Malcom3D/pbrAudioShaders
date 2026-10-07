@@ -90,8 +90,8 @@ class FlightPath:
 #        self.entity_manager.register('trajectories', trajectory_data, trajectory_idx)
         _ = self.entity_manager.register('trajectories', trajectory_data)
         
-        # Save the trajectory data
-        trajectory_data.save(f"{self.output_dir}/{config_obj.name}.pkl")  # Pickle format
+#        # Save the trajectory data
+#        trajectory_data.save(f"{self.output_dir}/{config_obj.name}.pkl")  # Pickle format
 
 #        # Remove temporary trajectory data for this object
 #        self._cleanup_tmp_trajectories(obj_idx)
