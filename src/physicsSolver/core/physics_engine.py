@@ -132,7 +132,7 @@ class physicsEngine:
         if config.system.enable_noise_enhancement:
             track_names += ['sliding_sound', 'scraping_sound', 'rolling_sound']
 
-        signal_names = ['whole' for _ in range(len(track_names))]
+        signal_names = [['whole'] for _ in range(len(track_names))]
 
         # Determine total samples
         fps = config.system.fps
