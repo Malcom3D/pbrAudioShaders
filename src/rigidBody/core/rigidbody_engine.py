@@ -56,6 +56,10 @@ class rigidBodyEngine:
     total_samples: int = 1
 
     def __post_init__(self):
+        # Initialize StorageEngine
+        self.storage_engine = StorageEngine(self.entity_manager)
+        debug_print("StorageEngine initialized for rigidBodyEngine.")
+
         resume_data = ResumeData(self.entity_manager)
         resume_data.load_data()
 
@@ -70,10 +74,6 @@ class rigidBodyEngine:
 
         # Ensure status directory exists
         os.makedirs(self.status_dir, exist_ok=True)
-
-        # Initialize StorageEngine
-        self.storage_engine = StorageEngine(self.entity_manager)
-        debug_print("StorageEngine initialized for rigidBodyEngine.")
 
         obj_static, obj_dyn, obj_pairs, obj_modal, obj_proxy_synth = ([] for _ in range(5))
         for config_obj in config.objects:
