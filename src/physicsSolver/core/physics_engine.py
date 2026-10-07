@@ -296,13 +296,47 @@ class physicsEngine:
 
     def _cleanup_tmp_trajectories(self, obj_idx: int):
         """Remove temporary trajectory data for the given object."""
-        import copy
+        from pbrAudioCommon import KleptoEntityStore, tmpTrajectoryData
+
         trajectories = self.entity_manager.get('trajectories')
-        tmp_trajectories = copy.deepcopy(trajectories)
-        for key in trajectories.keys():
-            if isinstance(tmp_trajectories[key], tmpTrajectoryData) and tmp_trajectories[key].obj_idx == obj_idx:
-                del tmp_trajectories[key]
-        self.entity_manager._trajectories = tmp_trajectories
+        if not trajectories:
+            return
+
+        # 1. Collect the keys of tmpTrajectoryData entries belonging to this object
+        tmp_keys_to_remove = [
+            key for key, traj in trajectories.items()
+            if isinstance(traj, tmpTrajectoryData) and traj.obj_idx == obj_idx
+        ]
+
+        if not tmp_keys_to_remove:
+            debug_print(f"No tmpTrajectoryData to clean up for obj_idx={obj_idx}")
+            return
+
+        # 2. Unregister them from the in-memory EntityManager
+        for key in tmp_keys_to_remove:
+            self.entity_manager.unregister('trajectories', key)
+
+        # 3. Persist the deletions to the KleptoEntityStore so that
+        #    a subsequent ResumeData.load_data() does not resurrect them.
+        config = self.entity_manager.get('config')
+        store = KleptoEntityStore(config)
+        try:
+            for key in tmp_keys_to_remove:
+                store.delete('trajectories', key)
+        finally:
+            store.close()
+
+        debug_print(f"Cleaned up {len(tmp_keys_to_remove)} tmpTrajectoryData entries for obj_idx={obj_idx}")
+
+#    def _cleanup_tmp_trajectories(self, obj_idx: int):
+#        """Remove temporary trajectory data for the given object."""
+#        import copy
+#        trajectories = self.entity_manager.get('trajectories')
+#        tmp_trajectories = copy.deepcopy(trajectories)
+#        for key in trajectories.keys():
+#            if isinstance(tmp_trajectories[key], tmpTrajectoryData) and tmp_trajectories[key].obj_idx == obj_idx:
+#                del tmp_trajectories[key]
+#        self.entity_manager._trajectories = tmp_trajectories
 
     @delayed
     def proxy(self, obj_idx: int):
