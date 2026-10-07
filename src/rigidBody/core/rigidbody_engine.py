@@ -28,9 +28,9 @@ from dask import config as dask_config
 #dask_config.set(num_workers=1024)
 dask_config.set({'num_workers': 1024, 'optimization.fuse.active': True, 'optimization.fuse.max_depth': 10,})
 
-from pbrAudioCommon import EntityManager, ScoreTrack, ForceDataSequence, ModalVertices, CollisionData, ResumeData
+from pbrAudioCommon import EntityManager, ScoreTrack, ForceDataSequence, ModalVertices, CollisionData, TrajectoryData, ResumeData
 from pbrAudioCommon import _update_status
-from pbrAudioCommon import TrajectoryData
+from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
 from pbrAudioStorage import StorageEngine
 
@@ -60,6 +60,10 @@ class rigidBodyEngine:
         resume_data.load_data()
 
         config = self.entity_manager.get('config')
+
+        set_debug(config.system.debug)
+        set_debug_prefix(self.__class__.__name__)
+
         self.physical_core = config.system.physical_core
         self.status_dir = f"{config.system.cache_path}/status/{__class__.__name__}"
         self.progress = 0
