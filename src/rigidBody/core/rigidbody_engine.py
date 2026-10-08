@@ -193,6 +193,7 @@ class rigidBodyEngine:
             if '_luthier' not in step_done:
                 self._luthier()
             if '_player' not in step_done:
+                self._luthier()
                 self._player()
 
     def _process_groups(self):
