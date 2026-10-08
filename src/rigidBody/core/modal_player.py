@@ -109,7 +109,7 @@ class ModalPlayer:
 #        sound_path = f"{config.system.cache_path}/audio_force"
         if config.system.enable_noise_enhancement:
 #            self.sliding_sound, self.scraping_sound, self.rolling_sound = self._load_sound_tracks(sound_path, config_obj.name)
-            self.sliding_sound, self.scraping_sound, self.rolling_sound = self._load_sound_tracks()
+            self.sliding_sound, self.scraping_sound, self.rolling_sound = self._load_sound_tracks(storage_engine=storage_engine, config_obj=config_obj)
 
     def compute(self, storage_engine: StorageEngine) -> None:
         """Non-blocking version that works with Blender."""
