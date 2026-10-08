@@ -254,10 +254,10 @@ class rigidBodyEngine:
         tasks_player = [self.bake_player(player) for player in players]
         results_player = compute(*tasks_player)
 
-        tasks_save = [self.bake_save(player) for player in players]
-        results_save = compute(*tasks_save)
-        self.progress = _update_status(f"{self.status_dir}", "/bake", 92)
-        print(f'rigidBodyEngine: Saved tracks for {len(players)} player')
+#        tasks_save = [self.bake_save(player) for player in players]
+#        results_save = compute(*tasks_save)
+#        self.progress = _update_status(f"{self.status_dir}", "/bake", 92)
+#        print(f'rigidBodyEngine: Saved tracks for {len(players)} player')
 
     def _proxy_synth(self):
         # ProxySynth

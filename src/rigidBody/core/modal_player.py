@@ -46,7 +46,7 @@ class ModalPlayer:
         self.sample_counter = self.entity_manager.get('sample_counter')
         self.score_path = f"{config.system.cache_path}/score"
 #        self.output_dir = f"{config.system.cache_path}/modal_player"
-        os.makedirs(self.output_dir, exist_ok=True)
+#        os.makedirs(self.output_dir, exist_ok=True)
 
         fps = config.system.fps
         fps_base = config.system.fps_base
@@ -303,7 +303,7 @@ class ModalPlayer:
                 sample_start=0,
                 metadata={'format': RAW, 'sample_rate': sample_rate, 'bit_depth': 'float32'}
             )
-        debug_print(f"Successfully wrote synth tracks for {config_obj.name} to storage.")
+            debug_print(f"Successfully wrote synth tracks {track_name} for {config_obj.name} to storage.")
 
     def _load_sound_tracks(self, storage_engine: StorageEngine, config_obj: Any):
         """
