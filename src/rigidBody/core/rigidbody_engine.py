@@ -122,8 +122,6 @@ class rigidBodyEngine:
         if config.system.enable_noise_enhancement:
             track_names += ['sliding_sound', 'scraping_sound', 'rolling_sound']
 
-        signal_names = [['0'] for _ in range(len(track_names))]
-
         # total_samples is determined in __post_init__
         self.storage_engine.register(
             collection=config.system.collection,
@@ -131,7 +129,6 @@ class rigidBodyEngine:
             engine="rigidBodyEngine",
             track_group="modal_synth",
             track_names=track_names,
-            signal_names=signal_names,
             signal_type="float32",
             total_samples=self.total_samples,
             metadata={'description': 'Final synthesized modal tracks from rigidBodyEngine'}
