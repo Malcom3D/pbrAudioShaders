@@ -300,7 +300,7 @@ class ModalPlayer:
                 obj_idx=self.obj_idx,
                 track_name=track_name,
                 sample_start=0,
-                metadata={'format': RAW, 'sample_rate': sample_rate, 'bit_depth': 'float32'}
+                metadata={'format': 'RAW', 'sample_rate': sample_rate, 'bit_depth': 'float32'}
             )
             debug_print(f"Successfully wrote synth tracks {track_name} for {config_obj.name} to storage.")
 
