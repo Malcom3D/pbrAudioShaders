@@ -277,6 +277,8 @@ class ModalPlayer:
         Save individual tracks to the StorageEngine.
         """
         config = self.entity_manager.get('config')
+        sample_rate = int(config.system.sample_rate)
+
         for conf_obj in config.objects:
             if conf_obj.idx == self.obj_idx:
                 config_obj = conf_obj
