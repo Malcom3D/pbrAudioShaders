@@ -1,1 +1,15 @@
-This project benefited from AI assistance provided by DeepSeek AI (https://www.deepseek.com/)
+# Acknowledgments
+
+pbrAudio would not be possible without the help of these wonderful people.
+
+## Supporters
+
+- **M**
+- **RobbyPat [Roberta.patruno.74@gmail.com]**
+- **Maje**
+- **Davide**
+
+
+## Contributors
+
+This project benefited from AI contribution provided by DeepSeek AI (https://www.deepseek.com/)
