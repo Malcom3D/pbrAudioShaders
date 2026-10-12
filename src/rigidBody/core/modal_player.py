@@ -297,13 +297,7 @@ class ModalPlayer:
                 debug_print(f"Track {track_name} for {config_obj.name} is empty, skipping.")
                 continue
             
-            storage_engine.write(
-                audio_data=track_data,
-                obj_idx=self.obj_idx,
-                track_name=track_name,
-                sample_start=0,
-                metadata={'format': 'RAW', 'sample_rate': sample_rate, 'subtype': 'float32'}
-            )
+            storage_engine.write(audio_data=track_data, obj_idx=self.obj_idx, track_name=track_name, sample_start=0, metadata={'format': 'RAW', 'sample_rate': sample_rate, 'subtype': 'FLOAT'})
             debug_print(f"Successfully wrote synth tracks {track_name} for {config_obj.name} to storage.")
 
     def _load_sound_tracks(self, storage_engine: StorageEngine, config_obj: Any):
