@@ -27,6 +27,8 @@ from pbrAudioCommon import ScoreEvent, ScoreTrack
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 from pbrAudioCommon import _adjust_for_fracture_shard
 
+from pbrAudioStorage import StorageEngine # <-- Import StorageEngine
+
 @dataclass
 class ModalComposer:
     entity_manager: EntityManager
@@ -35,6 +37,8 @@ class ModalComposer:
         config = self.entity_manager.get('config')
         set_debug(config.system.debug)
         set_debug_prefix(self.__class__.__name__)
+        # Initialize the StorageEngine
+        self.storage_engine = StorageEngine(self.entity_manager)
 
     def compute(self, obj_idx: int) -> None:
         config = self.entity_manager.get('config')
@@ -44,8 +48,6 @@ class ModalComposer:
         subframes = config.system.subframes
         sample_rate = config.system.sample_rate
         sfps = (fps / fps_base) * subframes
-
-        forces_path = f"{config.system.cache_path}/audio_force"
 
         score_track_final, score_track = (None for _ in range(2))
         score_tracks = self.entity_manager.get('score_tracks')
@@ -64,7 +66,8 @@ class ModalComposer:
         for conf_obj in config.objects:
             if conf_obj.idx == obj_idx:
                 config_obj = conf_obj
-                force, coupling_strength = self._load_audioforce_tracks(total_samples=total_samples, forces_path=forces_path, obj_name=config_obj.name)
+                # Use the new storage-based method
+                force, coupling_strength = self._load_audioforce_tracks(obj_idx=config_obj.idx)
 
         # configure blosc2 compression
         cparams = blosc2.CParams(codec=blosc2.Codec.LZ4, typesize=1, clevel=1, nthreads=8)
@@ -81,7 +84,7 @@ class ModalComposer:
             final_coupling_data = np.zeros_like(coupling_strength)
 
             mixed_mask = event_track.type == 5
-            for event_type in range(1,5):
+            for event_type in range(1, 5):
 
                 # score_track_final
                 n_vertex_ids = np.count_nonzero(event_track.vertex_ids, axis=1)
@@ -111,7 +114,7 @@ class ModalComposer:
             final_contact_area = np.zeros_like(event_track.contact_area)
             final_force = np.zeros_like(coupling_strength)
             final_coupling_data = np.zeros_like(coupling_strength)
-            for event_type in [3,4]:
+            for event_type in [3, 4]:
                 final_type[mixed_mask] = event_type
                 final_coupling_data[mixed_mask] = coupling_strength[mixed_mask]
                 final_contact_area[mixed_mask] = event_track.contact_area[mixed_mask]
@@ -121,29 +124,70 @@ class ModalComposer:
             final_vertex_ids = blosc2.asarray(final_vertex_ids, cparams=cparams, dparams=dparams)
             score_track_final.add_event(ScoreEvent(coll_obj=obj2_idx, start_sample=event_track.start_sample, stop_sample=event_track.stop_sample, type=final_type, vertex_ids=final_vertex_ids, contact_area=final_contact_area, force=final_force, coupling_data=final_coupling_data))
 
-    def _load_audioforce_tracks(self, total_samples: int, forces_path: str, obj_name: str) -> Tuple[np.ndarray, np.ndarray]:
-        """Load and list audio-force tracks for obj_name in forces_path"""
+    def _load_audioforce_tracks(self, obj_idx: int) -> Tuple[List[np.ndarray], np.ndarray]:
+        """
+        Load audio-force tracks for an object from the StorageEngine.
+        """
+        # Define track names to load, in an order that maps to contact types
+        # Index: 0=non_collision, 1=impact, 2=scraping, 3=sliding, 4=rolling
+        track_names = ['non_collision', 'impact', 'scraping', 'sliding', 'rolling', 'coupling_strength']
+        
+        # Initialize a dictionary to hold the loaded tracks
+        loaded_tracks = {}
 
-        non_collision = np.zeros((total_samples,1))
-        impact = np.zeros((total_samples,1))
-        scraping = np.zeros((total_samples,1))
-        sliding = np.zeros((total_samples,1))
-        rolling = np.zeros((total_samples,1))
-        _mixed = np.zeros((total_samples,1))
-        static = np.zeros((total_samples,1))
-        coupling_strength = np.zeros((total_samples,1))
+        debug_print(f"Loading audio-force tracks for obj_idx {obj_idx} from storage...")
+        for track_name in track_names:
+            try:
+                # The read method returns a (1, N) array, so we flatten it.
+                track_data = self.storage_engine.read(
+                    engine='physicsSolver',
+                    obj_idx=obj_idx,
+                    track_name=track_name
+                )
+                if track_data is not None:
+                    loaded_tracks[track_name] = track_data.flatten()
+                else:
+                    # If a track is not found, create a silent one.
+                    # We need a length. We can get it from any other loaded track.
+                    # If no tracks are loaded yet, we'll handle it later.
+                    loaded_tracks[track_name] = None
+            except Exception as e:
+                debug_print(f"Could not load track '{track_name}' for obj {obj_idx}: {e}")
+                loaded_tracks[track_name] = None
 
-        if os.path.exists(f"{forces_path}/{obj_name}_non_collision.raw"):
-            non_collision += np.fromfile(f"{forces_path}/{obj_name}_non_collision.raw", dtype=np.float32).reshape((-1,1))
-        if os.path.exists(f"{forces_path}/{obj_name}_impact.raw"):
-            impact += np.fromfile(f"{forces_path}/{obj_name}_impact.raw", dtype=np.float32).reshape((-1,1))
-        if os.path.exists(f"{forces_path}/{obj_name}_scraping.raw"):
-            scraping += np.fromfile(f"{forces_path}/{obj_name}_scraping.raw", dtype=np.float32).reshape((-1,1))
-        if os.path.exists(f"{forces_path}/{obj_name}_sliding.raw"):
-            sliding += np.fromfile(f"{forces_path}/{obj_name}_sliding.raw", dtype=np.float32).reshape((-1,1))
-        if os.path.exists(f"{forces_path}/{obj_name}_rolling.raw"):
-            rolling += np.fromfile(f"{forces_path}/{obj_name}_rolling.raw", dtype=np.float32).reshape((-1,1))
-        if os.path.exists(f"{forces_path}/{obj_name}_coupling_strength.raw"):
-            coupling_strength += np.fromfile(f"{forces_path}/{obj_name}_coupling_strength.raw", dtype=np.float32).reshape((-1,1))
+        # Determine the total length from the first successfully loaded track
+        total_samples = 0
+        for track in loaded_tracks.values():
+            if track is not None:
+                total_samples = track.shape[0]
+                break
+        
+        # If no tracks were loaded, we can't proceed.
+        if total_samples == 0:
+            debug_print(f"No audio-force tracks found for obj {obj_idx}. Returning empty arrays.")
+            # Return a list of empty arrays and an empty coupling array
+            return [np.zeros(1) for _ in range(5)], np.zeros(1)
 
-        return [non_collision, impact, scraping, sliding, rolling, _mixed, static], coupling_strength
+        # Fill in any missing tracks with zeros
+        for track_name, track_data in loaded_tracks.items():
+            if track_data is None:
+                loaded_tracks[track_name] = np.zeros(total_samples, dtype=np.float32)
+
+        # Assemble the final lists and arrays
+        # The order must match the indexing used in the 'compute' method:
+        # [non_collision, impact, scraping, sliding, rolling]
+        force_tracks = [
+            loaded_tracks.get('non_collision'),
+            loaded_tracks.get('impact'),
+            loaded_tracks.get('scraping'),
+            loaded_tracks.get('sliding'),
+            loaded_tracks.get('rolling'),
+        ]
+        
+        coupling_strength_track = loaded_tracks.get('coupling_strength')
+
+        # Reshape to (N, 1) to match the expected format in the compute method
+        force_tracks = [track.reshape(-1, 1) for track in force_tracks]
+        coupling_strength_track = coupling_strength_track.reshape(-1, 1)
+
+        return force_tracks, coupling_strength_track
