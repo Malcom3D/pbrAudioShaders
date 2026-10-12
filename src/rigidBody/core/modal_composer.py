@@ -150,6 +150,7 @@ class ModalComposer:
                     # If a track is not found, create a silent one.
                     # We need a length. We can get it from any other loaded track.
                     # If no tracks are loaded yet, we'll handle it later.
+                    debug_print(f"Could not load track '{track_name}' for obj {obj_idx}: use a silent one")
                     loaded_tracks[track_name] = None
             except Exception as e:
                 debug_print(f"Could not load track '{track_name}' for obj {obj_idx}: {e}")

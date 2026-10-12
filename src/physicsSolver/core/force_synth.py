@@ -955,7 +955,7 @@ class ForceSynth:
                 obj_idx=config_obj.idx,
                 track_name=final_track_name,
                 sample_start=0, # Write from the beginning
-                metadata={'format': 'RAW', 'sample_rate': sample_rate, 'bit_depth': 'float32'}
+                metadata={'format': 'RAW', 'sample_rate': sample_rate, 'subtype': 'float32'}
             )
 
         debug_print(f"Successfully wrote tracks for {config_obj.name} to storage.")
