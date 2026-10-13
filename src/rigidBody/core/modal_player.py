@@ -321,7 +321,7 @@ class ModalPlayer:
         try:
             scraping_sound_track = storage_engine.read(engine='physicsSolver', obj_idx=config_obj.idx, track_name='scraping_sound')
             if scraping_sound_track is not None:
-                scraping_sound = scraping_sound_track.flattenatten()
+                scraping_sound = scraping_sound_track.flatten()
         except Exception as e:
             debug_print(f"Could not load scraping_sound for {config_obj.name}: {e}")
 
