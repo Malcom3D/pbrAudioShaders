@@ -96,14 +96,14 @@ class rigidBodyEngine:
                 self.total_samples = int(trajectory.get_x()[-1])
                 break
 
+        self._register_storage_schema()
+
     def prebake(self):
         step_done = []
         if os.path.exists(f"{self.status_dir}/step_done"):
             with open(f"{self.status_dir}/step_done", 'r') as file:
                 step_done = file.read().split()
 
-        if '_register_storage_schema' not in step_done:
-            self._register_storage_schema()
         if '_modal' not in step_done:
             self._modal()
         if '_proxy' not in step_done:
