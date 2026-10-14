@@ -36,8 +36,8 @@ class ForceSolver:
 
     def __post_init__(self):
         config = self.entity_manager.get('config')
-        self.output_dir = f"{config.system.cache_path}/forces_data"
-        os.makedirs(self.output_dir, exist_ok=True)
+#        self.output_dir = f"{config.system.cache_path}/forces_data"
+#        os.makedirs(self.output_dir, exist_ok=True)
 
     def compute(self, obj_idx: int) -> None:
         config = self.entity_manager.get('config')

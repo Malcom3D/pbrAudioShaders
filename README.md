@@ -178,3 +178,7 @@ If you use this software in your research, please cite:
   year = {2025},
   url = {https://github.com/malcom3d/pbrAudio}
 }
+
+## Supporters & Credits
+
+Thanks to everyone who has supported pbrAudio! See [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md) for the full list.
