@@ -86,6 +86,14 @@ class physicsEngine:
             for j in range(i + 1, len(config.objects)):
                 self.obj_pairs.append([config.objects[i].idx, config.objects[j].idx])
 
+        # Determine total samples
+        fps = config.system.fps
+        fps_base = config.system.fps_base
+        subframes = config.system.subframes
+        sample_rate = config.system.sample_rate
+        sfps = ( fps / fps_base ) * subframes # subframes per seconds
+        self.total_samples = config.system.total_frames * sample_rate / sfps
+
     def bake(self):
         step_done = []
         self.progress = _update_status(f"{self.status_dir}", "/bake", self.progress)
