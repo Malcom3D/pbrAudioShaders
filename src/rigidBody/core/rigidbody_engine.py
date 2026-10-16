@@ -35,7 +35,7 @@ from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 from pbrAudioStorage import StorageEngine
 
 from ellipsoidalProxy import Modal4Proxy, ProxySynth, ProxyEngine
-from postProcess import PostProcessEngine
+#from postProcess import PostProcessEngine
 
 from ..core.mesh2modal import Mesh2Modal
 from ..core.modal_composer import ModalComposer
@@ -267,8 +267,9 @@ class rigidBodyEngine:
         self.progress = _update_status(f"{self.status_dir}", "/bake", 90)
 
     def _post_process(self):
-        post_engine = PostProcessEngine(self.entity_manager)
-        post_engine.process_with_modal_player()
+        pass
+#        post_engine = PostProcessEngine(self.entity_manager)
+#        post_engine.process_with_modal_player()
 
         self.progress = _update_status(f"{self.status_dir}", "/bake", 99)
 
