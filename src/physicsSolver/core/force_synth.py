@@ -942,15 +942,8 @@ class ForceSynth:
             if not np.any(track_data):
                 continue # Skip silent tracks
 
-            final_track_name = track_name
-            if unprocessed:
-                # You could write unprocessed data to a separate collection
-                # or use a naming convention. For now, we'll just log it.
-                debug_print(f"Skipping write of unprocessed track '{track_name}' for now.")
-                continue
-
             # Write the track to the storage engine
-            self.storage_engine.write(audio_data=track_data, obj_idx=config_obj.idx, track_name=final_track_name, sample_start=0, metadata={'format': 'RAW', 'sample_rate': sample_rate, 'subtype': 'FLOAT'})
+            self.storage_engine.write(audio_data=track_data, obj_idx=config_obj.idx, track_name=final_track_name, sample_start=0, engine="physicsSolver", metadata={'format': 'RAW', 'sample_rate': sample_rate, 'subtype': 'FLOAT'})
 
         debug_print(f"Successfully wrote tracks for {config_obj.name} to storage.")
 

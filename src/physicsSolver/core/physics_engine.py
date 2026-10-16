@@ -119,42 +119,34 @@ class physicsEngine:
             self._post_process()
 
     def _register_storage_schema(self):
-        """
+        """ 
         Registers the data schema for raw audio-force tracks with the StorageEngine.
-        This defines how the data is organized on disk.
+        This defines how the data is organized on the graph.
         """
-        config = self.entity_manager.get('config')
         debug_print("Registering storage schema for audio-force tracks...")
-
-        # Define the tracks that ForceSynth will generate
+        config = self.entity_manager.get('config')
         track_names = ['non_collision', 'impact', 'sliding', 'scraping', 'rolling', 'coupling_strength']
-
         if config.system.enable_noise_enhancement:
             track_names += ['sliding_sound', 'scraping_sound', 'rolling_sound']
 
-        # Determine total samples
-        fps = config.system.fps
-        fps_base = config.system.fps_base
-        subframes = config.system.subframes
-        sample_rate = config.system.sample_rate
-        sfps = ( fps / fps_base ) * subframes # subframes per seconds
-        total_samples = config.system.total_frames * sample_rate / sfps
-
-        # Register the schema with the StorageEngine
         self.storage_engine.register(
-            collection=config.system.collection,     # A name for this data collection
-            objs_type="objects",                     # The config attribute holding the object list
-            engine="physicsSolver",                  # The name of the engine generating this data
-            track_group="audio_force",               # A logical group for these tracks
+            collection=config.system.collection,
+            objs_type="objects",
+            engine="physicsSolver",
+            track_group="audio_force",
             track_names=track_names,
             signal_type="float32",
-            total_samples=total_samples,
-            metadata={'description': 'Raw audio-force tracks from ForceSynth'}
+            total_samples=int(self.total_samples),
+            metadata={'description': 'Raw audio-force tracks from ForceSynth'},
+            track_force_source={
+                "impact": "coupling_strength",
+                "sliding": "coupling_strength",
+                "scraping": "coupling_strength",
+                "rolling": "coupling_strength",
+            },
         )
-
-        # Materialize the storage, which pre-allocates the NDArrays on disk
         self.storage_engine.materialize()
-        
+
         self.progress = _update_status(f"{self.status_dir}", "/bake", self.progress + self.progress_ratio)
         debug_print("Storage schema registered and materialized.")
 
