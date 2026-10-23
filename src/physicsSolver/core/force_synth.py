@@ -25,6 +25,8 @@ import scipy.signal as signal
 from dataclasses import dataclass 
 from typing import List, Dict, Tuple, Optional, Any
 
+from concurrent.futures import ThreadPoolExecutor
+
 from pbrAudioCommon import EntityManager, HertzianContact, ContactType
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
@@ -40,6 +42,9 @@ class ForceSynth:
 
         set_debug(config.system.debug)
         set_debug_prefix(self.__class__.__name__)
+
+        self._executor = ThreadPoolExecutor(max_workers=config.system.physical_core)
+        self._futures = []  # keep refs so tasks aren't GC'd
 
 #        self.collisions_dir = f"{config.system.cache_path}/collisions"
 #        os.makedirs(self.collisions_dir, exist_ok=True)
@@ -928,6 +933,7 @@ class ForceSynth:
     def _write_tracks_to_storage(self, config_obj: Any, tracks: Dict[str, np.ndarray], unprocessed: bool = False):
         """
         Write the synthesized tracks to the StorageEngine.
+        Fire-and-forget: returns immediately.
         """
         config = self.entity_manager.get('config')
         sample_rate = config.system.sample_rate
@@ -943,8 +949,11 @@ class ForceSynth:
                 continue # Skip silent tracks
 
             # Write the track to the storage engine
-            self.storage_engine.write(audio_data=track_data, obj_idx=config_obj.idx, track_name=track_name, sample_start=0, engine="physicsSolver", metadata={'format': 'RAW', 'sample_rate': sample_rate, 'subtype': 'FLOAT'})
+            fut = self._executor.submit(self.storage_engine.write(collection=config.system.collection, engine="physicsSolver", obj_idx=config_obj.idx, track_name=track_name, audio_data=track_data, sample_start=0, metadata={'format': 'RAW', 'sample_rate': sample_rate, 'subtype': 'FLOAT'}))
+            self._futures.append(fut)
+            self._futures = [f for f in self._futures if not f.done()]
 
+        self._executor.shutdown(wait=True)
         debug_print(f"Successfully wrote tracks for {config_obj.name} to storage.")
 
 #    def _save_tracks(self, config_obj: Any, tracks: Dict[str, np.ndarray], total_samples: int, sample_rate: int, unprocessed: bool = False):

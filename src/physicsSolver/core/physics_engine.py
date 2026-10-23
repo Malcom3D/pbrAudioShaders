@@ -35,7 +35,7 @@ from pbrAudioCommon import EntityManager, CollisionData, ForceDataSequence, tmpT
 from pbrAudioCommon import _update_status
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
-from pbrAudioStorage import StorageEngine 
+from pbrAudioStorage import StorageEngine
 
 from ellipsoidalProxy import ProxyMesh
 
@@ -94,15 +94,14 @@ class physicsEngine:
         sfps = ( fps / fps_base ) * subframes # subframes per seconds
         self.total_samples = config.system.total_frames * sample_rate / sfps
 
+        self._register_storage_schema()
+
     def bake(self):
         step_done = []
         self.progress = _update_status(f"{self.status_dir}", "/bake", self.progress)
 
         with open(f"{self.status_dir}/step_done", 'r') as file:
             step_done = file.read().split()
-
-        if '_register_storage_schema' not in step_done:
-            self._register_storage_schema()
 
         if '_proxy' not in step_done:
             self._proxy()
@@ -137,6 +136,22 @@ class physicsEngine:
         if config.system.enable_noise_enhancement:
             track_names += ['sliding_sound', 'scraping_sound', 'rolling_sound']
 
+        # default_behaviors/kinds = [ collection, engine, object, track, signal ]
+        default_behaviors = {
+            'collection': 'none',
+            'engine': 'none',
+            'object': 'multi',
+            'track': 'single',
+            'signal': 'merge'
+            }
+        default_kinds = {
+            'collection': 'multi-track',
+            'engine': 'multi-track',
+            'object': 'multi-track',
+            'track': 'mono',
+            'signal': 'mono',
+            }
+
         self.storage_engine.register(
             collection=config.system.collection,
             objs_type="objects",
@@ -145,18 +160,16 @@ class physicsEngine:
             track_names=track_names,
             signal_type="float32",
             total_samples=int(self.total_samples),
+            sample_rate=config.system.sample_rate,
+            bit_depth=config.system.bit_depth,
+            subtype='FLOAT' if signal_type == "float32" else 'DOUBLE',
             metadata={'description': 'Raw audio-force tracks from ForceSynth'},
-            track_force_source={
-                "impact": "coupling_strength",
-                "sliding": "coupling_strength",
-                "scraping": "coupling_strength",
-                "rolling": "coupling_strength",
-            },
+            default_behaviors=default_behaviors,
+            default_kinds=default_kinds
         )
-        self.storage_engine.materialize()
 
         self.progress = _update_status(f"{self.status_dir}", "/bake", self.progress + self.progress_ratio)
-        debug_print("Storage schema registered and materialized.")
+        debug_print("Storage schema registered.")
 
     def _proxy(self):
         tasks_proxy = [self.proxy(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
