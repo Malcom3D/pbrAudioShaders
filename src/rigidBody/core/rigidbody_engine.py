@@ -113,6 +113,49 @@ class rigidBodyEngine:
 
     def _register_storage_schema(self):
         """
+        Registers the data schema for raw audio-force tracks with the StorageEngine.
+        This defines how the data is organized on the graph.
+        """
+        debug_print("Registering storage schema for modal synth tracks...")
+        config = self.entity_manager.get('config')
+        track_names = ['rigidbody', 'resonance', 'sliding', 'scraping', 'rolling']
+        if config.system.enable_noise_enhancement:
+            track_names += ['sliding_sound', 'scraping_sound', 'rolling_sound']
+
+        # default_behaviors/kinds = [ collection, engine, object, track, signal ]
+        default_behaviors = {
+            'collection': 'none',
+            'engine': 'none',
+            'object': 'multi',
+            'track': 'single',
+            'signal': 'merge'
+            }
+        default_kinds = {
+            'collection': 'multi-track',
+            'engine': 'multi-track',
+            'object': 'multi-track',
+            'track': 'mono',
+            'signal': 'mono',
+            }
+
+        self.storage_engine.register(
+            collection=config.system.collection,
+            objs_type="objects",
+            engine="rigidBodyEngine",
+            track_group="modal_synth",
+            track_names=track_names,
+            signal_type="float32",
+            total_samples=int(self.total_samples),
+            sample_rate=config.system.sample_rate,
+            bit_depth=config.system.bit_depth,
+            subtype='FLOAT',
+            metadata={'description': 'Final synthesized modal tracks from rigidBodyEngine'},
+            default_behaviors=default_behaviors,
+            default_kinds=default_kinds
+        )
+
+
+        """
         Registers the data schema for the final synthesized modal tracks.
         """
         config = self.entity_manager.get('config')
