@@ -162,7 +162,7 @@ class physicsEngine:
             total_samples=int(self.total_samples),
             sample_rate=config.system.sample_rate,
             bit_depth=config.system.bit_depth,
-            subtype='FLOAT' if signal_type == "float32" else 'DOUBLE',
+            subtype='FLOAT',
             metadata={'description': 'Raw audio-force tracks from ForceSynth'},
             default_behaviors=default_behaviors,
             default_kinds=default_kinds
