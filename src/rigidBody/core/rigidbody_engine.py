@@ -154,30 +154,6 @@ class rigidBodyEngine:
             default_kinds=default_kinds
         )
 
-
-        """
-        Registers the data schema for the final synthesized modal tracks.
-        """
-        config = self.entity_manager.get('config')
-        debug_print("Registering storage schema for modal synth tracks...")
-
-        track_names = ['rigidbody', 'resonance', 'sliding', 'scraping', 'rolling']
-        if config.system.enable_noise_enhancement:
-            track_names += ['sliding_sound', 'scraping_sound', 'rolling_sound']
-
-        # total_samples is determined in __post_init__
-        self.storage_engine.register(
-            collection=config.system.collection,
-            objs_type="objects",
-            engine="rigidBodyEngine",
-            track_group="modal_synth",
-            track_names=track_names,
-            signal_type="float32",
-            total_samples=self.total_samples,
-            metadata={'description': 'Final synthesized modal tracks from rigidBodyEngine'}
-        )
-
-        self.storage_engine.materialize()
         self.progress = _update_status(f"{self.status_dir}", "/prebake", 5) # Update progress
         debug_print("Modal synth storage schema registered and materialized.")
 

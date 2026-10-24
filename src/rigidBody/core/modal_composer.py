@@ -130,6 +130,7 @@ class ModalComposer:
         """
         # Define track names to load, in an order that maps to contact types
         # Index: 0=non_collision, 1=impact, 2=scraping, 3=sliding, 4=rolling
+        config = self.entity_manager.get('config')
         track_names = ['non_collision', 'impact', 'scraping', 'sliding', 'rolling', 'coupling_strength']
         
         # Initialize a dictionary to hold the loaded tracks
@@ -139,7 +140,7 @@ class ModalComposer:
         for track_name in track_names:
             try:
                 # The read method returns a (1, N) array, so we flatten it.
-                track_data = self.storage_engine.read(engine='physicsSolver', obj_idx=obj_idx, track_name=track_name)
+                track_data = self.storage_engine.read(collection=config.system.collection,  engine='physicsSolver', obj_idx=obj_idx, track_name=track_name)
                 if track_data is not None and np.asarray(track_data).size > 0:
                     loaded_tracks[track_name] = track_data.flatten().reshape(-1)
                 else:
