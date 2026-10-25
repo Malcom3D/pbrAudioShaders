@@ -141,8 +141,8 @@ class rigidBodyEngine:
         self.storage_engine.register(
             collection=config.system.collection,
             objs_type="objects",
-            engine="rigidBodyEngine",
-            track_group="modal_synth",
+            engine="rigidBody",
+            track_group="modal_displacement",
             track_names=track_names,
             signal_type="float32",
             total_samples=int(self.total_samples),
