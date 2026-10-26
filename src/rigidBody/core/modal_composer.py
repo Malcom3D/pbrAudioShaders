@@ -142,16 +142,16 @@ class ModalComposer:
                 # The read method returns a (1, N) array, so we flatten it.
                 track_data = self.storage_engine.read(collection=config.system.collection,  engine='physicsSolver', obj_idx=obj_idx, track_name=track_name)
                 if track_data is not None and np.asarray(track_data).size > 0:
-                    loaded_tracks[track_name] = track_data.flatten().reshape(-1)
+                    loaded_tracks[track_name] = track_data.flatten().reshape(1,-1)
                 else:
                     # If a track is not found, create a silent one.
                     # We need a length. We can get it from any other loaded track.
                     # If no tracks are loaded yet, we'll handle it later.
                     debug_print(f"Could not load track '{track_name}' for obj {obj_idx}: use a silent one")
-                    loaded_tracks[track_name] = None
+                    loaded_tracks[track_name] = np.zeros((1,total_samples), dtype=np.float32)
             except Exception as e:
                 debug_print(f"Could not load track '{track_name}' for obj {obj_idx}: {e}")
-                loaded_tracks[track_name] = None
+                loaded_tracks[track_name] = np.zeros((1,total_samples), dtype=np.float32)
 
         # Determine the total length from the first successfully loaded track
         total_samples = next((t.shape[0] for t in loaded_tracks.values() if t is not None), 0)
