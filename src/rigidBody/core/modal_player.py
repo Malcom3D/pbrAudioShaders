@@ -149,7 +149,7 @@ class ModalPlayer:
             # init var for the current sample
             rigidbody_output, resonance_output = (0 for _ in range(2))
             if config.system.enable_noise_enhancement:
-                sliding_output, scraping_output, rolling_output = (0 for _ in range(2))
+                sliding_output, scraping_output, rolling_output = (0 for _ in range(3))
             rigidbody_buffers = [0 for _ in range(7)]
             coupling_force = [0 for _ in range(7)]
             for synth_type in range(7):

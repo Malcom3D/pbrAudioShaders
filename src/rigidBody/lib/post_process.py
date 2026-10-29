@@ -228,7 +228,7 @@ class postProcess:
         """
         results: Dict[str, int] = {}
         for obj in self.config.objects:
-            n = self.apply_for_object(obj_id x=obj.idx, obj_name=obj.name if hasattr(obj, 'name') else str(obj.idx))
+            n = self.apply_for_object(obj_idx=obj.idx, obj_name=obj.name if hasattr(obj, 'name') else str(obj.idx))
             if n is not None:
                 results[obj.name if hasattr(obj, 'name') else str(obj.idx)] = n
         return results
