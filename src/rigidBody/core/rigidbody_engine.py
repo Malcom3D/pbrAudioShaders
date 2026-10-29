@@ -110,14 +110,14 @@ class rigidBodyEngine:
 
     def _register_storage_schema(self):
         """
-        Registers the data schema for raw audio-force tracks with the StorageEngine.
+        Registers the data schema for raw modal synth tracks with the StorageEngine.
         This defines how the data is organized on the graph.
         """
         debug_print("Registering storage schema for modal synth tracks...")
         config = self.entity_manager.get('config')
-        track_names = ['rigidbody', 'resonance', 'sliding', 'scraping', 'rolling']
+        track_names = ['rigidbody', 'resonance']
         if config.system.enable_noise_enhancement:
-            track_names += ['sliding_sound', 'scraping_sound', 'rolling_sound']
+            track_names += ['sliding', 'scraping', 'rolling']
 
         # default_behaviors/kinds = [ collection, engine, object, track, signal ]
         default_behaviors = {
@@ -134,19 +134,18 @@ class rigidBodyEngine:
             'track': 'mono',
             'signal': 'mono',
             }
-
         self.storage_engine.register(
             collection=config.system.collection,
             objs_type="objects",
-            engine="rigidBody",
+            engine=self.__class__.__name__,
             track_group="modal_displacement",
             track_names=track_names,
             signal_type="float32",
             total_samples=int(self.total_samples),
-            sample_rate=config.system.sample_rate,
+            sample_rate=int(config.system.sample_rate),
             bit_depth=config.system.bit_depth,
             subtype='FLOAT',
-            metadata={'description': 'Final synthesized modal tracks from rigidBodyEngine'},
+            metadata={'description': f'Final synthesized modal tracks from {self.__class__.__name__}'},
             default_behaviors=default_behaviors,
             default_kinds=default_kinds
         )
@@ -203,7 +202,7 @@ class rigidBodyEngine:
                 step_done = file.read().split()
 
         if len(modal_dyn_idx) >= self.physical_core:
-            if '_process_group' not in step_done:
+            if '_process_groups' not in step_done:
                 self._process_groups()
         else:
             if '_luthier' not in step_done:
@@ -283,9 +282,10 @@ class rigidBodyEngine:
         self.progress = _update_status(f"{self.status_dir}", "/bake", 90)
 
     def _post_process(self):
-        pass
-#        post_engine = PostProcessEngine(self.entity_manager)
-#        post_engine.process_with_modal_player()
+        from ..lib.synth_post_process import SynthPostProcess
+
+        sp = SynthPostProcess(self.entity_manager, storage_engine=self.storage_engine)
+        sp.apply()
 
         self.progress = _update_status(f"{self.status_dir}", "/bake", 99)
 

@@ -152,7 +152,7 @@ class physicsEngine:
         self.storage_engine.register(
             collection=config.system.collection,
             objs_type="objects",
-            engine="physicsSolver",
+            engine=self.__class__.__name__,
             track_group="audio_force",
             track_names=track_names,
             signal_type="float32",
@@ -160,13 +160,13 @@ class physicsEngine:
             sample_rate=config.system.sample_rate,
             bit_depth=config.system.bit_depth,
             subtype='FLOAT',
-            metadata={'description': 'Raw audio-force tracks from ForceSynth'},
+            metadata={'description': f'Raw audio-force tracks from {self.__class__.__name__}'},
             default_behaviors=default_behaviors,
             default_kinds=default_kinds
         )
 
         self.progress = _update_status(f"{self.status_dir}", "/bake", self.progress + self.progress_ratio)
-        debug_print("Storage schema registered.")
+        debug_print("Force synth Storage schema registered.")
 
     def _proxy(self):
         tasks_proxy = [self.proxy(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]

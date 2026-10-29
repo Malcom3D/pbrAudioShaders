@@ -22,6 +22,7 @@ from typing import Tuple, Optional, List, Dict, Any
 from dataclasses import dataclass, field
 
 from pbrAudioCommon import EntityManager
+from pbrAudioStorage import StorageEngine
 
 from ..lib.proxy_synth import ProxySynth
 from ..lib.proxy_ir_table import ProxyIRTable
@@ -42,6 +43,9 @@ class ProxyEngine:
     ir_table: ProxyIRTable = None
     
     def __post_init__(self):
+        # Initialize StorageEngine
+        self.storage_engine = StorageEngine(self.entity_manager)
+        debug_print("StorageEngine initialized for ProxyEngine.")
         config = self.entity_manager.get('config')
         
         # Initialize proxy synth
@@ -59,6 +63,51 @@ class ProxyEngine:
 
         # Compute IR table from proxy meshes
         self.ir_table.compute_ir_table(proxy_meshes)
+
+    def _register_storage_schema(self):
+        """
+        Registers the data schema for raw proxy synth tracks with the StorageEngine.
+        This defines how the data is organized on the graph.
+        """
+        debug_print("Registering storage schema for proxy synth tracks...")
+        config = self.entity_manager.get('config')
+        track_names = ['impact', 'resonance', 'sliding', 'scraping', 'rolling']
+        if config.system.enable_noise_enhancement:
+            track_names += ['sliding_sound', 'scraping_sound', 'rolling_sound']
+
+        # default_behaviors/kinds = [ collection, engine, object, track, signal ]
+        default_behaviors = {
+            'collection': 'none',
+            'engine': 'none',
+            'object': 'multi',
+            'track': 'single',
+            'signal': 'merge'
+            }
+        default_kinds = {
+            'collection': 'multi-track',
+            'engine': 'multi-track',
+            'object': 'multi-track',
+            'track': 'mono',
+            'signal': 'mono',
+            }
+        self.storage_engine.register(
+            collection=config.system.collection,
+            objs_type="objects",
+            engine=self.__class__.__name__,
+            track_group="modal_displacement",
+            track_names=track_names,
+            signal_type="float32",
+            total_samples=int(self.total_samples),
+            sample_rate=int(config.system.sample_rate),
+            bit_depth=config.system.bit_depth,
+            subtype='FLOAT',
+            metadata={'description': f'Final synthesized proxy tracks from {self.__class__.__name__}'},
+            default_behaviors=default_behaviors,
+            default_kinds=default_kinds
+        )
+
+        self.progress = _update_status(f"{self.status_dir}", "/prebake", 5) # Update progress
+        debug_print("Proxy synth storage schema registered and materialized.")
 
     @delayed
     def compute(self, obj_idx: int, total_samples: int) -> None:

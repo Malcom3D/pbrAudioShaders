@@ -20,7 +20,7 @@ import os
 import json
 import time
 import numpy as np
-import soundfile as sf
+#import soundfile as sf
 from typing import Any, List, Tuple, Dict, Optional
 from dataclasses import dataclass, field
 
@@ -147,7 +147,9 @@ class ModalPlayer:
             nonlocal sample_idx, old_sample_idx, t60_empty
 
             # init var for the current sample
-            rigidbody_output, resonance_output, sliding_output, scraping_output, rolling_output, other_obj_idx = (0 for _ in range(6))
+            rigidbody_output, resonance_output = (0 for _ in range(2))
+            if config.system.enable_noise_enhancement:
+                sliding_output, scraping_output, rolling_output = (0 for _ in range(2))
             rigidbody_buffers = [0 for _ in range(7)]
             coupling_force = [0 for _ in range(7)]
             for synth_type in range(7):
@@ -155,6 +157,7 @@ class ModalPlayer:
 
             # Process events at current sample
             for event in self.score.events:
+                other_obj_idx = None
                 end_sample = min(event.stop_sample + self.t60_samples, self.sample_counter.total_samples - 1)
                 if event.start_sample <= sample_idx and (is_shard_frame == None or is_shard_frame <= sample_idx) and (fracture_frame == None or sample_idx <= fracture_frame) and sample_idx <= end_sample:
                     # Process the current sample
@@ -183,7 +186,7 @@ class ModalPlayer:
                                         resonance_output += self.resonance_synth.process(event_type, vertex_ids, input_force, contact_area, coupling_data)
 #                            t60_empty += 1
                     # Noise
-                    if not contact_area == 0:
+                    if not contact_area == 0 and config.system.enable_noise_enhancement::
                         if synth_type in [2,3] and config.system.enable_noise_enhancement:
                             scraping_output += self.scraping_sound[sample_idx] * contact_area
                             sliding_output += self.sliding_sound[sample_idx] * contact_area
@@ -202,13 +205,15 @@ class ModalPlayer:
                                     if not value == 0:
                                         resonance_output += self.resonance_synth.process(event_type, vertex_ids, input_force, contact_area, coupling_data)
 
-                    self.rigidbody_synth.connected_buffer.write_to_obj(int(other_obj_idx), synth_type, coupling_force[synth_type])
+                    if other_obj_idx is not None:
+                        self.rigidbody_synth.connected_buffer.write_to_obj(int(other_obj_idx), synth_type, coupling_force[synth_type])
 
                     self.rigidbody_synth_track[sample_idx] += rigidbody_output if not np.isnan(rigidbody_output) else 0
                     self.resonance_synth_track[sample_idx] += resonance_output if not np.isnan(resonance_output) else 0
-                    self.sliding_synth_track[sample_idx] += sliding_output if not np.isnan(sliding_output) else 0
-                    self.scraping_synth_track[sample_idx] += scraping_output if not np.isnan(scraping_output) else 0
-                    self.rolling_synth_track[sample_idx] += rolling_output if not np.isnan(rolling_output) else 0
+                    if config.system.enable_noise_enhancement:
+                        self.sliding_synth_track[sample_idx] += sliding_output if not np.isnan(sliding_output) else 0
+                        self.scraping_synth_track[sample_idx] += scraping_output if not np.isnan(scraping_output) else 0
+                        self.rolling_synth_track[sample_idx] += rolling_output if not np.isnan(rolling_output) else 0
         
                 # Update sample indices for next iteration
                 old_sample_idx = sample_idx
@@ -286,10 +291,14 @@ class ModalPlayer:
         tracks_to_save = {
             'rigidbody': self.rigidbody_synth_track,
             'resonance': self.resonance_synth_track,
-            'sliding': self.sliding_synth_track,
-            'scraping': self.scraping_synth_track,
-            'rolling': self.rolling_synth_track,
         }
+
+        if config.system.enable_noise_enhancement:
+            tracks_to_save.update({
+                'sliding': self.sliding_synth_track,
+                'scraping': self.scraping_synth_track,
+                'rolling': self.rolling_synth_track,
+            })
 
         debug_print(f"Writing synth tracks for {config_obj.name} to storage...")
         for track_name, track_data in tracks_to_save.items():
@@ -297,7 +306,7 @@ class ModalPlayer:
                 debug_print(f"Track {track_name} for {config_obj.name} is empty, skipping.")
                 continue
             
-            storage_engine.write(collection=config.system.collection, engine='rigidBody', audio_data=track_data, obj_idx=self.obj_idx, track_name=track_name, sample_start=0, metadata={'format': 'RAW', 'sample_rate': sample_rate, 'subtype': 'FLOAT'})
+            storage_engine.write(collection=config.system.collection, engine='rigidBodyEngine', audio_data=track_data, obj_idx=self.obj_idx, track_name=track_name, sample_start=0, metadata={'format': 'RAW', 'sample_rate': sample_rate, 'subtype': 'FLOAT'})
             debug_print(f"Successfully wrote synth tracks {track_name} for {config_obj.name} to storage.")
 
     def _load_sound_tracks(self, storage_engine: StorageEngine, config_obj: Any):

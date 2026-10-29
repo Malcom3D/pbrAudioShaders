@@ -20,7 +20,7 @@ import os
 import numpy as np
 from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass, field
-import soundfile as sf
+#import soundfile as sf
 from scipy import signal
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal import butter, filtfilt
@@ -76,13 +76,13 @@ class ProxySynth:
         if self.equalizer is None:
             self.equalizer = ProxyEqualizer(self.entity_manager)
         
-        # Set output directory
-        if self.output_dir is None:
-            self.output_dir = f"{config.system.cache_path}/proxy_audio"
-        os.makedirs(self.output_dir, exist_ok=True)
+#        # Set output directory
+#        if self.output_dir is None:
+#            self.output_dir = f"{config.system.cache_path}/proxy_audio"
+#        os.makedirs(self.output_dir, exist_ok=True)
         
-        # Path to audio-force tracks
-        self.audio_force_dir = f"{config.system.cache_path}/audio_force"
+#        # Path to audio-force tracks
+#        self.audio_force_dir = f"{config.system.cache_path}/audio_force"
         
         # Cache for material_key lookups
         self._material_key_cache = {}
@@ -213,68 +213,77 @@ class ProxySynth:
         
         return 0.5  # Default
 
-    def _load_audio_force_tracks(self, obj_name: str) -> Optional[Dict[str, np.ndarray]]:
+    def _load_sound_tracks(self, storage_engine: StorageEngine, config_obj: Any) -> Optional[Dict[str, np.ndarray]]:
         """
-        Load audio-force tracks for an object.
-        
+        Load sound tracks from the StorageEngine.
+
         Returns:
             Dictionary with keys: 'impact', 'sliding', 'scraping', 'rolling', 
             'rolling_sound', 'sliding_sound', 'scraping_sound'
             or None if no tracks found.
         """
         tracks = {}
-        track_names = ['impact', 'sliding', 'scraping', 'rolling', 
-                       'rolling_sound', 'sliding_sound', 'scraping_sound']
+        track_names = ['impact', 'sliding', 'scraping', 'rolling', 'rolling_sound', 'sliding_sound', 'scraping_sound']
         
         for track_name in track_names:
-            track_file = f"{self.audio_force_dir}/{obj_name}_{track_name}.raw"
-            
-            if os.path.exists(track_file):
-                try:
-                    track_data = np.fromfile(track_file, dtype=np.float32)
-                    if len(track_data) > 0:
-                        tracks[track_name] = track_data
-                        debug_print(f"Loaded {track_name} track: {len(track_data)} samples")
-                except Exception as e:
-                    debug_print(f"Error loading {track_name} track: {e}")
+            track_data = storage_engine.read(collection=collection, engine='physicsSolver', obj_idx=config_obj.idx, track_name=track_name)
+            if len(track_data) > 0:
+                tracks[track_name] = track_data
+                debug_print(f"Loaded {track_name} track: {len(track_data)} samples")
         
         if not tracks:
             return None
         
         return tracks
 
-    def _save_audio(self, config_obj: Any, mixed: np.ndarray, 
-                    tracks: Dict[str, np.ndarray]) -> None:
-        """Save synthesized audio to files."""
-        # Save mixed audio
-        mixed_file = f"{self.output_dir}/{config_obj.name}_proxy_mixed.wav"
-        sf.write(mixed_file, mixed, self.sample_rate, subtype='FLOAT')
-        debug_print(f"Saved mixed proxy audio to {mixed_file}")
-        
-        # Save individual tracks
+    def save_synth_tracks(self, storage_engine: StorageEngine, config_obj: Any, tracks: Dict[str, np.ndarray]):
+        """
+        Save individual tracks to the StorageEngine.
+        """
+        config = self.entity_manager.get('config')
+        sample_rate = int(config.system.sample_rate)
+
+        debug_print(f"Writing synth tracks for {config_obj.name} to storage...")
         for track_name, track_data in tracks.items():
-            if len(track_data) > 0:
-                track_file = f"{self.output_dir}/{config_obj.name}_proxy_{track_name}.wav"
-                sf.write(track_file, track_data, self.sample_rate, subtype='FLOAT')
-                debug_print(f"Saved {track_name} track to {track_file}")
-        
-        # Save metadata
-        import json
-        metadata = {
-            'object_name': config_obj.name,
-            'object_idx': config_obj.idx,
-            'proxy_type': config_obj.proxy_type,
-            'sample_rate': self.sample_rate,
-            'total_samples': len(mixed),
-            'duration': len(mixed) / self.sample_rate,
-            'tracks': list(tracks.keys())
-        }
-        
-        metadata_file = f"{self.output_dir}/{config_obj.name}_proxy_metadata.json"
-        with open(metadata_file, 'w') as f:
-            json.dump(metadata, f, indent=2)
-        
-        debug_print(f"Saved metadata to {metadata_file}")
+            if not np.any(track_data):
+                debug_print(f"Track {track_name} for {config_obj.name} is empty, skipping.")
+                continue
+
+            storage_engine.write(collection=config.system.collection, engine='ProxyEngine', audio_data=track_data, obj_idx=config_obj.idx, track_name=track_name, sample_start=0, metadata={'format': 'RAW', 'sample_rate': sample_rate, 'subtype': 'FLOAT'})
+            debug_print(f"Successfully wrote synth tracks {track_name} for {config_obj.name} to storage.")
+
+#    def _save_audio(self, config_obj: Any, mixed: np.ndarray, 
+#                    tracks: Dict[str, np.ndarray]) -> None:
+#        """Save synthesized audio to files."""
+#        # Save mixed audio
+#        mixed_file = f"{self.output_dir}/{config_obj.name}_proxy_mixed.wav"
+#        sf.write(mixed_file, mixed, self.sample_rate, subtype='FLOAT')
+#        debug_print(f"Saved mixed proxy audio to {mixed_file}")
+#        
+#        # Save individual tracks
+#        for track_name, track_data in tracks.items():
+#            if len(track_data) > 0:
+#                track_file = f"{self.output_dir}/{config_obj.name}_proxy_{track_name}.wav"
+#                sf.write(track_file, track_data, self.sample_rate, subtype='FLOAT')
+#                debug_print(f"Saved {track_name} track to {track_file}")
+#        
+#        # Save metadata
+#        import json
+#        metadata = {
+#            'object_name': config_obj.name,
+#            'object_idx': config_obj.idx,
+#            'proxy_type': config_obj.proxy_type,
+#            'sample_rate': self.sample_rate,
+#            'total_samples': len(mixed),
+#            'duration': len(mixed) / self.sample_rate,
+#            'tracks': list(tracks.keys())
+#        }
+#        
+#        metadata_file = f"{self.output_dir}/{config_obj.name}_proxy_metadata.json"
+#        with open(metadata_file, 'w') as f:
+#            json.dump(metadata, f, indent=2)
+#        
+#        debug_print(f"Saved metadata to {metadata_file}")
 
     def compute(self, obj_idx: int, total_samples: int) -> None:
         """
@@ -311,7 +320,7 @@ class ProxySynth:
         debug_print(f'IR matrix shape: {ir_matrix.shape} for {config_obj.name}')
         
         # Load audio-force tracks
-        audio_tracks = self._load_audio_force_tracks(config_obj.name)
+        audio_tracks = self._load_sound_tracks(self.storage_engine, config_obj)
         
         if audio_tracks is None:
             debug_print(f"No audio-force tracks found for {config_obj.name}")
@@ -357,34 +366,37 @@ class ProxySynth:
             
             processed_tracks[track_name] = processed
 
-        # Mix all tracks
-        mixed = np.zeros(total_samples, dtype=np.float32)
-
-        for track_name in processed_tracks.keys():
-            track = processed_tracks[track_name]
-            
-            # Apply track-specific volume adjustments
-            if track_name == 'impact':
-                max_val = np.max(np.abs(track))
-                if max_val > 0:
-                    track = track / max_val * 0.9
-            elif track_name == 'rolling':
-                track *= 0.01
-            elif track_name in ['sliding', 'scraping']:
-                track *= 0.0075
-            elif track_name == 'rolling_sound':
-                track *= 2.5
-            elif track_name == 'sliding_sound':
-                track *= 1.0
-            elif track_name == 'scraping_sound':
-                track *= 5
-
-            mixed += track
+#        # Mix all tracks
+#        mixed = np.zeros(total_samples, dtype=np.float32)
+#
+#        for track_name in processed_tracks.keys():
+#            track = processed_tracks[track_name]
+#            
+#            # Apply track-specific volume adjustments
+#            if track_name == 'impact':
+#                max_val = np.max(np.abs(track))
+#                if max_val > 0:
+#                    track = track / max_val * 0.9
+#            elif track_name == 'rolling':
+#                track *= 0.01
+#            elif track_name in ['sliding', 'scraping']:
+#                track *= 0.0075
+#            elif track_name == 'rolling_sound':
+#                track *= 2.5
+#            elif track_name == 'sliding_sound':
+#                track *= 1.0
+#            elif track_name == 'scraping_sound':
+#                track *= 5
+#
+#            mixed += track
         
-        # Normalize
-        max_val = np.max(np.abs(mixed))
-        if max_val > 0:
-            mixed /= max_val * 0.9
+#        # Normalize
+#        max_val = np.max(np.abs(mixed))
+#        if max_val > 0:
+#            mixed /= max_val * 0.9
         
-        # Save output
-        self._save_audio(config_obj, mixed, processed_tracks)
+#        # Save output
+#        self._save_audio(config_obj, mixed, processed_tracks)
+        # Write the final tracks to storage
+        self.save_synth_tracks(storage_engine, config_obj, processed_tracks)
+
