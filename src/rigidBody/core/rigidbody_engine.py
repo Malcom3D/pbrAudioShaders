@@ -253,7 +253,7 @@ class rigidBodyEngine:
 
         connected_buffer = ConnectedBuffer()
         _ = self.entity_manager.register('connected_buffer', connected_buffer)
-        sample_counter = SampleCounter(status_file=f"{self.status_dir}/bake")
+        sample_counter = SampleCounter(status_dir=f"{self.status_dir}")
         sample_counter.set_total_samples(self.total_samples)
         _ = self.entity_manager.register('sample_counter', sample_counter)
 
