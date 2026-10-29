@@ -282,9 +282,9 @@ class rigidBodyEngine:
         self.progress = _update_status(f"{self.status_dir}", "/bake", 90)
 
     def _post_process(self):
-        from ..lib.synth_post_process import SynthPostProcess
+        from ..lib.synth_post_process import postProcess
 
-        sp = SynthPostProcess(self.entity_manager, storage_engine=self.storage_engine)
+        sp = postProcess(self.entity_manager, storage_engine=self.storage_engine)
         sp.apply()
 
         self.progress = _update_status(f"{self.status_dir}", "/bake", 99)

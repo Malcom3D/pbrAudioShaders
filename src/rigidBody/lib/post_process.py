@@ -19,7 +19,7 @@
 """ 
 Non-destructive chain writer for rigidBodyEngine tracks.
 
-This replaces the old pbrAudioPostProcess.SynthPostProcess. Instead of
+This replaces the old pbrAudioPostProcess.postProcess. Instead of
 loading/writing audio, it writes `chains` metadata onto the AudioDataType
 nodes produced by rigidBodyEngine in pbrAudioStorage. The DAG evaluator
 inside StorageEngine.read() applies them.
@@ -54,7 +54,7 @@ DEFAULT_TRACK_FORCE_MAP: Dict[str, str] = {
 }
 
 # Modal Player also writes these noise-enhancement tracks - the old
-# SynthPostProcess did not process them, so we skip them here. If you want
+# postProcess did not process them, so we skip them here. If you want
 # to post-process them too, add them to TRACKS_TO_POST.
 DEFAULT_TRACKS_TO_POST: List[str] = ['rigidbody', 'resonance', 'sliding', 'scraping', 'rolling']
 
@@ -66,7 +66,7 @@ DEFAULT_TRACKS_TO_POST: List[str] = ['rigidbody', 'resonance', 'sliding', 'scrap
 #   {"type": "<processor name>", "params": {...}}
 # and validated by pbrAudioSignals.get_processor().
 #
-# The old SynthPostProcess applied these steps in order:
+# The old postProcess applied these steps in order:
 #   1. _apply_noise_gate           (force-correlated)
 #   2. _spectral_denoise           (force-correlated, STFT)
 #   3. _adaptive_smoothing         (force-correlated EMA)
@@ -181,7 +181,7 @@ def _build_track_chain(track_name: str, cfg: Any) -> Dict[str, Any]:
 
 
 @dataclass
-class SynthPostProcess:
+class postProcess:
     """
     Writes non-destructive chains metadata for rigidBodyEngine's tracks.
 
@@ -251,7 +251,7 @@ class SynthPostProcess:
                 patched += 1
         if patched:
             debug_print(
-                f"SynthPostProcess: patched {patched} tracks for "
+                f"postProcess: patched {patched} tracks for "
                 f"{obj_name or obj_idx}"
             )
         return patched
@@ -315,7 +315,7 @@ class SynthPostProcess:
 
         if path not in backend._wstore:
             debug_print(
-                f"SynthPostProcess: {path} not materialized - skipping "
+                f"postProcess: {path} not materialized - skipping "
                 f"(is the object dynamic and was the schema registered?)"
             )
             return False
@@ -323,7 +323,7 @@ class SynthPostProcess:
         try:
             track_arr = backend._wstore[path]
         except Exception as e:
-            debug_print(f"SynthPostProcess: cannot open {path}: {e}")
+            debug_print(f"postProcess: cannot open {path}: {e}")
             return False
 
 #        # 1) Attach to the track-level metadata.
