@@ -31,7 +31,7 @@ from dask import config as dask_config
 #dask_config.set(scheduler='processes', num_workers=1024)
 dask_config.set({'num_workers': 1024, 'optimization.fuse.active': True, 'optimization.fuse.max_depth': 10,})
 
-from pbrAudioCommon import EntityManager, CollisionData, ForceDataSequence, tmpTrajectoryData, ResumeData
+from pbrAudioCommon import EntityManager, CollisionData, ForceDataSequence, tmpTrajectoryData
 from pbrAudioCommon import _update_status
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
@@ -65,9 +65,6 @@ class physicsEngine:
 
         self.storage_engine = StorageEngine(self.entity_manager)
         debug_print("StorageEngine initialized.")
-
-        resume_data = ResumeData(self.entity_manager)
-        resume_data.load_data()
 
         self.status_dir = f"{config.system.cache_path}/status/{__class__.__name__}"
         self.progress_ratio = 100/13 # 100/num_functions
