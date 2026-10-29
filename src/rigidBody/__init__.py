@@ -39,7 +39,7 @@ from .core.modal_luthier import ModalLuthier
 from .core.modal_player import ModalPlayer
 from .lib.connected_buffer import ConnectedBuffer
 from .lib.sample_counter import SampleCounter
-from .lib.synth_post_process import postProcess
+from .lib.post_process import postProcess
 
 __all__ = [
      'Pym2f',
