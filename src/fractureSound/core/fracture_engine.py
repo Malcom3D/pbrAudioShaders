@@ -22,7 +22,7 @@ from typing import List, Tuple, Any, Dict, Optional
 from dataclasses import dataclass, field
 from dask import delayed, compute
 
-from pbrAudioCommon import EntityManager, ResumeData, CollisionData, ForceDataSequence, TrajectoryData, FractureEvent, FractureType
+from pbrAudioCommon import EntityManager, CollisionData, ForceDataSequence, TrajectoryData, FractureEvent, FractureType
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
 from ..lib.fracture_detector import FractureDetector
@@ -54,9 +54,6 @@ class fractureEngine:
         
         set_debug(config.system.debug)
         set_debug_prefix(self.__class__.__name__)
-
-        resume_data = ResumeData(self.entity_manager)
-        resume_data.load_data()
 
         self.collisions_dir = f"{config.system.cache_path}/collisions"
         self.trajectories_dir = f"{config.system.cache_path}/trajectories"

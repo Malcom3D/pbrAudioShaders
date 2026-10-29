@@ -25,7 +25,7 @@ from dask import delayed, compute
 from dask import config as dask_config
 dask_config.set({'num_workers': 1024, 'optimization.fuse.active': True, 'optimization.fuse.max_depth': 10,})
 
-from pbrAudioCommon import EntityManager, ParticlesTrajectoryData, ResumeData
+from pbrAudioCommon import EntityManager, ParticlesTrajectoryData
 from pbrAudioCommon import _update_status
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
@@ -47,9 +47,6 @@ class particlesEngine:
 
         set_debug(config.system.debug)
         set_debug_prefix(self.__class__.__name__)
-
-        resume_data = ResumeData(self.entity_manager)
-        resume_data.load_data()
 
         self.status_dir = f"{config.system.cache_path}/status/{__class__.__name__}"
         os.makedirs(self.status_dir, exist_ok=True)
