@@ -161,7 +161,7 @@ class Modal4Proxy:
         max_coords = np.max(proxy_vertices, axis=0)
         extents = max_coords - min_coords
         # Use 1/20 of the largest extent, with a floor in config.system.voxel_size
-        voxel_size = max(max(extents) / 20.0, 0.001)
+        voxel_size = float(max(float(np.max(extents)) / 20.0, 0.001))
 
         # Instantiate Approx2Faust
         approx = Approx2Faust() 
