@@ -186,7 +186,7 @@ class ModalPlayer:
                                         resonance_output += self.resonance_synth.process(event_type, vertex_ids, input_force, contact_area, coupling_data)
 #                            t60_empty += 1
                     # Noise
-                    if not contact_area == 0 and config.system.enable_noise_enhancement::
+                    if not contact_area == 0 and config.system.enable_noise_enhancement:
                         if synth_type in [2,3] and config.system.enable_noise_enhancement:
                             scraping_output += self.scraping_sound[sample_idx] * contact_area
                             sliding_output += self.sliding_sound[sample_idx] * contact_area
