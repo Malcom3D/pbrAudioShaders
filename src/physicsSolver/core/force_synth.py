@@ -173,13 +173,6 @@ class ForceSynth:
             tracks['scraping_sound'] = scraping_sound
             tracks['rolling_sound'] = rolling_sound
 
-        if config.system.enable_denoiser:
-#            # Save unprocessed tracks
-#            self._save_tracks(config_obj, tracks, total_samples, int(sample_rate), unprocessed=True)
-            # Write unprocessed tracks to a different collection or with a prefix
-            self._write_tracks_to_storage(config_obj, tracks, unprocessed=True)
-
-#        self._save_tracks(config_obj, tracks, total_samples, int(sample_rate))
         self._write_tracks_to_storage(config_obj, tracks)
 
     def _synthesize_impact(self, force: Any, collision: Any, config_obj: Any, other_config_obj: Any, sample_idx: float, total_samples: int, sample_rate: int) -> Dict[str, Any]:
@@ -943,7 +936,7 @@ class ForceSynth:
             return
 
         debug_print(f"Writing tracks for object {config_obj.name} to storage...")
-        
+
         for track_name, track_data in tracks.items():
             if not np.any(track_data):
                 continue # Skip silent tracks
@@ -953,8 +946,15 @@ class ForceSynth:
             self._futures.append(fut)
             self._futures = [f for f in self._futures if not f.done()]
 
-        self._executor.shutdown(wait=True)
         debug_print(f"Successfully wrote tracks for {config_obj.name} to storage.")
+
+    def close(self) -> None:
+        """Block until all pending writes are done, then release the executor."""
+        if self._executor is None:
+            return
+        self._executor.shutdown(wait=True)
+        self._futures.clear()
+        self._executor = None
 
 #    def _save_tracks(self, config_obj: Any, tracks: Dict[str, np.ndarray], total_samples: int, sample_rate: int, unprocessed: bool = False):
 #        """

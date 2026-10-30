@@ -394,7 +394,10 @@ class physicsEngine:
     @delayed
     def force_synth(self, obj_idx: int, storage_engine: StorageEngine):
         fsy = ForceSynth(self.entity_manager, storage_engine)
-        fsy.compute(obj_idx)
+        try:
+            fsy.compute(obj_idx)
+        finally:
+            fsy.close()
 
     @delayed
     def collision(self, collision: CollisionData):
