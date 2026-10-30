@@ -93,7 +93,7 @@ def _build_track_chain(track_name: str, cfg: Any) -> Dict[str, Any]:
     # --- 1. Force-correlated noise gate --------------------------------
     if cfg.postprocess.dynamic_denoise_enabled:
         steps.append({
-            "type": "force_noise_gate",
+            "type": "adaptive_noise_gate",
             "params": {
                 "threshold_db": cfg.postprocess.noise_gate_threshold_db,
                 "attack_ms": 2.0,
