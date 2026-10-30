@@ -137,7 +137,7 @@ def _build_track_chain(track_name: str, cfg: Any) -> Dict[str, Any]:
         steps.append({
             "type": "force_phase_align",
             "params": {
-                "crossfade_samples": cfg.post.postprocess.crossfade_samples,
+                "crossfade_samples": cfg.postprocess.crossfade_samples,
                 "sample_rate": cfg.system.sample_rate,
             },
         })

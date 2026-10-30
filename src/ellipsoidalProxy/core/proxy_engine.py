@@ -94,7 +94,7 @@ class ProxyEngine:
             collection=config.system.collection,
             objs_type="objects",
             engine=self.__class__.__name__,
-            track_group="modal_displacement",
+            track_group="modal-displacement",
             track_names=track_names,
             signal_type="float32",
             total_samples=int(self.total_samples),
