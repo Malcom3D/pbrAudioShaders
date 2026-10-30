@@ -17,43 +17,51 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import os
-import json
 import numpy as np
-from typing typing import Dict, List, Tuple, Optional, Any
-from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
+
+from dataclasses import dataclass
 
 from pbrAudioCommon import EntityManager
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
 from pbrAudioStorage import StorageEngine
-from pbrAudioSignals import (
-    ChainProcessor,
-    DCBlocker,
-    AdaptiveNoiseGate,
-    TemporalSmoothing,
-    SpectralDenoise,
-    EnvelopeShaper,
-    AdaptiveGaussianSmoothing,
-    ForceWeightedGain,
-    GlobalNormalize,
-    PerTrackNormalize,
-    build_chain,
-)
+from pbrAudioSignals.core.groups import AUDIO_FORCE, GENERIC
+
+
+# Track name -> (semantic track type, default processor params)
+# The semantics drive the choice of processor params below.
+_TRACK_TYPES: Dict[str, str] = {
+    'impact':            'impact',
+    'sliding':           'continuous',
+    'scraping':          'continuous',
+    'rolling':           'continuous',
+    'non_collision':     'ambient',
+    'coupling_strength': 'control',
+}
+
+_NOISE_TRACKS: Dict[str, str] = {
+    'sliding_sound':  'noise',
+    'scraping_sound': 'noise',
+    'rolling_sound':  'noise',
+}
+
 
 @dataclass
 class postProcess:
     """
     Non-destructive post-processing engine for synthesized audio forces.
 
-    Instead of writing processed audio to disk, this engine writes processing
-    chain metadata to the StorageEngine. The processing chains are then applied
-    at read time by the DAG evaluator.
+    Writes processor *chain metadata* onto each track's AudioDataType via the
+    StorageEngine. Actual DSP runs at read time through the DAG evaluator in
+    pbrAudioStorage, so nothing is ever re-computed on disk.
 
-    This replaces the deprecated AudioForcePostProcessEngine that used the
-    old postProcess module.
+    This replaces the deprecated AudioForcePostProcessEngine (which used the
+    old postProcess module and wrote processed WAVs).
     """
+
     entity_manager: EntityManager
-    storage_engine: StorageEngine = None
+    storage_engine: Optional[StorageEngine] = None
 
     def __post_init__(self):
         config = self.entity_manager.get('config')
@@ -61,487 +69,359 @@ class postProcess:
         set_debug_prefix(self.__class__.__name__)
 
         self.config = config
-        self.denoiser_config = config.denoiser
-        self.postprocess_config = config.postprocess
+        self.denoiser = config.denoiser
+        self.postprocess = config.postprocess
 
-        # Initialize or reuse StorageEngine
         if self.storage_engine is None:
             self.storage_engine = StorageEngine(self.entity_manager)
 
-    def process(self) -> None:
-        """
-        Configure processing chains for all objects.
-        Writes chain metadata to StorageEngine for read-time processing.
-        """
-        config = self.config
+        # Engine key as registered in physicsEngine._register_storage_schema
+        self.engine = self.__class__.__name__  # -> "postProcess"
+        # Fallback engine name used by ForceSynth. If your ForceSynth writes
+        # under "physicsSolver" keep the constant below in sync.
+        self.force_engine = "physicsSolver"
 
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+    def process(self) -> None:
+        """Configure read-time processing chains for every dynamic object."""
+        config = self.config
         debug_print("Configuring processing chains...")
 
-        # First, compute global normalization value across all objects
+        # Global normalisation target: peak across all *raw* tracks.
         global_peak = self._compute_global_peak()
         debug_print(f"Global peak value: {global_peak}")
 
-        # Configure chains for each object
-        obj_count = 0
+        configured = 0
         for config_obj in config.objects:
             if config_obj.static:
                 continue
-
-            # Check if object has audio-force tracks
-            if not self._has_audio_force_tracks(config_obj.idx):
+            if not self._object_has_tracks(config_obj.idx):
                 continue
-
-            # Build and register processing chain
             self._configure_object_chains(config_obj, global_peak)
-            obj_count += 1
+            configured += 1
 
-        debug_print(f"Configured processing chains for {obj_count} objects")
+        debug_print(f"Configured processing chains for {configured} objects")
 
-    def _has_audio_force_tracks(self, obj_idx: int) -> bool:
-        """Check if an object has audio-force tracks in storage."""
-        try:
-            # Try to read a track to see if it exists
-            track_data = self.storage_engine.read(
-                engine='physicsSolver',
-                obj_idx=obj_idx,
-                track_name='impact'
-            )
-            return track_data is not None and track_data.size > 0
-        except Exception:
-            return False
-
-    def _compute_global_peak(self) -> float:
+    def clear_chains(self, obj_idx: Optional[int] = None,
+                     track_name: Optional[str] = None) -> None:
         """
-        Compute the global peak value across all audio-force tracks.
-        Used for global normalization.
+        Clear processing chains via the StorageEngine.
+
+        Args:
+            obj_idx    : if None, clear all dynamic objects.
+            track_name : if None, clear every track of the object(s).
         """
         config = self.config
-        max_peak = 0.0
 
-        track_names = ['non_collision', 'impact', 'sliding', 'scraping', 'rolling',
-                       'coupling_strength']
+        if obj_idx is not None:
+            obj_indices = [obj_idx]
+        else:
+            obj_indices = [o.idx for o in config.objects if not o.static]
+
+        track_names = list(_TRACK_TYPES.keys())
         if config.system.enable_noise_enhancement:
-            track_names += ['sliding_sound', 'scraping_sound', 'rolling_sound']
+            track_names += list(_NOISE_TRACKS.keys())
 
-        for config_obj_obj in config.objects:
-            if config_obj.static:
+        cleared = 0
+        for o_idx in obj_indices:
+            if not self._object_has_tracks(o_idx):
                 continue
 
-            for track_name in track_names:
+            targets = [track_name] if track_name else track_names
+            for t_name in targets:
                 try:
-                    track_data = self.storage_engine.read(
-                        engine='physicsSolver',
-                        obj_idx=config_obj.idx,
-                        track_name=track_name
+                    n = self.storage_engine.clear_chains(
+                        collection=config.system.collection,
+                        engine=self.force_engine,
+                        obj_idx=o_idx,
+                        track_name=t_name,
                     )
-                    if track_data is not None and track_data.size > 0:
-                        peak = float(np.max(np.abs(track_data)))
-                        max_peak = max(max_peak, peak)
+                    cleared += n
+                except Exception as e:
+                    debug_print(
+                        f"clear_chains failed for {o_idx}/{t_name}: {e}"
+                    )
+
+        debug_print(f"Cleared {cleared} chain-bearing nodes")
+
+    def get_chain_spec(self, obj_idx: int, track_name: str) -> Optional[Dict[str, Any]]:
+        """Read the current chain spec for an object's track (metadata only)."""
+        try:
+            meta = self.storage_engine.get_track_meta(
+                collection=self.config.system.collection,
+                engine=self.force_engine,
+                obj_idx=obj_idx,
+                track_name=track_name,
+            )
+        except Exception as e:
+            debug_print(f"get_chain_spec: {e}")
+            return None
+
+        # Track-level chains are the mirror that set_chains() writes.
+        return meta.chains
+
+    # ------------------------------------------------------------------
+    # Discovery helpers
+    # ------------------------------------------------------------------
+    def _object_has_tracks(self, obj_idx: int) -> bool:
+        """
+        True iff *any* physicsSolver track node exists for this object.
+
+        We use the StorageEngine.read() with unprocessed=True so the DAG
+        evaluator never tries to run a chain that isn't installed yet.
+        """
+        for t_name in _TRACK_TYPES:
+            try:
+                data = self.storage_engine.read(
+                    collection=self.config.system.collection,
+                    engine=self.force_engine,
+                    obj_idx=obj_idx,
+                    track_name=t_name,
+                    signal_name=None,
+                    unprocessed=True,
+                )
+                if data is not None and data.size > 0 and np.any(data):
+                    return True
+            except Exception:
+                continue
+        return False
+
+    def _compute_global_peak(self) -> float:
+        """Peak across all raw (unprocessed) physicsSolver tracks."""
+        config = self.config
+        all_tracks = list(_TRACK_TYPES.keys())
+        if config.system.enable_noise_enhancement:
+            all_tracks += list(_NOISE_TRACKS.keys())
+
+        max_peak = 0.0
+        for config_obj in config.objects:
+            if config_obj.static:
+                continue
+            for t_name in all_tracks:
+                try:
+                                       data = self.storage_engine.read(
+                        collection=config.system.collection,
+                        engine=self.force_engine,
+                        obj_idx=config_obj.idx,
+                        track_name=t_name,
+                        signal_name=None,
+                        unprocessed=True,
+                    )
+                    if data is not None and data.size > 0:
+                        max_peak = max(max_peak, float(np.max(np.abs(data))))
                 except Exception:
                     continue
 
         return max_peak if max_peak > 0 else 1.0
 
+    # ------------------------------------------------------------------
+    # Chain construction
+    # ------------------------------------------------------------------
     def _configure_object_chains(self, config_obj: Any, global_peak: float) -> None:
-        """
-        Configure processing chains for all tracks of a single object.
-
-        Args:
-            config_obj: Object configuration
-            global_peak: Global peak value for normalization
-        """
+        """Build & attach chain specs for for every track of one object."""
         config = self.config
 
-        # Determine which tracks exist and their types
-        track_types = {
-            'impact': 'impact',
-            'sliding': 'continuous',
-            'scraping': 'continuous',
-            'rolling': 'continuous',
-            'non_collision': 'ambient',
-            'coupling_strength': 'control',
-        }
-
+        track_types = dict(_TRACK_TYPES)
         if config.system.enable_noise_enhancement:
-            track_types.update({
-                'sliding_sound': 'noise',
-                'scraping_sound': 'noise',
-                'rolling_sound': 'noise',
-            })
+            track_types.update(_NOISE_TRACKS)
 
         for track_name, track_type in track_types.items():
-            # Build chain specification for this track
+            # Only touch tracks that actually contain audio.
+            if not self._track_has_audio(config_obj.idx, track_name):
+                continue
+
             chain_spec = self._build_chain_spec(
                 track_name=track_name,
                 track_type=track_type,
                 config_obj=config_obj,
-                global_peak=global_peak
+                global_peak=global_peak,
             )
 
-            if chain_spec:
-                # Write chain metadata to storage
-                self._write_chain_metadata(
+            if not chain_spec:
+                continue
+
+            try:
+                n = self.storage_engine.set_chains(
+                    collection=config.system.collection,
+                    engine=self.force_engine,
                     obj_idx=config_obj.idx,
                     track_name=track_name,
-                    chain_spec=chain_spec
+                    chains={
+                        "op": "sequential",
+                        "processors": chain_spec,
+                    },
                 )
-                debug_print(f"Configured chain for {config_obj.name}/{track_name}: "
-                           f"{len(chain_spec)} processors")
+                debug_print(
+                    f"Configured chain for {config_obj.name}/{track_name}: "
+                    f"{len(chain_spec)} processors ({n} nodes updated)"
+                )
+            except Exception as e:
+                debug_print(
+                    f"set_chains failed for {config_obj.name}/{track_name}: {e}"
+                )
+
+    def _track_has_audio(self, obj_idx: int, track_name: str) -> bool:
+        try:
+            data = self.storage_engine.read(
+                collection=self.config.system.system.collection,
+                engine=self.force_engine,
+                obj_idx=obj_idx,
+                track_name=track_name,
+                signal_name=None,
+                unprocessed=True,
+            )
+            return data is not None and data.size > 0 and bool(np.any(data))
+        except Exception:
+            return False
 
     def _build_chain_spec(self, track_name: str, track_type: str,
                           config_obj: Any, global_peak: float) -> List[Dict[str, Any]]:
-        """
-        Build the chain specification for a specific track.
+        """Build a list of {type, params} dicts for one track."""
+        denoiser = self.denoiser
+        pp = self.postprocess
+        sr = self.config.system.sample_rate
 
-        Args:
-            track_name: Name of the track
-            track_type: Type of track ('impact', 'continuous', 'noise', 'ambient', 'control')
-            config_obj: Object configuration
-            global_peak: Global peak value
-
-        Returns:
-            List of processor specifications
-        """
-        chain = []
-        denoiser = self.denoiser_config
-        postprocess = self.postprocess_config
-
-        # coupling_strength is a control signal, minimal processing
+        # Control signal: leave alone.
         if track_type == 'control':
-            return []  # No processing for control signals
+            return []
 
-        # DC blocker (always first if enabled)
-        if denoiser.enable_dc_blocker or postprocess.dynamic_denoise_enabled:
+        chain: List[Dict[str, Any]] = []
+
+        # --- 1. DC blocker (always first if enabled) ---
+        if denoiser.enable_dc_blocker or pp.dynamic_denoise_enabled:
             chain.append({
-                'type': 'dc_blocker',
-                'params': {
-                    'alpha': denoiser.dc_blocker_alpha if denoiser.enable_dc_blocker else 0.999
-                }
+                "type": "dc_blocker",
+                "params": {
+                    "alpha": denoiser.dc_blocker_alpha
+                    if denoiser.enable_dc_blocker else 0.999,
+                },
             })
 
-        # Adaptive noise gate with force correlation
-        if denoiser.enable_noise_gate or postprocess.dynamic_denoise_enabled:
-            # Different thresholds for different track types
-            if track_type == 'impact':
-                threshold_db = -70.0  # Preserve more for impacts
-                force_weight = 0.7    # Strong force correlation
-            elif track_type == 'continuous':
-                threshold_db = -60.0
-                force_weight = 0.5
-            elif track_type == 'noise':
-                threshold_db = -50.0
-                force_weight = 0.3
-            else:  # ambient
-                threshold_db = -40.0
-                force_weight = 0.1
-
+        # --- 2. Adaptive noise gate (force-correlated) ---
+        if denoiser.enable_noise_gate or pp.dynamic_denoise_enabled:
+            threshold_db, force_weight = self._gate_params_for(track_type)
             chain.append({
-                'type': 'adaptive_noise_gate',
-                'params': {
-                    'sample_rate': self.config.system.sample_rate,
-                    'threshold_db': threshold_db,
-                    'attack_ms': denoiser.gate_attack_ms,
-                    'release_ms': denoiser.gate_release_ms,
-                    'hold_ms': denoiser.gate_hold_ms,
-                    'force_weight': force_weight
-                }
+                "type": "adaptive_noise_gate",
+                "params": {
+                    "sample_rate": sr,
+                    "threshold_db": threshold_db,
+                    "attack_ms": denoiser.gate_attack_ms,
+                    "release_ms": denoiser.gate_release_ms,
+                    "hold_ms": denoiser.gate_hold_ms,
+                    "force_weight": force_weight,
+                },
             })
 
-        # Temporal smoothing (preserves transients)
-        if denoiser.enable_temporal_smoothing or postprocess.smoothing_enabled:
-            # Different windows for different tracks
-            if track_type == 'impact':
-                window = 3  # Minimal smoothing for impacts
-            elif track_type == 'continuous':
-                window = denoiser.temporal_smoothing_window
-            else:
-                window = 5
-
+        # --- 3. Temporal smoothing ---
+        if denoiser.enable_temporal_smoothing or pp.smoothing_enabled:
+            window = 3 if track_type == 'impact' else (
+                denoiser.temporal_smoothing_window if track_type == 'continuous' else 5
+            )
             chain.append({
-                'type': 'temporal_smoothing',
-                'params': {
-                    'window': window,
-                    'transient_threshold': 0.15
-                }
+                "type": "temporal_smoothing",
+                "params": {
+                    "window": window,
+                    "transient_threshold": 0.15,
+                },
             })
 
-        # Spectral denoising
-        if denoiser.enable_spectral_noise_reduction or postprocess.dynamic_denoise_enabled:
-            # Different reduction strengths for different tracks
-            if track_type == 'impact':
-                reduction_quiet = 0.5   # Less reduction for impacts
-                reduction_loud = 0.1
-            elif track_type == 'continuous':
-                reduction_quiet = postprocess.spectral_reduction_strength
-                reduction_loud = 0.2
-            elif track_type == 'noise':
-                reduction_quiet = 0.9   # More reduction for noise tracks
-                reduction_loud = 0.3
-            else:
-                reduction_quiet = 1.0
-                reduction_loud = 0.4
-
+        # --- 4. Spectral denoising ---
+        if denoiser.enable_spectral_noise_reduction or pp.dynamic_denoise_enabled:
+            quiet, loud = self._spectral_params_for(track_type, pp)
             chain.append({
-                'type': 'spectral_denoise',
-                'params': {
-                    'n_fft': denoiser.spectral_fft_size,
-                    'hop_length': denoiser.spectral_hop_size,
-                    'reduction_strength_quiet': reduction_quiet,
-                    'reduction_strength_loud': reduction_loud,
-                    'noise_floor_percentile': 10.0
-                }
+                "type": "spectral_denoise",
+                "params": {
+                    "n_fft": denoiser.spectral_fft_size,
+                    "hop_length": denoiser.spectral_hop_size,
+                    "reduction_strength_quiet": quiet,
+                    "reduction_strength_loud": loud,
+                    "noise_floor_percentile": 10.0,
+                },
             })
 
-        # Envelope shaping
+        # --- 5. Envelope shaping ---
         if denoiser.enable_envelope_shaping:
             chain.append({
-                'type': 'envelope_shaper',
-                'params': {
-                    'depth': 0.5 if track_type == 'continuous' else 0.3
-                }
+                "type": "envelope_shaper",
+                "params": {
+                    "depth": 0.5 if track_type == 'continuous' else 0.3,
+                },
             })
 
-        # Gaussian adaptive smoothing
+        # --- 6. Gaussian adaptive smoothing ---
         if denoiser.enable_gaussian_adaptive_smoothing:
             chain.append({
-                'type': 'adaptive_gaussian',
-                'params': {
-                    'sigma_min': denoiser.gaussian_sigma_min,
-                    'sigma_max': denoiser.gaussian_sigma_max,
-                    'force_threshold': denoiser.gaussian_force_threshold
-                }
+                "type": "adaptive_gaussian",
+                "params": {
+                    "sigma_min": denoiser.gaussian_sigma_min,
+                    "sigma_max": denoiser.gaussian_sigma_max,
+                    "force_threshold": denoiser.gaussian_force_threshold,
+                },
             })
 
-        # Force-weighted gain
-        if postprocess.dynamic_denoise_enabled or postprocess.smoothing_enabled:
-            # Different target RMS for different track types
-            if track_type == 'impact':
-                target_rms = 0.2
-                gain_low = 0.5
-                gain_high = 1.2
-            elif track_type == 'continuous':
-                target_rms = 0.1
-                gain_low = 0.3
-                gain_high = 1.0
-            elif track_type == 'noise':
-                target_rms = 0.05
-                gain_low = 0.2
-                gain_high = 0.8
-            else:
-                target_rms = 0.03
-                gain_low = 0.1
-                gain_high = 0.5
-
+        # --- 7. Force-weighted gain ---
+        if pp.dynamic_denoise_enabled or pp.smoothing_enabled:
+            target_rms, gain_low, gain_high = self._gain_params_for(track_type)
             chain.append({
-({
-                'type': 'force_weighted_gain',
-                'params': {
-                    'target_rms': target_rms,
-                    'gain_low': gain_low,
-                    'gain_high': gain_high,
-                    'max_gain_db': postprocess.max_gain_db,
-                    'compression': postprocess.dynamic_range_compression,
-                    'smooth_ms': postprocess.smoothing_window_ms,
-                    'sample_rate': self.config.system.sample_rate
-                }
+                "type": "force_weighted_gain",
+                "params": {
+                    "target_rms": target_rms,
+                    "gain_low": gain_low,
+                    "gain_high": gain_high,
+                    "max_gain_db": pp.max_gain_db,
+                    "compression": pp.dynamic_range_compression,
+                    "smooth_ms": pp.smoothing_window_ms,
+,
+                    "sample_rate": sr,
+                },
             })
 
-        # Global normalization
-        if postprocess.normalize_output:
+ })
+
+        # --- 8. Scene-wide normalisation ---
+        if pp.normalize_output:
             chain.append({
-                'type': 'global_normalize',
-                'params': {
-                    'target_peak': 0.95,
-                    'peak_key': 'global_peak'
-                }
+                "type": "global_normalize",
+                "params": {
+                    "target_peak": 0.95,
+                    "peak_key": "global_peak",
+                },
             })
 
         return chain
 
-    def _write_chain_metadata(self, obj_idx: int, track_name: str,
-                               chain_spec: List[Dict[str, Any]]) -> None:
-        """
-        Write chain metadata to StorageEngine for a specific track.
+    # ------------------------------------------------------------------
+    # Parameter palette per track type
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _gate_params_for(track_type: str):
+        if track_type == 'impact':
+            return -70.0, 0.7
+        if track_type == 'continuous':
+            return -60.0, 0.5
+        if track_type == 'noise':
+            return -50.0, 0.3
+        return -40.0, 0.1  # ambient / anything else
 
-        The metadata is stored in the signal attributes and is used by the
-        DAG evaluator at read time to apply the processing chain.
+    @staticmethod
+    def _spectral_params_for(track_type: str, pp: Any):
+        if track_type == 'impact':
+            return 0.5, 0.1
+        if track_type == 'continuous':
+            return pp.spectral_reduction_strength, 0.2
+        if track_type == 'noise':
+            return 0.9, 0.3
+        return 1.0, 0.4  # # ambient
 
-        Args:
-            obj_idx: Object index
-            track_name: Track name
-            chain_spec: List of processor specifications
-        """
-        from pbrAudioStorage.lib.backend import Blosc2Backend
+    @staticmethod
+    def _gain_params_for(track_type: str):
+        if track_type == 'impact':
+            return 0.20, 0.5, 1.2
+        if track_type == 'continuous':
+            return 0.10, 0.3, 1.0
+        if track_type == 'noise':
+            return 0.05, 0.2, 0.8
+        return 0.03, 0.1, 0.5  # ambient
 
-        # Get the backend instance
-        backend = self.storage_engine.backend
-        if backend is None:
-            backend = Blosc2Backend.get(self.storage_engine.tree_store_path, mode="a")
-
-        # Prepare metadata with chain specification
-        metadata = {
-            'chains': {
-                'op': 'sequential',
-                'processors': chain_spec
-            },
-            'post_processed': True,
-            'post_process_engine': 'physicsSolver'
-        }
-
-        # Update the track metadata in the storage
-        with backend._lock:
-            store = backend.store
-            node_path = backend._node_path('physicsSolver', obj_idx)
-
-            if node_path not in store:
-                debug_print(f"Warning: Node {node_path} not found in storage")
-                return
-
-            arr = store[node_path]
-
-            # Get track metadata
-            obj_meta = arr.attrs.get('object', {})
-            track_names = obj_meta.get('track_names', [])
-
-            if track_name not in track_names:
-                debug_print(f"Warning: Track {track_name} not found for object {obj_idx}")
-                return
-
-            track_index = track_names.index(track_name)
-
-            # Get and update track metadata
-            tracks_meta = arr.attrs.get('tracks', [])
-            if track_index < len(tracks_meta):
-                track_meta = tracks_meta[track_index]
-
-                # Store chain in signal metadata
-                # If signals exist, update the first one; otherwise create a placeholder
-                signals = track_meta.get('signals', [])
-
-                if signals:
-                    # Add chain to each signal's metadata
-                    for signal in signals:
-                        signal['chains'] = metadata['chains']
-                        signal['post_processed'] = True
-                        signal['post_process_engine'] = 'physicsSolver'
-                else:
-                    # No signals yet - store chain in track metadata for later
-                    track_meta['pending_chains'] = metadata['chains']
-                    track_meta['post_processed'] = True
-
-                # Update the array attributes
-                arr.attrs['tracks'] = tracks_meta
-
-        debug_print(f"Wrote chain metadata for {obj_idx}/{track_name}")
-
-    def get_chain_spec(self, obj_idx: int, track_name: str) -> Optional[Dict[str, Any]]:
-        """
-        Retrieve the chain specification for a specific track.
-
-        Args:
-            obj_idx: Object index
-            track_name: Track name
-
-        Returns:
-            Chain specification dictionary or None if not found
-        """
-        from pbrAudioStorage.lib.backend import Blosc2Backend
-
-        backend = self.storage_engine.backend
-        if backend is None:
-            backend = Blosc2Backend.get(self.storage_engine.tree_store_path, mode="r")
-
-        try:
-            with backend._lock:
-                store = backend.store
-                node_path = backend._node_path('physicsSolver', obj_idx)
-
-                if node_path not in store:
-                    return None
-
-                arr = store[node_path]
-                obj_meta = arr.attrs.get('object', {})
-                track_names = obj_meta.get('track_names', [])
-
-                if track_name not in track_names:
-                    return None
-
-                track_index = track_names.index(track_name)
-                tracks_meta = arr.attrs.get('tracks', [])
-
-                if track_index < len(tracks_meta):
-                    track_meta = tracks_meta[track_index]
-
-                    # Check for pending chains (no signals yet)
-                    if 'pending_chains' in track_meta:
-                        return track_meta['pending_chains']
-
-                    # Check signal-level chains
-                    signals = track_meta.get('signals', [])
-                    if signals and 'chains' in signals[0]:
-                        return signals[0]['chains']
-
-        except Exception as e:
-            debug_print(f"Error reading chain spec: {e}")
-
-        return None
-
-    def clear_chains(self, obj_idx: int = None, track_name: str = None) -> None:
-        """
-        Clear processing chains from storage.
-
-        Args:
-            obj_idx: Object index (if None, clear all)
-            track_name: Track name (if None, clear all tracks for object)
-        """
-        from pbrAudioStorage.lib.backend import Blosc2Backend
-
-        backend = self.storage_engine.backend
-        if backend is None:
-            backend = Blosc2Backend.get(self.storage_engine.tree_store_path, mode="a")
-
-        config = self.config
-
-        with backend._lock:
-            store = backend.store
-
-            if obj_idx is not None:
-                obj_indices = [obj_idx]
-            else:
-                obj_indices = [obj.idx for obj in config.objects if not obj.static]
-
-            for o_idx in obj_indices:
-                node_path = backend._node_path('physicsSolver', o_idx)
-
-                if node_path not in store:
-                    continue
-
-                arr = store[node_path]
-                obj_meta = arr.attrs.get('object', {})
-                track_names = obj_meta.get('track_names', [])
-
-                if track_name is not None:
-                    track_indices = [track_names.index(track_name)] if track_name in track_names else []
-                else:
-                    track_indices = range(len(track_names))
-
-                tracks_meta = arr.attrs.get('tracks', [])
-
-                for t_idx in track_indices:
-                    if t_idx < len(tracks_meta):
-                        track_meta = tracks_meta[t_idx]
-
-                        # Remove pending chains
-                        track_meta.pop('pending_chains', None)
-                        track_meta.pop('post_processed', None)
-
-                        # Remove signal-level chains
-                        signals = track_meta.get('signals', [])
-                        for signal in signals:
-                            signal.pop('chains', None)
-                            signal.pop('post_processed', None)
-                            signal.pop('post_process_engine', None)
-
-                arr.attrs['tracks'] = tracks_meta
-
-        debug_print(f"Cleared chains for obj_idx={obj_idx}, track_name={track_name}")
