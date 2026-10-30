@@ -949,7 +949,7 @@ class ForceSynth:
                 continue # Skip silent tracks
 
             # Write the track to the storage engine
-            fut = self._executor.submit(self.storage_engine.write(collection=config.system.collection, engine="physicsSolver", obj_idx=config_obj.idx, track_name=track_name, audio_data=track_data, sample_start=0, metadata={'format': 'RAW', 'sample_rate': sample_rate, 'subtype': 'FLOAT'}))
+            fut = self._executor.submit(self.storage_engine.write(collection=config.system.collection, engine="physicsEngine", obj_idx=config_obj.idx, track_name=track_name, audio_data=track_data, sample_start=0, metadata={'format': 'RAW', 'sample_rate': sample_rate, 'subtype': 'FLOAT'}))
             self._futures.append(fut)
             self._futures = [f for f in self._futures if not f.done()]
 
