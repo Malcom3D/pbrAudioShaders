@@ -46,7 +46,6 @@ _NOISE_TRACKS: Dict[str, str] = {
     'rolling_sound':  'noise',
 }
 
-
 @dataclass
 class postProcess:
     """
@@ -76,10 +75,10 @@ class postProcess:
             self.storage_engine = StorageEngine(self.entity_manager)
 
         # Engine key as registered in physicsEngine._register_storage_schema
-        self.engine = self.__class__.__name__  # -> "postProcess"
+        self.engine = "physicsEngine" # -> "postProcess"
         # Fallback engine name used by ForceSynth. If your ForceSynth writes
         # under "physicsSolver" keep the constant below in sync.
-        self.force_engine = "physicsSolver"
+        self.force_engine = "physicsEngine"
 
     # ------------------------------------------------------------------
     # Public API
@@ -95,8 +94,6 @@ class postProcess:
 
         configured = 0
         for config_obj in config.objects:
-            if config_obj.static:
-                continue
             if not self._object_has_tracks(config_obj.idx):
                 continue
             self._configure_object_chains(config_obj, global_peak)
@@ -104,8 +101,7 @@ class postProcess:
 
         debug_print(f"Configured processing chains for {configured} objects")
 
-    def clear_chains(self, obj_idx: Optional[int] = None,
-                     track_name: Optional[str] = None) -> None:
+    def clear_chains(self, obj_idx: Optional[int] = None, track_name: Optional[str] = None) -> None:
         """
         Clear processing chains via the StorageEngine.
 
@@ -167,7 +163,7 @@ class postProcess:
     # ------------------------------------------------------------------
     def _object_has_tracks(self, obj_idx: int) -> bool:
         """
-        True iff *any* physicsSolver track node exists for this object.
+        True if *any* physicsEngine track node exists for this object.
 
         We use the StorageEngine.read() with unprocessed=True so the DAG
         evaluator never tries to run a chain that isn't installed yet.
@@ -201,7 +197,7 @@ class postProcess:
                 continue
             for t_name in all_tracks:
                 try:
-                                       data = self.storage_engine.read(
+                    data = self.storage_engine.read(
                         collection=config.system.collection,
                         engine=self.force_engine,
                         obj_idx=config_obj.idx,
@@ -373,12 +369,9 @@ class postProcess:
                     "max_gain_db": pp.max_gain_db,
                     "compression": pp.dynamic_range_compression,
                     "smooth_ms": pp.smoothing_window_ms,
-,
                     "sample_rate": sr,
                 },
             })
-
- })
 
         # --- 8. Scene-wide normalisation ---
         if pp.normalize_output:

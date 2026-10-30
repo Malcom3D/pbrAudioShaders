@@ -48,6 +48,7 @@ from ..core.distance_solver import DistanceSolver
 from ..core.force_solver import ForceSolver
 from ..core.collision_solver import CollisionSolver
 from ..core.force_synth import ForceSynth
+from ..lib.post_process import postProcess
 
 @dataclass
 class physicsEngine:
@@ -258,8 +259,7 @@ class physicsEngine:
     def _post_process(self):
         config = self.entity_manager.get('config')
         if config.system.enable_denoiser:
-            from postProcess import AudioForcePostProcessEngine
-            pp = AudioForcePostProcessEngine(self.entity_manager)
+            pp = postProcess(self.entity_manager, self.storage_engine)
             pp.process()
 
     def _save_data(self):

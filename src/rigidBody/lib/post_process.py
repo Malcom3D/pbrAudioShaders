@@ -99,9 +99,10 @@ def _build_track_chain(track_name: str, cfg: Any) -> Dict[str, Any]:
                 "attack_ms": 2.0,
                 "release_ms": 50.0,
                 "hold_ms": 10.0,
-                "force_track": DEFAULT_TRACK_FORCE_MAP.get(track_name, 'impact'),
-                "force_reference_weight": cfg.postprocess.force_reference_weight,
-                "min_force_threshold": cfg.postprocess.min_force_threshold,
+#                "force_track": DEFAULT_TRACK_FORCE_MAP.get(track_name, 'impact'),
+#                "min_force_threshold": cfg.postprocess.min_force_threshold,
+                "force_weight": cfg.postprocess.force_reference_weight,
+                "sample_rate": cfg.system.sample_rate,
             },
         })
 
@@ -113,7 +114,8 @@ def _build_track_chain(track_name: str, cfg: Any) -> Dict[str, Any]:
                 "hop_size": 512,
                 "noise_floor_db": cfg.postprocess.noise_floor_estimate_db,
                 "reduction_strength": cfg.postprocess.spectral_reduction_strength,
-                "force_track": DEFAULT_TRACK_FORCE_MAP.get(track_name, 'impact'),
+                "sample_rate": cfg.system.sample_rate,
+#                "force_track": DEFAULT_TRACK_FORCE_MAP.get(track_name, 'impact'),
             },
         })
 
@@ -122,9 +124,13 @@ def _build_track_chain(track_name: str, cfg: Any) -> Dict[str, Any]:
         steps.append({
             "type": "force_adaptive_smoothing",
             "params": {
-                "window_ms": cfg.postprocess.smoothing_window_ms,
-                "adaptive": cfg.postprocess.adaptive_smoothing,
-                "force_track": DEFAULT_TRACK_FORCE_MAP.get(track_name, 'impact'),
+                "alpha_min": 0.1,
+                "alpha_max": 0.9 if cfg.postprocess.adaptive_smoothing else 0.5,
+                "smooth_ms": cfg.postprocess.smoothing_window_ms,
+                "sample_rate": cfg.system.sample_rate,
+#                "window_ms": cfg.postprocess.smoothing_window_ms,
+#                "adaptive": cfg.postprocess.adaptive_smoothing,
+#                "force_track": DEFAULT_TRACK_FORCE_MAP.get(track_name, 'impact'),
             },
         })
 
@@ -134,7 +140,8 @@ def _build_track_chain(track_name: str, cfg: Any) -> Dict[str, Any]:
             "type": "force_phase_align",
             "params": {
                 "crossfade_samples": cfg.postprocess.crossfade_samples,
-                "force_track": DEFAULT_TRACK_FORCE_MAP.get(track_name, 'impact'),
+                "sample_rate": cfg.system.sample_rate,
+#                "force_track": DEFAULT_TRACK_FORCE_MAP.get(track_name, 'impact'),
             },
         })
 
@@ -154,15 +161,18 @@ def _build_track_chain(track_name: str, cfg: Any) -> Dict[str, Any]:
             "target_rms": target_rms,
             "max_gain_db": cfg.postprocess.max_gain_db,
             "dynamic_range_compression": cfg.postprocess.dynamic_range_compression,
-            "force_track": DEFAULT_TRACK_FORCE_MAP.get(track_name, 'impact'),
+            "sample_rate": cfg.system.sample_rate,
+#            "force_track": DEFAULT_TRACK_FORCE_MAP.get(track_name, 'impact'),
         },
     })
 
     # --- 6. Peak normalize -------------------------------------------
     if cfg.postprocess.normalize_output:
         steps.append({
-            "type": "peak_normalize",
-            "params": {"peak": 0.95},
+            "type": "per_track_normalize",
+            "params": {"target_peak": 0.95},
+#            "type": "peak_normalize",
+#            "params": {"peak": 0.95},
         })
 
     return {
@@ -299,9 +309,7 @@ class postProcess:
                 return obj
         return None
 
-    def _write_chain_to_storage(
-        self, obj_idx: int, track_name: str, chain: Dict[str, Any]
-    ) -> bool:
+    def _write_chain_to_storage(self, obj_idx: int, track_name: str, chain: Dict[str, Any]) -> bool:
         """
         Attach `chain` to `<collection>/rigidBodyEngine/<obj_idx>/<track_name>`
         in the storage backend.
