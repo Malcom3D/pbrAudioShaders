@@ -140,7 +140,7 @@ class ModalComposer:
         for track_name in track_names:
             try:
                 # The read method returns a (1, N) array, so we flatten it.
-                track_data = self.storage_engine.read(collection=config.system.collection,  engine='physicsSolver', obj_idx=obj_idx, track_name=track_name)
+                track_data = self.storage_engine.read(collection=config.system.collection,  engine='physicsEngine', obj_idx=obj_idx, track_name=track_name)
                 if track_data is not None and np.asarray(track_data).size > 0:
                     loaded_tracks[track_name] = track_data.flatten().reshape(1,-1)
                 else:

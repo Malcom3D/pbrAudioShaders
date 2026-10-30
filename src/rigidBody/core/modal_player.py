@@ -322,21 +322,21 @@ class ModalPlayer:
         rolling_sound = np.zeros(total_samples, dtype=np.float32)
 
         try:
-            sliding_sound_track = storage_engine.read(collection=collection, engine='physicsSolver', obj_idx=config_obj.idx, track_name='sliding_sound')
+            sliding_sound_track = storage_engine.read(collection=collection, engine='physicsEngine', obj_idx=config_obj.idx, track_name='sliding_sound')
             if sliding_sound_track is not None:
                 sliding_sound = sliding_sound_track.flatten()
         except Exception as e:
             debug_print(f"Could not load sliding_sound for {config_obj.name}: {e}")
 
         try:
-            scraping_sound_track = storage_engine.read(collection=collection, engine='physicsSolver', obj_idx=config_obj.idx, track_name='scraping_sound')
+            scraping_sound_track = storage_engine.read(collection=collection, engine='physicsEngine', obj_idx=config_obj.idx, track_name='scraping_sound')
             if scraping_sound_track is not None:
                 scraping_sound = scraping_sound_track.flatten()
         except Exception as e:
             debug_print(f"Could not load scraping_sound for {config_obj.name}: {e}")
 
         try:
-            rolling_sound_track = storage_engine.read(collection=collection, engine='physicsSolver', obj_idx=config_obj.idx, track_name='rolling_sound')
+            rolling_sound_track = storage_engine.read(collection=collection, engine='physicsEngine', obj_idx=config_obj.idx, track_name='rolling_sound')
             if rolling_sound_track is not None:
                 rolling_sound = rolling_sound_track.flatten()
         except Exception as e:
