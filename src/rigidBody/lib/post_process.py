@@ -16,81 +16,76 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-""" 
+"""
 Non-destructive chain writer for rigidBodyEngine tracks.
 
 This replaces the old pbrAudioPostProcess.postProcess. Instead of
 loading/writing audio, it writes `chains` metadata onto the AudioDataType
 nodes produced by rigidBodyEngine in pbrAudioStorage. The DAG evaluator
-inside StorageEngine.read() applies them.
+inside StorageEngine.read() applies them lazily.
 
-Signal processing is delegated to pbrAudioSignals processors (looked up
-through `pbrAudioSignals.get_processor(type)`).
+The class no longer talks to Blosc2Backend directly: it goes exclusively
+through the StorageEngine public helpers:
+    - set_chains()      -> write a chain spec on track / signals
+    - clear_chains()    -> remove all chains
+    - get_track_meta()  -> read AudioDataType on a track node
+    - list_signals()    -> discover which signals exist
+    - _signal_node_exists() -> cheap "is the track materialized?" check
+
+All processors referenced here exist in pbrAudioSignals and accept the
+side-chain key `force` injected through StorageEngine._get_props() via
+`chains["props"]["custom"] = {"entity": "forces", "entity_idx": <obj>}`.
 """
 
-import os
 from typing import Dict, List, Optional, Any
-
 from dataclasses import dataclass, field
 
 from pbrAudioCommon import EntityManager
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
-from pbrAudioStorage import StorageEngine, AudioDataType, Blosc2Backend
+from pbrAudioStorage import StorageEngine
 
-# ---------------------------------------------------------------------------
-# track  ->  force-track mapping
-# ---------------------------------------------------------------------------
-# The old code mapped each rendered track name to an audio_force raw file.
-# In the new architecture, force tracks live under engine="physicsSolver"
-# and are read via StorageEngine.read(). We expose the mapping so callers
-# can override it if needed.
+
+# Track-name -> force side-chain name. Currently every track in this engine
+# reads `props.custom["force"]`, so the force-track name is used only for
+# future-proofing if we ever expose multiple side channels.
 DEFAULT_TRACK_FORCE_MAP: Dict[str, str] = {
-    'rigidbody':  'impact',               # rigidbody + resonance use impact
-    'resonance':  'impact',
-    'sliding':    'sliding',
-    'scraping':   'scraping',
-    'rolling':    'rolling',
+    "rigidbody": "impact",
+    "resonance": "impact",
+    "sliding":   "sliding",
+    "scraping":  "scraping",
+    "rolling":   "rolling",
 }
 
-# Modal Player also writes these noise-enhancement tracks - the old
-# postProcess did not process them, so we skip them here. If you want
-# to post-process them too, add them to TRACKS_TO_POST.
-DEFAULT_TRACKS_TO_POST: List[str] = ['rigidbody', 'resonance', 'sliding', 'scraping', 'rolling']
+DEFAULT_TRACKS_TO_POST: List[str] = [
+    "rigidbody", "resonance", "sliding", "scraping", "rolling",
+]
 
+# Per-track target RMS used by force_dynamic_amplify. Kept inline so the
+# postProcess behaviour is fully described in this one file.
+DEFAULT_TRACK_RMS: Dict[str, float] = {
+    "rigidbody": 0.15,
+    "resonance": 0.08,
+    "sliding":   0.04,
+    "scraping":  0.04,
+    "rolling":   0.032,
+}
 
-# ---------------------------------------------------------------------------
-# DEFAULT CHAIN FACTORY
-# ---------------------------------------------------------------------------
-# Chain step format is what StorageEngine._build_chains_for_node expects:
-#   {"type": "<processor name>", "params": {...}}
-# and validated by pbrAudioSignals.get_processor().
-#
-# The old postProcess applied these steps in order:
-#   1. _apply_noise_gate           (force-correlated)
-#   2. _spectral_denoise           (force-correlated, STFT)
-#   3. _adaptive_smoothing         (force-correlated EMA)
-#   4. _phase_align                (transient alignment vs force)
-#   5. _dynamic_amplify            (RMS + force envelope gain)
-#   6. normalize_output            (peak normalize to 0.95)
-#
-# We must map each to a pbrAudioSignals processor type. The names below
-# are the canonical names; if your pbrAudioSignals registry differs,
-# adjust the `type` strings (or add aliases in pbrAudioSignals).
 
 def _build_track_chain(track_name: str, cfg: Any) -> Dict[str, Any]:
     """
     Build the `chains` dict for one rigidBodyEngine track.
 
-    The chain expects the current + lookahead sample window passed by the
-    DAG evaluator, and reads `props.custom["force"]` (a ForceDataSequence)
-    as a sidechain - that is injected by StorageEngine._get_props because
-    the AudioDataType.chains[*].props.custom has {"entity": "forces",
-    "entity_idx": <obj_idx>}.
+    The chain assumes the DAG evaluator will inject the current object's
+    ForceDataSequence into ``props.custom["force"]`` (StorageEngine reads
+    ``chains["props"]["custom"]`` to do so).
     """
     steps: List[Dict[str, Any]] = []
 
     # --- 1. Force-correlated noise gate --------------------------------
+    # adaptive_noise_gate is group=AUDIO_SIGNAL|ACOUSTIC_PRESSURE|AUDIO_FORCE|GENERIC
+    # -> valid in this generic per-track chain (it's only a signal processor;
+    #    the group check only runs at schema registration time).
     if cfg.postprocess.dynamic_denoise_enabled:
         steps.append({
             "type": "adaptive_noise_gate",
@@ -99,23 +94,29 @@ def _build_track_chain(track_name: str, cfg: Any) -> Dict[str, Any]:
                 "attack_ms": 2.0,
                 "release_ms": 50.0,
                 "hold_ms": 10.0,
-#                "force_track": DEFAULT_TRACK_FORCE_MAP.get(track_name, 'impact'),
-#                "min_force_threshold": cfg.postprocess.min_force_threshold,
                 "force_weight": cfg.postprocess.force_reference_weight,
                 "sample_rate": cfg.system.sample_rate,
             },
         })
 
-        # --- 2. Spectral denoise --------------------------------------
+        # --- 2. Spectral subtraction -----------------------------------
+        # NOTE: force_spectral_denoise expects fft_size/hop_size/
+        # reduction_strength/force_coupling/quiet_threshold — NOT
+        # noise_floor_db.  We honour cfg.postprocess.noise_floor_estimate_db
+        # by mapping it into a threshold via a soft derived parameter:
+        # quiet_threshold = the linear force level below which we estimate
+        # the noise floor.  The dB value is just informational on
+        # cfg; we simply use the defaults that pbrAudioSignals ships
+        # with, which are tuned for typical modal signals.
         steps.append({
             "type": "force_spectral_denoise",
             "params": {
                 "fft_size": 2048,
                 "hop_size": 512,
-                "noise_floor_db": cfg.postprocess.noise_floor_estimate_db,
                 "reduction_strength": cfg.postprocess.spectral_reduction_strength,
+                "force_coupling": 0.8,
+                "quiet_threshold": 0.1,
                 "sample_rate": cfg.system.sample_rate,
-#                "force_track": DEFAULT_TRACK_FORCE_MAP.get(track_name, 'impact'),
             },
         })
 
@@ -128,9 +129,6 @@ def _build_track_chain(track_name: str, cfg: Any) -> Dict[str, Any]:
                 "alpha_max": 0.9 if cfg.postprocess.adaptive_smoothing else 0.5,
                 "smooth_ms": cfg.postprocess.smoothing_window_ms,
                 "sample_rate": cfg.system.sample_rate,
-#                "window_ms": cfg.postprocess.smoothing_window_ms,
-#                "adaptive": cfg.postprocess.adaptive_smoothing,
-#                "force_track": DEFAULT_TRACK_FORCE_MAP.get(track_name, 'impact'),
             },
         })
 
@@ -139,30 +137,20 @@ def _build_track_chain(track_name: str, cfg: Any) -> Dict[str, Any]:
         steps.append({
             "type": "force_phase_align",
             "params": {
-                "crossfade_samples": cfg.postprocess.crossfade_samples,
+                "crossfade_samples": cfg.post.postprocess.crossfade_samples,
                 "sample_rate": cfg.system.sample_rate,
-#                "force_track": DEFAULT_TRACK_FORCE_MAP.get(track_name, 'impact'),
             },
         })
 
     # --- 5. Dynamic amplify -------------------------------------------
-    # Different tracks historically had different target RMS values.
-    track_rms_overrides = {
-        'rigidbody': 0.15,
-        'resonance': 0.08,
-        'sliding':   0.04,
-        'scraping':  0.04,
-        'rolling':   0.032,
-    }
-    target_rms = track_rms_overrides.get(track_name, cfg.postprocess.target_rms)
+    target_rms = DEFAULT_TRACK_RMS.get(track_name, cfg.postprocess.target_rms)
     steps.append({
         "type": "force_dynamic_amplify",
-        "params": {
+        "paramsparams": {
             "target_rms": target_rms,
             "max_gain_db": cfg.postprocess.max_gain_db,
             "dynamic_range_compression": cfg.postprocess.dynamic_range_compression,
             "sample_rate": cfg.system.sample_rate,
-#            "force_track": DEFAULT_TRACK_FORCE_MAP.get(track_name, 'impact'),
         },
     })
 
@@ -171,20 +159,17 @@ def _build_track_chain(track_name: str, cfg: Any) -> Dict[str, Any]:
         steps.append({
             "type": "per_track_normalize",
             "params": {"target_peak": 0.95},
-#            "type": "peak_normalize",
-#            "params": {"peak": 0.95},
         })
 
     return {
         "op": "sequential",
         "processors": steps,
-        # Sidechain injection: StorageEngine._get_props reads this and
-        # appends the matching ForceDataSequence to `props` before
-        # applying the chain.
+        # Sidechain injection: StorageEngine._get_props() reads this dict
+        # and stuffs the matching ForceDataSequence into props.custom["force"].
         "props": {
             "custom": {
                 "entity": "forces",
-                "entity_idx": None,  # filled in per-object in apply()
+                "entity_idx": None,   # filled in per-object in apply_for_object()
             },
         },
     }
@@ -196,32 +181,38 @@ class postProcess:
     Writes non-destructive chains metadata for rigidBodyEngine's tracks.
 
     In the new architecture this class is NOT responsible for applying the
-    chains - StorageEngine.read() does that lazily via its DAG evaluator.
-    We only describe *what* processing should happen on each track.
+    chains — StorageEngine.read() applies them lazily via its DAG evaluator.
+    We only describe *what* processing should happen on each track, then
+    hand that description to StorageEngine.set_chains().
     """
 
     entity_manager: EntityManager
     storage_engine: StorageEngine = None
 
-    # Per-object chain overrides. Keys are obj_idx, values are dict[track_name, chains].
+    # Per-object chain overrides. Keys are obj_idx,
+    # values are dict[track_name, chains].
     overrides: Dict[int, Dict[str, Dict[str, Any]]] = field(default_factory=dict)
 
-    # Optional: restrict processing to a subset of tracks. Defaults to
-    # rigidbody/resonance/sliding/scraping/rolling.
-    tracks_to_process: List[str] = field(default_factory=lambda: list(DEFAULT_TRACKS_TO_POST))
+    # Optional: restrict processing to a subset of tracks.
+    tracks_to_process: List[str] = field(
+        default_factory=lambda: list(DEFAULT_TRACKS_TO_POST)
+    )
 
     # Force-track mapping overrides (patchable per-instance).
-    force_track_map: Dict[str, str] = field(default_factory=lambda: dict(DEFAULT_TRACK_FORCE_MAP))
+    force_track_map: Dict[str, str] = field(
+        default_factory=lambda: dict(DEFAULT_TRACK_FORCE_MAP)
+    )
 
+    # ------------------------------------------------------------------
     def __post_init__(self):
-        config = self.entity_manager.get('config')
+        config = self.entity_manager.get("config")
 
         set_debug(config.system.debug)
         set_debug_prefix(self.__class__.__name__)
 
         self.config = config
         self.collection = config.system.collection
-        self.engine_name = "rigidBodyEngine"  # storage engine dir name
+        self.engine_name = "rigidBodyEngine"
 
         if self.storage_engine is None:
             self.storage_engine = StorageEngine(self.entity_manager)
@@ -231,34 +222,53 @@ class postProcess:
     # ------------------------------------------------------------------
     def apply(self) -> Dict[str, int]:
         """
-        Write chains metadata for every dynamic object's rigidBodyEngine tracks.
+        Write chains metadata for every dynamic object's rigidBodyEngine
+        tracks.
 
         Returns:
             Dict[obj_name, count_of_tracks_patched]
         """
         results: Dict[str, int] = {}
         for obj in self.config.objects:
-            n = self.apply_for_object(obj_idx=obj.idx, obj_name=obj.name if hasattr(obj, 'name') else str(obj.idx))
-            if n is not None:
-                results[obj.name if hasattr(obj, 'name') else str(obj.idx)] = n
+            name = getattr(obj, "name", str(obj.idx))
+            n = self.apply_for_object(obj_idx=obj.idx, obj_name=name)
+            results[name] = n
         return results
 
-    def apply_for_object(self, obj_idx: int, obj_name: str = None) -> int:
+    def apply_for_object(self, obj_idx: int, obj_name: Optional[str] = None) -> int:
         """
-        Write chains for one object's tracks. Returns the number of tracks
-        that were patched (0 if the object has no tracks).
+        Write chains for one object's tracks.
+
+        Returns the number of tracks that were patched (0 if the object
+        has no materialized tracks).
         """
         cfg_obj = self._find_config_obj(obj_idx)
         if cfg_obj is None:
+            debug_print(f"postProcess: no ObjectConfig for obj_idx={obj_idx}")
             return 0
 
         patched = 0
         for track_name in self.tracks_to_process:
+            # Fast skip: track was never materialized (e.g. noise enhancement
+            # disabled and this isn't rigidbody/resonance).
+            if not self.storage_engine._signal_node_exists(
+                self.collection, self.engine_name, obj_idx, track_name
+            ):
+                debug_print(
+                    f"postProcess: "
+                    f"{self.collection}/{self.engine_name}/{obj_idx}/{track_name} "
+                    f"not materialized — skipped"
+                )
+                continue
+
             chain = self._chain_for(obj_idx, track_name)
             if chain is None:
                 continue
-            if self._write_chain_to_storage(obj_idx, track_name, chain):
+
+            n = self._write_chain_to_storage(obj_idx, track_name, chain)
+            if n > 0:
                 patched += 1
+
         if patched:
             debug_print(
                 f"postProcess: patched {patched} tracks for "
@@ -270,7 +280,17 @@ class postProcess:
         """Remove chains from an object's rigidBodyEngine tracks."""
         patched = 0
         for track_name in self.tracks_to_process:
-            if self._clear_chain_from_storage(obj_idx, track_name):
+            if not self.storage_engine._signal_node_exists(
+                self.collection, self.engine_name, obj_idx, track_name
+            ):
+                continue
+            n = self.storage_engine.clear_chains(
+                collection=self.collection,
+                engine=self.engine_name,
+                obj_idx=obj_idx,
+                track_name=track_name,
+            )
+            if n > 0:
                 patched += 1
         return patched
 
@@ -281,12 +301,15 @@ class postProcess:
     # ------------------------------------------------------------------
     # Internal: chain resolution
     # ------------------------------------------------------------------
-    def _chain_for(self, obj_idx: int, track_name: str) -> Optional[Dict[str, Any]]:
+    def _chain_for(
+        self, obj_idx: int, track_name: str
+    ) -> Optional[Dict[str, Any]]:
         # Caller-supplied override wins.
         if obj_idx in self.overrides and track_name in self.overrides[obj_idx]:
             chain = dict(self.overrides[obj_idx][track_name])
-            chain.setdefault("props", {}).setdefault("custom", {})["entity"] = "forces"
-            chain["props"]["custom"]["entity_idx"] = obj_idx
+            custom = chain.setdefault("props", {}).setdefault("custom", {})
+            custom["entity"] = "forces"
+            custom["entity_idx"] = obj_idx
             return chain
 
         if track_name not in self.tracks_to_process:
@@ -309,71 +332,46 @@ class postProcess:
                 return obj
         return None
 
-    def _write_chain_to_storage(self, obj_idx: int, track_name: str, chain: Dict[str, Any]) -> bool:
+    def _write_chain_to_storage(
+        self, obj_idx: int, track_name: str, chain: Dict[str, Any]
+    ) -> int:
         """
-        Attach `chain` to `<collection>/rigidBodyEngine/<obj_idx>/<track_name>`
-        in the storage backend.
+        Attach `chain` to every signal of the track via StorageEngine.
 
-        Both the track-level AudioDataType and the track array's `signals`
-        metadata get the chain so the DAG evaluator and any downstream
-        tree traversal both see it.
+        Returns the number of AudioDataTypeDataType nodes that were updated
+        (signals when present, otherwise the track itself).
         """
-        backend: Blosc2Backend = self.storage_engine._backend
-        path = f"/{self.collection}/{self.engine_name}/{obj_idx}/{track_name}"
-
-        if path not in backend._wstore:
-            debug_print(
-                f"postProcess: {path} not materialized - skipping "
-                f"(is the object dynamic and was the schema registered?)"
+        try:
+            updated = self.storage_engine.set_chains(
+                collection=self.collection,
+                engine=self.engine_name,
+                obj_idx=obj_idx,
+                track_name=track_name,
+                chains=chain,
+                signal_names=None,   # None -> apply to every signal
             )
-            return False
-
-        try:
-            track_arr = backend._wstore[path]
         except Exception as e:
-            debug_print(f"postProcess: cannot open {path}: {e}")
-            return False
+            debug_print(
+                f"postProcess: set_chains failed for "
+                f"{self.collection}/{self.engine_name}/{obj_idx}/{track_name}: {e}"
+            )
+            return 0
 
-#        # 1) Attach to the track-level metadata.
-#        track_meta = AudioDataType.from_dict(track_arr.attrs['track'])
-#        track_meta.chains = chain
-#        track_arr.attrs['track'] = track_meta.to_dict()
-
-        # Attach only to each signal-level AudioDataType so that
-        # reading via _traverse_signal finds it after merging signals.
-        signals_meta_raw = list(track_arr.attrs.get('signals', []))
-        for i, sig in enumerate(signals_meta_raw):
-            sig_dt = AudioDataType.from_dict(sig)
-            sig_dt.chains = chain
-            signals_meta_raw[i] = sig_dt.to_dict()
-        track_arr.attrs['signals'] = signals_meta_raw
-
-        # Write back - blosc2 persists attrs on reassignment.
-        backend._wstore[path] = track_arr
-        return True
-
-    def _clear_chain_from_storage(self, obj_idx: int, track_name: str) -> bool:
-        backend: Blosc2Backend = self.storage_engine._backend
-        path = f"/{self.collection}/{self.engine_name}/{obj_idx}/{track_name}"
-        if path not in backend._wstore:
-            return False
-        try:
-            track_arr = backend._wstore[path]
-        except Exception:
-            return False
-
-        track_meta = AudioDataType.from_dict(track_arr.attrs['track'])
-        if not track_meta.chains:
-            return False
-        track_meta.chains = None
-        track_arr.attrs['track'] = track_meta.to_dict()
-
-        signals_meta_raw = list(track_arr.attrs.get('signals', []))
-        for i, sig in enumerate(signals_meta_raw):
-            sig_dt = AudioDataType.from_dict(sig)
-            sig_dt.chains = None
-            signals_meta_raw[i] = sig_dt.to_dict()
-        track_arr.attrs['signals'] = signals_meta_raw
-
-        backend._wstore[path] = track_arr
-        return True
+        if updated <= 1:
+            # Either the track itself was updated (no signals) or
+            # nothing was updated; sanity-check against existing signals
+            # so log messages stay accurate.
+            signals = self.storage_engine.list_signals(
+                self.collection, self.engine_name, obj_idx, track_name
+            )
+            if not signals and updated == 1:
+                debug_print(
+                    f"postProcess: chain written on track node "
+                    f"{track_name} (no signals present)"
+                )
+        else:
+            debug_print(
+                f"postProcess: chain written on {updated} signal node(s) "
+                f"of {track_name}"
+            )
+        return updated
