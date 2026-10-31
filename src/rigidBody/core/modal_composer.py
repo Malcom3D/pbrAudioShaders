@@ -73,6 +73,7 @@ class ModalComposer:
         cparams = blosc2.CParams(codec=blosc2.Codec.LZ4, typesize=1, clevel=1, nthreads=8)
         dparams = blosc2.DParams(nthreads=16)
 
+        debug_print(f'Score compositing for {config_obj.name} started...')
         for event_track in score_track.events:
             obj2_idx = event_track.coll_obj
 
@@ -142,7 +143,8 @@ class ModalComposer:
                 # The read method returns a (1, N) array, so we flatten it.
                 track_data = self.storage_engine.read(collection=config.system.collection,  engine='physicsEngine', obj_idx=obj_idx, track_name=track_name)
                 if track_data is not None and np.asarray(track_data).size > 0:
-                    loaded_tracks[track_name] = track_data.flatten().reshape(1,-1)
+#                    loaded_tracks[track_name] = track_data.flatten().reshape(1,-1)
+                    loaded_tracks[track_name] = np.ascontiguousarray(track_data, dtype=np.float32).reshape(-1,1)
                 else:
                     # If a track is not found, create a silent one.
                     # We need a length. We can get it from any other loaded track.

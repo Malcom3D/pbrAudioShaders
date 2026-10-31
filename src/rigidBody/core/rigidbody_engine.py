@@ -171,7 +171,8 @@ class rigidBodyEngine:
 
         collisions = self.entity_manager.get('collisions')
         tasks_composer = [self.prebake_composer(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
-        results_composer = compute(*tasks_composer)
+        num_workers = config.system.physical_core * 2
+        results_composer = compute(*tasks_composer, num_workers=num_workers)
         self.progress = _update_status(f"{self.status_dir}", "/prebake", 90)
         self._save_data()
 

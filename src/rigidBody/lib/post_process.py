@@ -146,7 +146,7 @@ def _build_track_chain(track_name: str, cfg: Any) -> Dict[str, Any]:
     target_rms = DEFAULT_TRACK_RMS.get(track_name, cfg.postprocess.target_rms)
     steps.append({
         "type": "force_dynamic_amplify",
-        "paramsparams": {
+        "params": {
             "target_rms": target_rms,
             "max_gain_db": cfg.postprocess.max_gain_db,
             "dynamic_range_compression": cfg.postprocess.dynamic_range_compression,
