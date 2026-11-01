@@ -97,7 +97,8 @@ class ForceSynth:
 
         # Calculate total duration in samples
         frames = trajectory.get_x()
-        total_samples = int(trajectory.get_x()[-1])
+#        total_samples = int(trajectory.get_x()[-1])
+        total_samples = config.system.total_frames * sample_rate / sfps
         duration_s = total_samples / sample_rate
 
         # Init tracks

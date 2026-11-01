@@ -85,20 +85,20 @@ class rigidBodyEngine:
             for j in range(i + 1, len(config.objects)):
                 self.obj_pairs.append([config.objects[i].idx, config.objects[j].idx])
 
-        trajectories = self.entity_manager.get('trajectories')
-        for t_idx in trajectories.keys():
-            if isinstance(trajectories[t_idx], TrajectoryData) and not trajectories[t_idx].static:
-                trajectory = trajectories[t_idx]
-                self.total_samples = int(trajectory.get_x()[-1])
-                break
+#        trajectories = self.entity_manager.get('trajectories')
+#        for t_idx in trajectories.keys():
+#            if isinstance(trajectories[t_idx], TrajectoryData) and not trajectories[t_idx].static:
+#                trajectory = trajectories[t_idx]
+#                self.total_samples = int(trajectory.get_x()[-1])
+#                break
 
-#        # Determine begin total samples
-#        fps = config.system.fps
-#        fps_base = config.system.fps_base
-#        subframes = config.system.subframes
-#        sample_rate = config.system.sample_rate
-#        sfps = ( fps / fps_base ) * subframes # subframes per seconds
-#        self.total_samples = config.system.total_frames * sample_rate / sfps
+        # Determine begin total samples
+        fps = config.system.fps
+        fps_base = config.system.fps_base
+        subframes = config.system.subframes
+        sample_rate = config.system.sample_rate
+        sfps = ( fps / fps_base ) * subframes # subframes per seconds
+        self.total_samples = config.system.total_frames * sample_rate / sfps
 
         self._register_storage_schema()
 

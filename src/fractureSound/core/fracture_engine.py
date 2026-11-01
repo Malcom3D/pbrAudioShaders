@@ -78,14 +78,15 @@ class fractureEngine:
         self.fracture_events = self.entity_manager.get('fracture_events')
 
         # Set total samples
-        self.total_samples = self._set_total_samples()
+#        self.total_samples = self._set_total_samples()
+        self.total_samples = config.system.total_frames * self.sample_rate / self.sfps
 
-    def _set_total_samples(self):
-        trajectories = self.entity_manager.get('trajectories')
-        for t_idx in trajectories.keys():
-            if isinstance(trajectories[t_idx], TrajectoryData) and not trajectories[t_idx].static:
-                trajectory = trajectories[t_idx]
-                return int(trajectory.get_x()[-1])
+#    def _set_total_samples(self):
+#        trajectories = self.entity_manager.get('trajectories')
+#        for t_idx in trajectories.keys():
+#            if isinstance(trajectories[t_idx], TrajectoryData) and not trajectories[t_idx].static:
+#                trajectory = trajectories[t_idx]
+#                return int(trajectory.get_x()[-1])
     
     def bake(self) -> None:
         """
