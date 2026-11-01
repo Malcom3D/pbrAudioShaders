@@ -63,13 +63,12 @@ class postProcess:
     storage_engine: Optional[StorageEngine] = None
 
     def __post_init__(self):
-        config = self.entity_manager.get('config')
-        set_debug(config.system.debug)
+        self.config = self.entity_manager.get('config')
+        set_debug(self.config.system.debug)
         set_debug_prefix(self.__class__.__name__)
 
-        self.config = config
-        self.audio_forces_postprocess = config.audio_forces_postprocess
-        self.postprocess = config.synth_postprocess
+        self.audio_forces_postprocess = self.config.audio_forces_postprocess
+        self.postprocess = self.config.synth_postprocess
 
         if self.storage_engine is None:
             self.storage_engine = StorageEngine(self.entity_manager)

@@ -254,8 +254,8 @@ class CollisionSolver:
     def _init_score_tracks(self, obj1_idx, obj2_idx, config_obj1, config_obj2):
         """Initialize or retrieve score tracks."""
         score_tracks = self.entity_manager.get('score_tracks')
-        score_track1 = score_track2 = None
-        
+        score_track1, score_track2 = (None for _in range(2))
+
         for st_idx in score_tracks.keys():
             if score_tracks[st_idx].obj_idx == obj1_idx:
                 score_track1 = score_tracks[st_idx]

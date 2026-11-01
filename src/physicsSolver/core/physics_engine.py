@@ -84,7 +84,7 @@ class physicsEngine:
             for j in range(i + 1, len(config.objects)):
                 self.obj_pairs.append([config.objects[i].idx, config.objects[j].idx])
 
-        # Determine total samples
+        # Determine begin total samples
         fps = config.system.fps
         fps_base = config.system.fps_base
         subframes = config.system.subframes

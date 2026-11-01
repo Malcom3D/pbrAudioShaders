@@ -92,6 +92,14 @@ class rigidBodyEngine:
                 self.total_samples = int(trajectory.get_x()[-1])
                 break
 
+#        # Determine begin total samples
+#        fps = config.system.fps
+#        fps_base = config.system.fps_base
+#        subframes = config.system.subframes
+#        sample_rate = config.system.sample_rate
+#        sfps = ( fps / fps_base ) * subframes # subframes per seconds
+#        self.total_samples = config.system.total_frames * sample_rate / sfps
+
         self._register_storage_schema()
 
     def prebake(self):

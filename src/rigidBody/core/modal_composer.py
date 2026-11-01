@@ -61,7 +61,8 @@ class ModalComposer:
             # object do not collide (static?)
             return
 
-        self.total_samples = score_track_final.total_samples
+#        self.total_samples = score_track_final.total_samples
+        self.total_samples = 0
 
         for conf_obj in config.objects:
             if conf_obj.idx == obj_idx:
@@ -81,8 +82,8 @@ class ModalComposer:
             final_type = np.zeros_like(event_track.type)
             final_vertex_ids = np.full(event_track.vertex_ids.shape, np.bool_(False), dtype=np.bool_)
             final_contact_area = np.zeros_like(event_track.contact_area)
-            final_force = np.zeros_like(coupling_strength)
-            final_coupling_data = np.zeros_like(coupling_strength)
+            final_force = np.zeros_like(coupling_strength[event_track.start_sample:event_track.stop_sample])
+            final_coupling_data = np.zeros_like(coupling_strength[event_track.start_sample:event_track.stop_sample])
 
             mixed_mask = event_track.type == 5
             for event_type in range(1, 5):
@@ -92,7 +93,7 @@ class ModalComposer:
                 type_mask = event_track.type == event_type
 
                 final_type[type_mask] = event_type
-                final_coupling_data[type_mask] = coupling_strength[type_mask]
+                final_coupling_data[type_mask] = coupling_strength[event_track.start_sample:event_track.stop_sample][type_mask]
                 final_contact_area[type_mask] = event_track.contact_area[type_mask]
                 final_vertex_ids[type_mask.reshape(-1,)] = event_track.vertex_ids[type_mask.reshape(-1,)]
                 final_force[type_mask] = np.divide(force[event_type][type_mask], n_vertex_ids[type_mask.reshape(-1,)], out=np.zeros_like(force[event_type][type_mask]), where=n_vertex_ids[type_mask.reshape(-1,)] != 0)
@@ -100,7 +101,7 @@ class ModalComposer:
                 # Rewrite final*[mixed_mask] with type == 2
                 if event_type == 2:
                     final_type[mixed_mask] = event_type
-                    final_coupling_data[mixed_mask] = coupling_strength[mixed_mask]
+                    final_coupling_data[mixed_mask] = coupling_strength[event_track.start_sample:event_track.stop_sample][mixed_mask]
                     final_contact_area[mixed_mask] = event_track.contact_area[mixed_mask]
                     final_vertex_ids[mixed_mask.reshape(-1,)] = event_track.vertex_ids[mixed_mask.reshape(-1,)]
                     final_force[mixed_mask] = np.divide(force[event_type][mixed_mask], n_vertex_ids[mixed_mask.reshape(-1,)], out=np.zeros_like(force[event_type][mixed_mask]), where=n_vertex_ids[mixed_mask.reshape(-1,)] != 0)
@@ -113,11 +114,11 @@ class ModalComposer:
             final_type = np.zeros_like(event_track.type)
             final_vertex_ids = np.full(event_track.vertex_ids.shape, np.bool_(False), dtype=np.bool_)
             final_contact_area = np.zeros_like(event_track.contact_area)
-            final_force = np.zeros_like(coupling_strength)
-            final_coupling_data = np.zeros_like(coupling_strength)
+            final_force = np.zeros_like(coupling_strength[event_track.start_sample:event_track.stop_sample])
+            final_coupling_data = np.zeros_like(coupling_strength[event_track.start_sample:event_track.stop_sample])
             for event_type in [3, 4]:
                 final_type[mixed_mask] = event_type
-                final_coupling_data[mixed_mask] = coupling_strength[mixed_mask]
+                final_coupling_data[mixed_mask] = coupling_strength[event_track.start_sample:event_track.stop_sample][mixed_mask]
                 final_contact_area[mixed_mask] = event_track.contact_area[mixed_mask]
                 final_vertex_ids[mixed_mask.reshape(-1,)] = event_track.vertex_ids[mixed_mask.reshape(-1,)]
                 final_force[mixed_mask] = np.divide(force[event_type][mixed_mask], n_vertex_ids[mixed_mask.reshape(-1,)], out=np.zeros_like(force[event_type][mixed_mask]), where=n_vertex_ids[mixed_mask.reshape(-1,)] != 0)
@@ -143,6 +144,9 @@ class ModalComposer:
                 # The read method returns a (1, N) array, so we flatten it.
                 track_data = self.storage_engine.read(collection=config.system.collection,  engine='physicsEngine', obj_idx=obj_idx, track_name=track_name)
                 if track_data is not None and np.asarray(track_data).size > 0:
+                    if self.total_samples == 0:
+                        # Determine the total length from the first successfully loaded track
+                        self.total_samples = track_data.reshape(-1,1).shape[0]
 #                    loaded_tracks[track_name] = track_data.flatten().reshape(1,-1)
                     loaded_tracks[track_name] = np.ascontiguousarray(track_data, dtype=np.float32).reshape(-1,1)
                 else:
@@ -154,12 +158,12 @@ class ModalComposer:
             except Exception as e:
                 debug_print(f"Could not load track '{track_name}' for obj {obj_idx}: use a silent one: [{e}]")
                 loaded_tracks[track_name] = np.zeros((1,self.total_samples), dtype=np.float32)
-
-        # Determine the total length from the first successfully loaded track
-        total_samples = next((t.shape[0] for t in loaded_tracks.values() if t is not None), 0)
         
+#        # Determine the total length from the first successfully loaded track
+#        self.total_samples = next((t.shape[0] for t in loaded_tracks.values() if t is not None), 0)
+
         # If no tracks were loaded, we can't proceed.
-        if total_samples == 0:
+        if self.total_samples == 0:
             debug_print(f"No audio-force tracks found for obj {obj_idx}. Returning empty arrays.")
             # Return a list of empty arrays and an empty coupling array
             return [np.zeros(1) for _ in range(5)], np.zeros(1)
@@ -167,7 +171,7 @@ class ModalComposer:
         # Fill in any missing tracks with zeros
         for track_name, track_data in loaded_tracks.items():
             if track_data is None:
-                loaded_tracks[track_name] = np.zeros(total_samples, dtype=np.float32)
+                loaded_tracks[track_name] = np.zeros(self.total_samples, dtype=np.float32)
 
         # Assemble the final lists and arrays
         # The order must match the indexing used in the 'compute' method:
