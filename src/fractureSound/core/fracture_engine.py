@@ -79,7 +79,7 @@ class fractureEngine:
 
         # Set total samples
 #        self.total_samples = self._set_total_samples()
-        self.total_samples = config.system.total_frames * self.sample_rate / self.sfps
+        self.total_samples = int(config.system.total_frames * self.sample_rate / self.sfps)
 
 #    def _set_total_samples(self):
 #        trajectories = self.entity_manager.get('trajectories')

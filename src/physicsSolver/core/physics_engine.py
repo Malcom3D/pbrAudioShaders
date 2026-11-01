@@ -90,7 +90,7 @@ class physicsEngine:
         subframes = config.system.subframes
         sample_rate = config.system.sample_rate
         sfps = ( fps / fps_base ) * subframes # subframes per seconds
-        self.total_samples = config.system.total_frames * sample_rate / sfps
+        self.total_samples = int(config.system.total_frames * sample_rate / sfps)
 
         self._register_storage_schema()
 

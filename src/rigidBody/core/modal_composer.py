@@ -62,7 +62,7 @@ class ModalComposer:
             return
 
         # Determine begin total samples
-        self.total_samples = config.system.total_frames * sample_rate / sfps
+        self.total_samples = int(config.system.total_frames * sample_rate / sfps)
 
 #        self.total_samples = score_track_final.total_samples
 
