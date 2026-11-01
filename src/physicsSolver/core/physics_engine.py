@@ -258,7 +258,7 @@ class physicsEngine:
 
     def _post_process(self):
         config = self.entity_manager.get('config')
-        if config.system.enable_denoiser:
+        if config.system.enable_audio_forces_postprocess:
             pp = postProcess(self.entity_manager, self.storage_engine)
             pp.process()
 

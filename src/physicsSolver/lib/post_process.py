@@ -68,8 +68,8 @@ class postProcess:
         set_debug_prefix(self.__class__.__name__)
 
         self.config = config
-        self.denoiser = config.denoiser
-        self.postprocess = config.postprocess
+        self.audio_forces_postprocess = config.audio_forces_postprocess
+        self.postprocess = config.synth_postprocess
 
         if self.storage_engine is None:
             self.storage_engine = StorageEngine(self.entity_manager)
@@ -275,8 +275,8 @@ class postProcess:
     def _build_chain_spec(self, track_name: str, track_type: str,
                           config_obj: Any, global_peak: float) -> List[Dict[str, Any]]:
         """Build a list of {type, params} dicts for one track."""
-        denoiser = self.denoiser
-        pp = self.postprocess
+        audio_forces_postprocess = self.audio_forces_postprocess
+        pp = self.synth_postprocess
         sr = self.config.system.sample_rate
 
         # Control signal: leave alone.
@@ -286,34 +286,34 @@ class postProcess:
         chain: List[Dict[str, Any]] = []
 
         # --- 1. DC blocker (always first if enabled) ---
-        if denoiser.enable_dc_blocker or pp.dynamic_denoise_enabled:
+        if audio_forces_postprocess.enable_dc_blocker or pp.dynamic_denoise_enabled:
             chain.append({
                 "type": "dc_blocker",
                 "params": {
-                    "alpha": denoiser.dc_blocker_alpha
-                    if denoiser.enable_dc_blocker else 0.999,
+                    "alpha": audio_forces_postprocess.dc_blocker_alpha
+                    if audio_forces_postprocess.enable_dc_blocker else 0.999,
                 },
             })
 
         # --- 2. Adaptive noise gate (force-correlated) ---
-        if denoiser.enable_noise_gate or pp.dynamic_denoise_enabled:
+        if audio_forces_postprocess.enable_noise_gate or pp.dynamic_denoise_enabled:
             threshold_db, force_weight = self._gate_params_for(track_type)
             chain.append({
                 "type": "adaptive_noise_gate",
                 "params": {
                     "sample_rate": sr,
                     "threshold_db": threshold_db,
-                    "attack_ms": denoiser.gate_attack_ms,
-                    "release_ms": denoiser.gate_release_ms,
-                    "hold_ms": denoiser.gate_hold_ms,
+                    "attack_ms": audio_forces_postprocess.gate_attack_ms,
+                    "release_ms": audio_forces_postprocess.gate_release_ms,
+                    "hold_ms": audio_forces_postprocess.gate_hold_ms,
                     "force_weight": force_weight,
                 },
             })
 
         # --- 3. Temporal smoothing ---
-        if denoiser.enable_temporal_smoothing or pp.smoothing_enabled:
+        if audio_forces_postprocess.enable_temporal_smoothing or pp.smoothing_enabled:
             window = 3 if track_type == 'impact' else (
-                denoiser.temporal_smoothing_window if track_type == 'continuous' else 5
+                audio_forces_postprocess.temporal_smoothing_window if track_type == 'continuous' else 5
             )
             chain.append({
                 "type": "temporal_smoothing",
@@ -324,13 +324,13 @@ class postProcess:
             })
 
         # --- 4. Spectral denoising ---
-        if denoiser.enable_spectral_noise_reduction or pp.dynamic_denoise_enabled:
+        if audio_forces_postprocess.enable_spectral_noise_reduction or pp.dynamic_denoise_enabled:
             quiet, loud = self._spectral_params_for(track_type, pp)
             chain.append({
                 "type": "spectral_denoise",
                 "params": {
-                    "n_fft": denoiser.spectral_fft_size,
-                    "hop_length": denoiser.spectral_hop_size,
+                    "n_fft": audio_forces_postprocess.spectral_fft_size,
+                    "hop_length": audio_forces_postprocess.spectral_hop_size,
                     "reduction_strength_quiet": quiet,
                     "reduction_strength_loud": loud,
                     "noise_floor_percentile": 10.0,
@@ -338,7 +338,7 @@ class postProcess:
             })
 
         # --- 5. Envelope shaping ---
-        if denoiser.enable_envelope_shaping:
+        if audio_forces_postprocess.enable_envelope_shaping:
             chain.append({
                 "type": "envelope_shaper",
                 "params": {
@@ -347,13 +347,13 @@ class postProcess:
             })
 
         # --- 6. Gaussian adaptive smoothing ---
-        if denoiser.enable_gaussian_adaptive_smoothing:
+        if audio_forces_postprocess.enable_gaussian_adaptive_smoothing:
             chain.append({
                 "type": "adaptive_gaussian",
                 "params": {
-                    "sigma_min": denoiser.gaussian_sigma_min,
-                    "sigma_max": denoiser.gaussian_sigma_max,
-                    "force_threshold": denoiser.gaussian_force_threshold,
+                    "sigma_min": audio_forces_postprocess.gaussian_sigma_min,
+                    "sigma_max": audio_forces_postprocess.gaussian_sigma_max,
+                    "force_threshold": audio_forces_postprocess.gaussian_force_threshold,
                 },
             })
 

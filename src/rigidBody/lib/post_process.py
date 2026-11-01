@@ -86,15 +86,15 @@ def _build_track_chain(track_name: str, cfg: Any) -> Dict[str, Any]:
     # adaptive_noise_gate is group=AUDIO_SIGNAL|ACOUSTIC_PRESSURE|AUDIO_FORCE|GENERIC
     # -> valid in this generic per-track chain (it's only a signal processor;
     #    the group check only runs at schema registration time).
-    if cfg.postprocess.dynamic_denoise_enabled:
+    if cfg.synth_postprocess.dynamic_denoise_enabled:
         steps.append({
             "type": "adaptive_noise_gate",
             "params": {
-                "threshold_db": cfg.postprocess.noise_gate_threshold_db,
+                "threshold_db": cfg.synth_postprocess.noise_gate_threshold_db,
                 "attack_ms": 2.0,
                 "release_ms": 50.0,
                 "hold_ms": 10.0,
-                "force_weight": cfg.postprocess.force_reference_weight,
+                "force_weight": cfg.synth_postprocess.force_reference_weight,
                 "sample_rate": cfg.system.sample_rate,
             },
         })
@@ -102,7 +102,7 @@ def _build_track_chain(track_name: str, cfg: Any) -> Dict[str, Any]:
         # --- 2. Spectral subtraction -----------------------------------
         # NOTE: force_spectral_denoise expects fft_size/hop_size/
         # reduction_strength/force_coupling/quiet_threshold — NOT
-        # noise_floor_db.  We honour cfg.postprocess.noise_floor_estimate_db
+        # noise_floor_db.  We honour cfg.synth_postprocess.noise_floor_estimate_db
         # by mapping it into a threshold via a soft derived parameter:
         # quiet_threshold = the linear force level below which we estimate
         # the noise floor.  The dB value is just informational on
@@ -113,7 +113,7 @@ def _build_track_chain(track_name: str, cfg: Any) -> Dict[str, Any]:
             "params": {
                 "fft_size": 2048,
                 "hop_size": 512,
-                "reduction_strength": cfg.postprocess.spectral_reduction_strength,
+                "reduction_strength": cfg.synth_postprocess.spectral_reduction_strength,
                 "force_coupling": 0.8,
                 "quiet_threshold": 0.1,
                 "sample_rate": cfg.system.sample_rate,
@@ -121,41 +121,41 @@ def _build_track_chain(track_name: str, cfg: Any) -> Dict[str, Any]:
         })
 
     # --- 3. Adaptive smoothing ----------------------------------------
-    if cfg.postprocess.smoothing_enabled:
+    if cfg.synth_postprocess.smoothing_enabled:
         steps.append({
             "type": "force_adaptive_smoothing",
             "params": {
                 "alpha_min": 0.1,
-                "alpha_max": 0.9 if cfg.postprocess.adaptive_smoothing else 0.5,
-                "smooth_ms": cfg.postprocess.smoothing_window_ms,
+                "alpha_max": 0.9 if cfg.synth_postprocess.adaptive_smoothing else 0.5,
+                "smooth_ms": cfg.synth_postprocess.smoothing_window_ms,
                 "sample_rate": cfg.system.sample_rate,
             },
         })
 
     # --- 4. Phase alignment -------------------------------------------
-    if cfg.postprocess.phase_align_enabled:
+    if cfg.synth_postprocess.phase_align_enabled:
         steps.append({
             "type": "force_phase_align",
             "params": {
-                "crossfade_samples": cfg.postprocess.crossfade_samples,
+                "crossfade_samples": cfg.synth_postprocess.crossfade_samples,
                 "sample_rate": cfg.system.sample_rate,
             },
         })
 
     # --- 5. Dynamic amplify -------------------------------------------
-    target_rms = DEFAULT_TRACK_RMS.get(track_name, cfg.postprocess.target_rms)
+    target_rms = DEFAULT_TRACK_RMS.get(track_name, cfg.synth_postprocess.target_rms)
     steps.append({
         "type": "force_dynamic_amplify",
         "params": {
             "target_rms": target_rms,
-            "max_gain_db": cfg.postprocess.max_gain_db,
-            "dynamic_range_compression": cfg.postprocess.dynamic_range_compression,
+            "max_gain_db": cfg.synth_postprocess.max_gain_db,
+            "dynamic_range_compression": cfg.synth_postprocess.dynamic_range_compression,
             "sample_rate": cfg.system.sample_rate,
         },
     })
 
     # --- 6. Peak normalize -------------------------------------------
-    if cfg.postprocess.normalize_output:
+    if cfg.synth_postprocess.normalize_output:
         steps.append({
             "type": "per_track_normalize",
             "params": {"target_peak": 0.95},
