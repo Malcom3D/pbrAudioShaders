@@ -163,11 +163,13 @@ class rigidBodyEngine:
     def _modal(self):
         tasks_modal = [self.prebake_modal(obj_idx) for obj_idx in self.obj_modal]
         results_modal = compute(*tasks_modal)
+        self._save_data()
         self.progress = _update_status(f"{self.status_dir}", "/prebake", 30)
 
     def _proxy(self):
         tasks_proxy = [self.prebake_proxy(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
         results_proxy = compute(*tasks_proxy)
+        self._save_data()
         self.progress = _update_status(f"{self.status_dir}", "/prebake", 45)
 
     def _composer(self):
@@ -181,8 +183,8 @@ class rigidBodyEngine:
         tasks_composer = [self.prebake_composer(obj_idx) for obj_idx in self.obj_dyn + self.obj_static]
         num_workers = config.system.physical_core * 2
         results_composer = compute(*tasks_composer, num_workers=num_workers)
-        self.progress = _update_status(f"{self.status_dir}", "/prebake", 90)
         self._save_data()
+        self.progress = _update_status(f"{self.status_dir}", "/prebake", 90)
 
     def _save_data(self):
         self.entity_manager.dump(is_score_track_final=True)
