@@ -136,7 +136,7 @@ class CollisionSolver:
             if vertices1_idx is not None and vertices2_idx is not None:
                 self._update_score_data(sample_idx, impact_end, contact_type, vertices1_idx, vertices2_idx, face_area1, face_area2, score_type1, score_type2, score_vertex_ids1, score_vertex_ids2, score_contact_area1, score_contact_area2, vertex1_id_list, vertex2_id_list, config_obj1, config_obj2)
 
-                debug_print(f"facing faces between {config_obj1.name} and {config_obj2.name} at frame {sample_idx}: {np.count_nonzero(vertices1_idx)} {np.count_nonzero(vertices2_idx)} at distance {collision_margin} for {ContactType(contact_type).name.lower()}")
+                debug_print(f"facing faces between {config_obj1.name} and {config_obj2.name} at sample {sample_idx}: {np.count_nonzero(vertices1_idx)} {np.count_nonzero(vertices2_idx)} at distance {collision_margin} for {ContactType(contact_type).name.lower()}")
 
         # Finalize score tracks
         self._finalize_score_tracks(score_track1, score_track2, config_obj1, config_obj2, start_samples, stop_samples, score_type1, score_type2, score_vertex_ids1, score_vertex_ids2, score_contact_area1, score_contact_area2)

@@ -67,7 +67,7 @@ DEFAULT_TRACK_RMS: Dict[str, float] = {
     "rigidbody": 0.15,
     "resonance": 0.08,
     "sliding":   0.04,
-    "scraping":  0.04,
+    "scraping":  0.0036,
     "rolling":   0.032,
 }
 
