@@ -43,3 +43,36 @@
 - **Storage & Compression:**
   - Added bz2 compression and decompression support for classes saved by `KleptoEntityStore`.
   - Added metadata editing methods to the `StorageEngine` class and support for parallel append and mmapped modes in `Blosc2Backend`.
+
+# pbrAudioRender
+## [v0.3.0] - 2026-11-05
+
+### Added
+- Added `pbrAudioDAW` with a new TUI.
+- Added `Viewport Panel` integration into `pbrAudioBlender`.
+- Added new 3D viewport widgets GUI to `pbrAudioBlender`.
+- Added new mono modal displacement to acoustic pressure processors in `pbrAudioSignals`.
+- Added new modal displacement and audio forces processors in `pbrAudioSignals`.
+- Added new methods to `StorageEngine` class to edit metadata on the backend.
+- Added `track_group` handling to `pbrAudioSignals` to subdivide processors based on DAG node/edge goals.
+- Added new `postProcess` class to describe `rigidBodySynth` post-processing in `pbrAudioStorage` metadata.
+- Added `SynthPostProcess` class to write audio data processing chains to `pbrAudioStorage` metadata.
+- Added `bz2` compression/decompression for classes saved by `KleptoEntityStore`.
+- Added `StorageEngine._get_props()` to load `AudioDataType.chains` custom configurations.
+
+### Changed
+- Refactored `pbrAudioStorage` to switch to parallel append and mmapped mode for the `Blosc2Backend` class.
+- Refactored `physicsSolver` and `rigidBody` post-process classes for alignment with new storage and signal features.
+- Completed code rewrite for `pbrAudioStorage`.
+- Refactored `postprocess` variable naming conventions.
+
+### Fixed
+- Fixed signal and `ScoreEvent` misalignment from `physicsSolver` and `rigidBody`.
+- Fixed typos in `StorageEngine`.
+- Fixed out-of-memory issues in `ModalComposer`.
+- Fixed `KleptoEntityStore` typos and errors.
+- Fixed `storage root_path` in `CollisionExporter` and `RenderExporter`.
+- Fixed `enable_proxy_synth` indentation in `pbrAudio/properties/scenePG.py`.
+- Fixed typos and errors in `Blosc2Backend` (removed `_rstore`).
+- Fixed various `NameError` and `ModuleNotFoundError` issues in `pbrAudioStorage` and `physicsSolver` modules.
+- Fixed various `SyntaxError` and indentation errors in `pbrAudioStorage`, `pbrAudioSignals`, and `pbrAudioBlender`.

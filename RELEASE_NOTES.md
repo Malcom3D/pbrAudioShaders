@@ -1,7 +1,12 @@
 # pbrAudioRender
-Welcome to version v0.3.0 of `pbrAudioRender`! This major update brings advanced acoustic simulation engines, expanded output configurations, and deep Blender integration.
+This release introduces significant updates to the `pbrAudioRender` ecosystem, focusing on performance, improved storage backends, and UI enhancements.
 
-* **New Simulation Engines:** Experience fully featured FDTD (Finite-Difference Time-Domain) wave propagation and Ray Tracing engines (`pbrAudioRay`) for precise acoustic modeling.
-* **Flexible Audio Outputs:** Render directly to Ambisonic, Surround, Stereo, or Stereo with HRTF formats, utilizing newly added spatial speaker setups like cubes, spheres, and dodecahedrons.
-* **Enhanced Blender Integration:** Enjoy improved 3D viewport widgets, new node-based frequency response graphs, and streamlined collision/render export capabilities.
-* **Advanced Synthesizers & Storage:** Benefit from upgraded modal synthesis pipelines, stochastic force rendering, and faster, compressed storage backends using Blosc2 and bz2.
+**Breaking Changes:**
+* This version includes a complete rewrite of the `pbrAudioStorage` engine. Users relying on specific metadata structures or backend storage may need to review their current implementations.
+
+**Key Highlights:**
+* **New UI/UX:** `pbrAudioBlender` now features a 3D viewport widget GUI and a dedicated Viewport Panel. A TUI-based `pbrAudioDAW` has also been added.
+* **Performance:** `pbrAudioStorage` has been refactored to support parallel appending and memory-mapped files, significantly improving handling of large data sets.
+* **New Processors:** Added support for advanced modal displacement and acoustic pressure processing.
+* **Storage Improvements:** Improved metadata handling and compression support (BZ2) for saved entities.
+* **Bug Fixes:** Resolved critical issues, including memory exhaustion in `ModalComposer` and various import/naming errors throughout the integration layers.
