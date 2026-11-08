@@ -64,7 +64,6 @@ class FractureSynth:
         
         self.sample_rate = int(config.system.sample_rate)
         self.fragment_modal_path = f"{config.system.cache_path}/fracture_modal"
-        self.fracture_audio_dir = f"{config.system.cache_path}/fracture_audio"
         os.makedirs(self.fracture_audio_dir, exist_ok=True)
         
         # Frequency bands for crack sound
@@ -106,19 +105,13 @@ class FractureSynth:
         
         # Synthesize based on fracture type
         if event.fracture_type == FractureType.SHATTER:
-            audio = self._synthesize_shatter(event, fragment_objs)
+            self._synthesize_shatter(event, fragment_objs, total_samples)
         elif event.fracture_type == FractureType.CRACK:
-            audio = self._synthesize_crack(event, fragment_objs)
+            self._synthesize_crack(event, fragment_objs, total_samples)
         else:  # SNAP
-            audio = self._synthesize_snap(event, fragment_objs)
-        
-        # Save audio
-        if audio is not None:
-            self._save_fracture_audio(event, audio, total_samples)
-        
-        return audio
+            self._synthesize_snap(event, fragment_objs, total_samples)
     
-    def _synthesize_shatter(self, event: FractureEvent, fragment_objs: List[Any]) -> Dict[str, np.ndarray]:
+    def _synthesize_shatter(self, event: FractureEvent, fragment_objs: List[Any], total_samples: int) -> Dict[str, np.ndarray]:
         """
         Synthesize shatter fracture sound.
         
@@ -131,7 +124,6 @@ class FractureSynth:
         debug_print(f"Synthesizing shatter fracture for {event.original_obj_name}")
         
         n_samples = int(0.5 * self.sample_rate)  # 500ms duration
-        output = np.zeros(n_samples)
         
         # Get material properties
         damping = event.damping
@@ -139,69 +131,52 @@ class FractureSynth:
         density = event.density
         
         # 1. Generate dense impulse train (grains)
-        grain_times = self._generate_poisson_grains(
-            density=self.grain_density,
-            duration=0.01,  # 10ms burst
-            sample_rate=self.sample_rate,
-            power_law=1.5  # Power-law distribution for inter-onset times
-        )
+        grain_times = self._generate_poisson_grains(density=self.grain_density, duration=0.01, sample_rate=self.sample_rate, power_law=1.5)
         
-        # 2. Process each grain
-        for grain_time in grain_times:
-            if grain_time >= n_samples:
-                break
-            
-            # Each grain: short excitation pulse → modal resonator
-            # Scale fragment size for pitch variation
-            fragment_idx = np.random.randint(0, len(fragment_objs))
-            fragment_obj = fragment_objs[fragment_idx]
-            
+        for fragment_obj in fragment_objs:
             # Get modal model for this fragment
             modal_data = self._get_fragment_modal(event, fragment_obj)
             if modal_data is None:
                 continue
+
+            # Process each grain
+            output = np.zeros(n_samples)
+            for grain_time in grain_times:
+                if grain_time >= n_samples:
+                    break
             
-            # Grain amplitude (decaying envelope)
-            amplitude = np.exp(-grain_time / (0.005 * self.sample_rate))
+                # Grain amplitude (decaying envelope)
+                amplitude = np.exp(-grain_time / (0.005 * self.sample_rate))
+
+                # Generate grain signal
+                grain_len = int(0.005 * self.sample_rate)  # 5ms grain
+                grain_signal = self._generate_grain(modal_data=modal_data, duration=grain_len, amplitude=amplitude, damping=damping, fragment_size=self._get_fragment_size(fragment_obj, event.frame))
             
-            # Generate grain signal
-            grain_len = int(0.005 * self.sample_rate)  # 5ms grain
-            grain_signal = self._generate_grain(
-                modal_data=modal_data,
-                duration=grain_len,
-                amplitude=amplitude,
-                damping=damping,
-                fragment_size=self._get_fragment_size(fragment_obj, event.frame)
-            )
-            
-            # Add to output with random phase
-            start = int(grain_time)
-            end = min(start + grain_len, n_samples)
-            if end > start:
-                output[start:end] += grain_signal[:end-start] * np.random.uniform(0.5, 1.5)
+                # Add to output with random phase
+                start = int(grain_time)
+                end = min(start + grain_len, n_samples)
+                if end > start:
+                    output[start:end] += grain_signal[:end-start] * np.random.uniform(0.5, 1.5)
         
-        # 3. Add stochastic branch crackling
-        crackle = self._generate_crackle_noise(
-            n_samples=n_samples,
-            density=0.5,  # Crackle density
-            amplitude=0.3,
-            damping=damping
-        )
-        output += crackle
+            # 3. Add stochastic branch crackling
+            crackle = self._generate_crackle_noise(n_samples=n_samples, density=0.5, amplitude=0.3, damping=damping)
+            output += crackle
         
-        # 4. Apply envelope
-        envelope = self._shatter_envelope(n_samples)
-        output *= envelope
-        
-        # Normalize
-        max_val = np.max(np.abs(output))
-        if max_val > 0:
-            output = output / max_val * 0.9
-        
-        return {'shatter': output}
-    
-    def _synthesize_crack(self, event: FractureEvent, 
-                          fragment_objs: List[Any]) -> Dict[str, np.ndarray]:
+            # 4. Apply envelope
+            envelope = self._shatter_envelope(n_samples)
+            output *= envelope
+
+            # Pad data track to total_samples length
+            data_start = int(event.frame)
+            data_stop = (output.shape[0] + data_start) - total_samples
+            data_stop = - data_stop if data_stop > 0 else None
+            data_signal = np.zeros(total_samples)
+            data_signal[data_start:] = output[:data_stop]
+
+            # save signal to object track
+            self._save_fracture_audio(obj_idx=fragment_obj, event=event, audio=data_signal)
+
+    def _synthesize_crack(self, event: FractureEvent, fragment_objs: List[Any], total_samples) -> Dict[str, np.ndarray]:
         """
         Synthesize crack fracture sound.
         
@@ -226,17 +201,11 @@ class FractureSynth:
         crack_length = event.crack_length
         
         # Number of crack events
-        n_events = int(10 + 20 * np.random.random())
+        n_events = int(len(fragment_objs) + 20 * np.random.random())
         
         # Generate event times with log-normal distribution
-        event_times = self._generate_log_normal_events(
-            n_events=n_events,
-            duration=0.3,
-            sample_rate=self.sample_rate,
-            shape=0.8,  # Log-normal shape parameter
-            scale=0.01  # Time scale
-        )
-        
+        event_times = self._generate_log_normal_events(n_events=n_events, duration=0.3, sample_rate=self.sample_rate, shape=0.8, scale=0.01)
+
         # 2. Process each crack event
         for i, event_time in enumerate(event_times):
             if event_time >= n_samples:
@@ -256,13 +225,7 @@ class FractureSynth:
             amplitude = 0.5 * velocity_scale * (0.5 + 0.5 * np.random.random())
             
             # Generate crack event signal
-            event_signal = self._generate_crack_event(
-                base_freq=base_freq,
-                duration=0.02,  # 20ms per event
-                amplitude=amplitude,
-                damping=damping,
-                young_modulus=young_modulus
-            )
+            event_signal = self._generate_crack_event(base_freq=base_freq, duration=0.02, amplitude=amplitude, damping=damping, young_modulus=young_modulus)
             
             # Add to output
             start = int(event_time)
@@ -271,26 +234,24 @@ class FractureSynth:
                 output[start:end] += event_signal[:end-start]
         
         # 3. Add subtle background noise
-        background = self._generate_crackle_noise(
-            n_samples=n_samples,
-            density=0.1,
-            amplitude=0.05,
-            damping=damping
-        )
+        background = self._generate_crackle_noise(n_samples=n_samples, density=0.1, amplitude=0.05, damping=damping)
         output += background
         
         # Apply envelope
         envelope = self._crack_envelope(n_samples)
         output *= envelope
-        
-        # Normalize
-        max_val = np.max(np.abs(output))
-        if max_val > 0:
-            output = output / max_val * 0.9
-        
-        return {'crack': output}
+
+        # Pad data track to total_samples length
+        data_start = int(event.frame)
+        data_stop = (output.shape[0] + data_start) - total_samples
+        data_stop = - data_stop if data_stop > 0 else None
+        data_signal = np.zeros(total_samples)
+        data_signal[data_start:] = output[:data_stop]
+
+        # save signal to object track
+        self._save_fracture_audio(obj_idx=event.original_obj_idx, event=event, audio=data_signal)
     
-    def _synthesize_snap(self, event: FractureEvent, fragment_objs: List[Any]) -> Dict[str, np.ndarray]:
+    def _synthesize_snap(self, event: FractureEvent, fragment_objs: List[Any], total_samples) -> Dict[str, np.ndarray]:
         """
         Synthesize snap fracture sound.
         
@@ -314,15 +275,26 @@ class FractureSynth:
         fracture_energy = event.fracture_energy
         
         # 1. Crack nucleation "tick" (high-frequency burst)
-        tick = self._generate_nucleation_tick(
-            amplitude=0.3,
-            duration=0.001,  # 1ms
-            damping=damping
-        )
+        tick = self._generate_nucleation_tick(amplitude=0.3, duration=0.001, damping=damping)
         output[:len(tick)] += tick
-        
-        # 2. Process each fragment for ringdown
+
+        # 2. Apply envelope
+        envelope = self._snap_envelope(n_samples)
+        output *= envelope
+
+        # Pad data track to total_samples length
+        data_start = int(event.frame)
+        data_stop = (output.shape[0] + data_start) - total_samples
+        data_stop = - data_stop if data_stop > 0 else None
+        data_signal = np.zeros(total_samples)
+        data_signal[data_start:] = output[:data_stop]
+
+        # save tick signal to object track
+        self._save_fracture_audio(obj_idx=event.original_obj_idx, event=event, audio=data_signal)
+
+        # 3. Process each fragment for ringdown
         for fragment_obj in fragment_objs:
+            output = np.zeros(n_samples)
             # Get fragment modal model
             modal_data = self._get_fragment_modal(event, fragment_obj)
             if modal_data is None:
@@ -333,13 +305,7 @@ class FractureSynth:
             
             # Generate fragment ringdown
             # Excitation is a step function (unloading)
-            ringdown = self._generate_fragment_ringdown(
-                modal_data=modal_data,
-                duration=1.0,
-                fracture_energy=fracture_energy,
-                fragment_size=fragment_size,
-                damping=damping
-            )
+            ringdown = self._generate_fragment_ringdown(modal_data=modal_data, duration=1.0, fracture_energy=fracture_energy, fragment_size=fragment_size, damping=damping)
             
             # Add to output with slight delay for each fragment
             delay = 0.001 + 0.002 * np.random.random()  # 1-3ms delay
@@ -347,17 +313,20 @@ class FractureSynth:
             end = min(delay_samples + len(ringdown), n_samples)
             output[delay_samples:end] += ringdown[:end-delay_samples]
         
-        # 3. Apply envelope
-        envelope = self._snap_envelope(n_samples)
-        output *= envelope
+            # 4. Apply envelope
+            envelope = self._snap_envelope(n_samples)
+            output *= envelope
+
+            # Pad data track to total_samples length
+            data_start = int(event.frame) 
+            data_stop = (output.shape[0] + data_start) - total_samples
+            data_stop = - data_stop if data_stop > 0 else None
+            data_signal = np.zeros(total_samples)
+            data_signal[data_start:] = output[:data_stop]
+
+            # save tick signal to object track
+            self._save_fracture_audio(obj_idx=event.fragment_obj.idx, event=event, audio=data_signal)
         
-        # Normalize
-        max_val = np.max(np.abs(output))
-        if max_val > 0:
-            output = output / max_val * 0.9
-        
-        return {'snap': output}
-    
     def _generate_poisson_grains(self, density: float, duration: float, sample_rate: int, power_law: float = 1.0) -> np.ndarray:
         """
         Generate grain times with Poisson-like distribution.
@@ -669,50 +638,23 @@ class FractureSynth:
         attack = 1 - np.exp(-t / 0.0005)
         decay = np.exp(-t / 0.3)
         return attack * decay
-    
-    def _save_fracture_audio(self, event: FractureEvent, audio: Dict[str, np.ndarray], total_samples: int):
-        """
-        Save fracture audio to files.
-        """
-        base_name = f"fracture_{event.original_obj_name}_{event.frame:.3f}"
-        
-        for name, data in audio.items():
-            if len(data) == 0:
-                continue
-            
-            # Normalize
-            max_val = np.max(np.abs(data))
-            if max_val > 0:
-                data = data / max_val * 0.9
 
-            # Pad data track to total_samples length
-            data_start = int(event.frame)
-            data_stop = (data.shape[0] + data_start) - total_samples
-            data_stop = - data_stop if data_stop > 0 else None
-            data_track = np.zeros(total_samples)
-            data_track[data_start:] = data[:data_stop]
-            
-            # Save
-            filename = f"{self.fracture_audio_dir}/{base_name}_{name}.raw"
-            sf.write(filename, data_track, self.sample_rate, subtype='FLOAT')
-            debug_print(f"Saved {name} fracture audio to {filename}")
-        
-        # Save metadata
-        import json
-        metadata = {
-            'event': {
-                'type': event.fracture_type.value,
-                'frame': float(event.frame),
-                'original_obj': event.original_obj_name,
-                'fragments': event.fragment_indices,
-                'energy': float(event.fracture_energy)
-            },
-            'audio': list(audio.keys()),
-            'sample_rate': self.sample_rate
+    def _save_fracture_audio(self, obj_idx: Any, event: FractureEvent, audio: np.ndarray):
+        """
+        Save fracture audio to object's track's signal.
+        """
+        config = self.entity_manager.get('config')
+        metadata={
+            'format': 'RAW',
+            'sample_rate': self.sample_rate,
+            'subtype': 'FLOAT',
+            'fracture_type': event.fracture_type.value,
+            'fracture_frame': float(event.frame),
+            'parent_obj_idx': int(event.original_obj_idx),
         }
-        
-        metadata_file = f"{self.fracture_audio_dir}/{base_name}_metadata.json"
-        with open(metadata_file, 'w') as f:
-            json.dump(metadata, f, indent=2)
-        
+        fracture_sample = int(event.frame)
+        fracture_type = event.fracture_type.value.lower() 
+        if event.fracture_type == FractureType.SNAP:
+            fracture_type = 'tick' if fragment_obj == event.original_obj_idx else 'ringdown'
+        self.storage_engine.write(collection=config.system.collection, engine='fractureEngine', obj_idx=fragment_obj.idx, track_name=fracture_type, audio_data=audio, sample_start=fracture_sample, metadata=metadata)
         debug_print(f"Saved fracture metadata to {metadata_file}")

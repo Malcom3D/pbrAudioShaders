@@ -219,15 +219,16 @@ class ProxySynth:
         Load sound tracks from the StorageEngine.
 
         Returns:
-            Dictionary with keys: 'impact', 'sliding', 'scraping', 'rolling', 
-            'rolling_sound', 'sliding_sound', 'scraping_sound'
+            Dictionary with keys: 'impact', 'sliding', 'scraping', 'rolling', 'rolling_sound', 'sliding_sound', 'scraping_sound'
             or None if no tracks found.
         """
+        config = self.entity_manager.get('config')
+
         tracks = {}
         track_names = ['impact', 'sliding', 'scraping', 'rolling', 'rolling_sound', 'sliding_sound', 'scraping_sound']
         
         for track_name in track_names:
-            track_data = storage_engine.read(collection=collection, engine='physicsSolver', obj_idx=config_obj.idx, track_name=track_name)
+            track_data = storage_engine.read(collection=config.system.collection, engine='physicsSolver', obj_idx=config_obj.idx, track_name=track_name)
             if len(track_data) > 0:
                 tracks[track_name] = track_data
                 debug_print(f"Loaded {track_name} track: {len(track_data)} samples")

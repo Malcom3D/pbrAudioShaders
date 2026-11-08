@@ -33,16 +33,19 @@ from ..lib.fracture_synth import FractureSynth
 class fractureEngine:
     """
     Main engine for fracture sound synthesis.
-    
+
     Orchestrates:
     1. Fracture detection from trajectory data
     2. Modal model adaptation for fragments
     3. Fracture sound synthesis
+    4. Non-destructive post-processing chain attachment
     """
     
     entity_manager: EntityManager
     fracture_events: List[FractureEvent] = field(default_factory=list)
-    
+    storage_engine: StorageEngine = None
+    total_samples: int = 1
+
     def __post_init__(self):
         config = self.entity_manager.get('config')
         
@@ -55,19 +58,13 @@ class fractureEngine:
         set_debug(config.system.debug)
         set_debug_prefix(self.__class__.__name__)
 
-        self.collisions_dir = f"{config.system.cache_path}/collisions"
-        self.trajectories_dir = f"{config.system.cache_path}/trajectories"
-        self.forces_dir = f"{config.system.cache_path}/forces_data"
-        
         self.status_dir = f"{config.system.cache_path}/status/{__class__.__name__}"
-        self.fracture_dir = f"{config.system.cache_path}/fracture"
+        self.progress = 0
+
         self.fracture_modal_dir = f"{config.system.cache_path}/fracture_modal"
-        self.fracture_audio_dir = f"{config.system.cache_path}/fracture_audio"
         
         os.makedirs(self.status_dir, exist_ok=True)
-        os.makedirs(self.fracture_dir, exist_ok=True)
         os.makedirs(self.fracture_modal_dir, exist_ok=True)
-        os.makedirs(self.fracture_audio_dir, exist_ok=True)
         
         # Initialize components
         self.detector = FractureDetector(self.entity_manager)
@@ -75,19 +72,68 @@ class fractureEngine:
         self.synth = FractureSynth(self.entity_manager)
 
         # Get fracture_events
-        self.fracture_events = self.entity_manager.get('fracture_events')
+        self.fracture_events = self.entity_manager.get('fracture_events') or []
 
-        # Set total samples
-#        self.total_samples = self._set_total_samples()
+        # Compute total samples
         self.total_samples = int(config.system.total_frames * self.sample_rate / self.sfps)
 
-#    def _set_total_samples(self):
-#        trajectories = self.entity_manager.get('trajectories')
-#        for t_idx in trajectories.keys():
-#            if isinstance(trajectories[t_idx], TrajectoryData) and not trajectories[t_idx].static:
-#                trajectory = trajectories[t_idx]
-#                return int(trajectory.get_x()[-1])
-    
+        # StorageEngine + schema
+        self.storage_engine = StorageEngine(self.entity_manager)
+        self._register_storage_schema()
+
+    def _register_storage_schema(self):
+        """
+        Register the AudioSchema for fracture-engine per-fragment tracks.
+
+        Track layout (per fragment object that is a shard):
+          - shatter   : burst-of-grains synthesis (one-shot; short burst)
+          - crack     : sparse crack events
+          - snap      : nucleation tick + fragment ringdown
+          - ringdown  : pure modal ringdown (post-fracture resonance)
+          - tick      : high-frequency nucleation tick
+
+        Only the shatter/crack/snap tracks are populated depending on the
+        fracture type. All tracks are registered so that the DAG walker
+        always finds a consistent layout per object.
+        """
+        config = self.entity_manager.get('config')
+        debug_print("Registering storage schema for fracture tracks...")
+
+        track_names = ['shatter', 'crack', 'snap', 'ringdown', 'tick']
+
+        default_behaviors = {
+            'collection': 'none',
+            'engine': 'none',
+            'object': 'multi',
+            'track': 'single',
+            'signal': 'merge',
+        }
+        default_kinds = {
+            'collection': 'multi-track',
+            'engine': 'multi-track',
+            'object': 'multi-track',
+            'track': 'mono',
+            'signal': 'mono',
+        }
+
+        self.storage_engine.register(
+            collection=self.collection,
+            objs_type="objects",
+            engine=self.__class__.__name__,
+            track_group="modal-displacement",
+            track_names=track_names,
+            signal_type="float32",
+            total_samples=int(self.total_samples),
+            sample_rate=self.sample_rate,
+            bit_depth=config.system.bit_depth,
+            subtype='FLOAT',
+            metadata={'description': f'Physically-based fracture synthesis tracks from {self.__class__.__name__}'},
+            default_behaviors=default_behaviors,
+            default_kinds=default_kinds,
+        )
+        _update_status(f"{self.status_dir}", "/init", 99)
+        debug_print("Fracture storage schema registered and materialized.")
+
     def bake(self) -> None:
         """
         Main bake function - detect fractures and synthesize sounds.
@@ -96,6 +142,7 @@ class fractureEngine:
         
         # Process all objects with fracture configuration
         for conf_obj in config.objects:
+            self.progress = _update_status(f"{self.status_dir}", "/bake", self.progress + 50/len(config.objects))
             if conf_obj.fractured is not False and conf_obj.shard is not False:
                 # This is a fractured object with shards
                 original_idx = conf_obj.idx
@@ -112,6 +159,9 @@ class fractureEngine:
         if self.fracture_events:
             self._process_fracture_events()
     
+        _update_status(f"{self.status_dir}", "/bake", 99)
+        debug_print("Fracture detection and synthesis ended.")
+
     def _process_fracture_events(self):
         """
         Process all fracture events in parallel.

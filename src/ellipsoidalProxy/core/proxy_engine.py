@@ -22,6 +22,9 @@ from typing import Tuple, Optional, List, Dict, Any
 from dataclasses import dataclass, field
 
 from pbrAudioCommon import EntityManager
+from pbrAudioCommon import _update_status
+from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
+
 from pbrAudioStorage import StorageEngine
 
 from ..lib.proxy_synth import ProxySynth
@@ -43,16 +46,37 @@ class ProxyEngine:
     ir_table: ProxyIRTable = None
     
     def __post_init__(self):
+        config = self.entity_manager.get('config')
+
+        set_debug(config.system.debug)
+        set_debug_prefix(self.__class__.__name__)
+
+        # Determine begin total samples
+        fps = config.system.fps
+        fps_base = config.system.fps_base
+        subframes = config.system.subframes
+        sample_rate = config.system.sample_rate
+        sfps = ( fps / fps_base ) * subframes # subframes per seconds
+        self.total_samples = int(config.system.total_frames * sample_rate / sfps)
+
+        # Initialize Status
+        self.status_dir = f"{config.system.cache_path}/status/{__class__.__name__}"
+        self.progress = 0
+
         # Initialize StorageEngine
         self.storage_engine = StorageEngine(self.entity_manager)
+        self._register_storage_schema()
+
+        self.progress = _update_status(f"{self.status_dir}", "/init", 25) # Update progress
         debug_print("StorageEngine initialized for ProxyEngine.")
-        config = self.entity_manager.get('config')
         
         # Initialize proxy synth
         self.proxy_synth = ProxySynth(entity_manager=self.entity_manager)
+        self.progress = _update_status(f"{self.status_dir}", "/init", 50) # Update progress
     
         # Map IR table
         self.ir_table = self.proxy_synth.ir_table
+        self.progress = _update_status(f"{self.status_dir}", "/init", 75) # Update progress
 
         config = self.entity_manager.get('config')
         proxy_meshes = []
@@ -63,6 +87,7 @@ class ProxyEngine:
 
         # Compute IR table from proxy meshes
         self.ir_table.compute_ir_table(proxy_meshes)
+        self.progress = _update_status(f"{self.status_dir}", "/init", 99) # Update progress
 
     def _register_storage_schema(self):
         """
@@ -106,7 +131,6 @@ class ProxyEngine:
             default_kinds=default_kinds
         )
 
-        self.progress = _update_status(f"{self.status_dir}", "/prebake", 5) # Update progress
         debug_print("Proxy synth storage schema registered and materialized.")
 
     @delayed
