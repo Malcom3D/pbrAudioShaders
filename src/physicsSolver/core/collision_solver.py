@@ -69,8 +69,8 @@ class CollisionSolver:
         if self._is_connected(config_obj1, config_obj2):
             self._connected_facing_face(obj1_idx, obj2_idx, trajectory1, trajectory2)
         
-        total_samples = int(trajectory1.get_x()[-1] if not config_obj1.static else trajectory2.get_x()[-1])
-#        total_samples = int(config.system.total_frames * sample_rate / sfps)
+#        total_samples = int(trajectory1.get_x()[-1] if not config_obj1.static else trajectory2.get_x()[-1])
+        total_samples = int(config.system.total_frames * sample_rate / sfps)
         
         # Calculate sample range
         start_samples, stop_samples, impact_end = self._calculate_sample_range(collision, total_samples, sample_rate, sfps, config_obj1, config_obj2)

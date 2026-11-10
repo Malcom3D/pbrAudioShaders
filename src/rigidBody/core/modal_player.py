@@ -44,7 +44,7 @@ class ModalPlayer:
         debug_print('ModalPlayer init: ', self.obj_idx)
         debug_print('ModalPlayer sample_counter: ', self.obj_idx)
         self.sample_counter = self.entity_manager.get('sample_counter')
-        self.score_path = f"{config.system.cache_path}/score"
+#        self.score_path = f"{config.system.cache_path}/score"
 #        self.output_dir = f"{config.system.cache_path}/modal_player"
 #        os.makedirs(self.output_dir, exist_ok=True)
 
