@@ -96,8 +96,8 @@ class ForceSynth:
 
         # Calculate total duration in samples
         frames = trajectory.get_x()
-#        total_samples = int(trajectory.get_x()[-1])
-        total_samples = int(config.system.total_frames * sample_rate / sfps)
+        total_samples = int(trajectory.get_x()[-1])
+#        total_samples = int(config.system.total_frames * sample_rate / sfps)
         duration_s = total_samples / sample_rate
 
         # Init tracks
@@ -147,28 +147,16 @@ class ForceSynth:
                         final_tracks[key] += synthesized_track[key]
 
                     # Add to tracks start from sample_idx
-                    stop_sample = total_samples - sample_idx
-                    impact_track[:total_samples-sample_idx] += synthesized_track['impact'][sample_idx:]
-                    sliding_track[:total_samples-sample_idx] += synthesized_track['sliding'][sample_idx:]
-                    scraping_track[:total_samples-sample_idx] += synthesized_track['scraping'][sample_idx:]
-                    rolling_track[:total_samples-sample_idx] += synthesized_track['rolling'][sample_idx:]
-                    non_collision_track[:total_samples-sample_idx] += synthesized_track['non_collision'][sample_idx:]
-                    coupling_strength_track[:total_samples-sample_idx] += synthesized_track['coupling_strength'][sample_idx:]
+                    impact_track += synthesized_track['impact']
+                    sliding_track += synthesized_track['sliding']
+                    scraping_track += synthesized_track['scraping']
+                    rolling_track += synthesized_track['rolling']
+                    non_collision_track += synthesized_track['non_collision']
+                    coupling_strength_track += synthesized_track['coupling_strength']
                     if config.system.enable_noise_enhancement:
-                        sliding_sound[:total_samples-sample_idx] += synthesized_track['sliding_sound'][sample_idx:]
-                        scraping_sound[:total_samples-sample_idx] += synthesized_track['scraping_sound'][sample_idx:]
-                        rolling_sound[:total_samples-sample_idx] += synthesized_track['rolling_sound'][sample_idx:]
-
-#                    impact_track += synthesized_track['impact']
-#                    sliding_track += synthesized_track['sliding']
-#                    scraping_track += synthesized_track['scraping']
-#                    rolling_track += synthesized_track['rolling']
-#                    non_collision_track += synthesized_track['non_collision']
-#                    coupling_strength_track += synthesized_track['coupling_strength']
-#                    if config.system.enable_noise_enhancement:
-#                        sliding_sound += synthesized_track['sliding_sound']
-#                        scraping_sound += synthesized_track['scraping_sound']
-#                        rolling_sound += synthesized_track['rolling_sound']
+                        sliding_sound += synthesized_track['sliding_sound']
+                        scraping_sound += synthesized_track['scraping_sound']
+                        rolling_sound += synthesized_track['rolling_sound']
 
         # Create tracks dictionary
         tracks = {
