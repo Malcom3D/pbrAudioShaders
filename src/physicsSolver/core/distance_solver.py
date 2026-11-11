@@ -217,7 +217,7 @@ class DistanceSolver:
 #        distances_margin = distances[distances <= 2*collision_margin]
 
         # Remove outliers for better threshold calculation
-        q1, q3 = np.percentile(distances, [25, 75])
+        q1, q3 = np.percentile(distances, [20, 80])
 #        q1, q3 = np.percentile(distances_margin, [25, 75])
         iqr = q3 - q1
         lower_bound = q1 - 1.5 * iqr
