@@ -165,8 +165,8 @@ class PositionSolver:
         # Convert to numpy arrays
         P1 = motion_path[frame - 2]
         P2 = motion_path[frame - 1]
-        P3 = motion_path[frame]
-        P4 = motion_path[frame + 1]
+        P3 = motion_path[frame + 1]
+        P4 = motion_path[frame + 2]
     
         # Direction vectors
         d1 = P1 - P2  # Direction from P2 toward P1
