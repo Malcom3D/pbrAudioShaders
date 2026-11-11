@@ -108,6 +108,7 @@ class physicsEngine:
         if '_traj' not in step_done:
             self._pos()
             self._rot()
+            self._norm()
             self._vertex()
             self._traj()
         if '_pp_traj' not in step_done:

@@ -45,9 +45,8 @@ class NormalSolver:
                 impact_rotation = tmp_trajectory.rotation
                 # Find the object config
                 config_obj = None
-                for obj in config.objects:
-                    if obj.idx == obj_idx:
-                        config_obj = obj
+                for config_obj in config.objects:
+                    if config_obj.idx == obj_idx:
                         break
 
                 if config_obj:
