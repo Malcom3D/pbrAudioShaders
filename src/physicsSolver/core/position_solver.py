@@ -31,6 +31,12 @@ class PositionSolver:
     """ Find unsampled intermediate positions """
     entity_manager: EntityManager
 
+    def __post_init__(self):
+        config = self.entity_manager.get('config')
+
+        set_debug(config.system.debug)
+        set_debug_prefix(self.__class__.__name__)
+
     def compute(self, obj_idx: int):
         config = self.entity_manager.get('config')
 
