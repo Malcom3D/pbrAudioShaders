@@ -256,7 +256,7 @@ class DistanceSolver:
         )
         
         # Ensure threshold is reasonable
-        threshold = max(threshold, collision_margin * 0.1)  # At least 10% of collision margin
+        threshold = max(threshold, collision_margin * 0.2)  # At least 10% of collision margin
         threshold = min(threshold, collision_margin * 2.0)  # At most 200% of collision margin
         
         return threshold

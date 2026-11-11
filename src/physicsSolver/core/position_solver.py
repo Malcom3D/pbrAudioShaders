@@ -40,9 +40,6 @@ class PositionSolver:
     def compute(self, obj_idx: int):
         config = self.entity_manager.get('config')
 
-        set_debug(config.system.debug)
-        set_debug_prefix(self.__class__.__name__)
-
         fps = config.system.fps
         fps_base = config.system.fps_base
         subframes = config.system.subframes
@@ -165,8 +162,8 @@ class PositionSolver:
         # Convert to numpy arrays
         P1 = motion_path[frame - 2]
         P2 = motion_path[frame - 1]
-        P3 = motion_path[frame + 1]
-        P4 = motion_path[frame + 2]
+        P3 = motion_path[frame]
+        P4 = motion_path[frame + 1]
     
         # Direction vectors
         d1 = P1 - P2  # Direction from P2 toward P1
