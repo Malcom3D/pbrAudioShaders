@@ -16,6 +16,7 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import asyncio
 import numpy as np
 from typing import Any, List, Tuple, Dict, Optional
 from dataclasses import dataclass, field
@@ -25,13 +26,43 @@ from pbrAudioCommon import EntityManager
 @dataclass
 class ConnectedBuffer:
     objs_buffer: np.ndarray = field(default_factory=lambda: np.zeros((1,7), dtype=np.float32))
+    _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    _event_loop: Optional[asyncio.AbstractEventLoop] = None
+
+    def __post_init__(self):
+        self._lock = asyncio.Lock()
+        self._event_loop = asyncio.new_event_loop()
+        self._tasks = []
 
     def add_obj(self, obj_idx: int):
+        """Synchronous wrapper that uses the existing event loop"""
+        if self._event_loop.is_running():
+            self._tasks.append(self._event_loop.create_task(self._add_obj(obj_idx)))
+        else:
+            # If called from sync context, run in the loop
+            self._tasks.append(self._event_loop.create_task(self._add_obj(obj_idx)))
+            self._event_loop.run_until_complete(asyncio.wait(self._tasks))
+
+    async def _add_obj(self, obj_idx: int):
+        async with self._lock:
+            await self._add_obj_internal(obj_idx)
+
+    async def _add_obj_internal(self, obj_idx: int):
         if obj_idx >= self.objs_buffer.shape[0]:
             # Expand buffer
             new_buffer = np.zeros((obj_idx+1,7), dtype=np.float32)
             new_buffer[:self.objs_buffer.shape[0], :] = self.objs_buffer
             self.objs_buffer = new_buffer
+            return 0
+
+#    def add_obj(self, obj_idx: int):
+#        if obj_idx >= self.objs_buffer.shape[0]:
+#            # Expand buffer
+#            new_buffer = np.zeros((obj_idx+1,7), dtype=np.float32)
+#            new_buffer[:self.objs_buffer.shape[0], :] = self.objs_buffer
+#            self.objs_buffer = new_buffer
+#            return 0
+
 #        new_inst = 1 + obj_idx - self.objs_buffer.shape[0]
 #        if new_inst > 0:
 #            buffer_type = [0 for _ in range(7)]
