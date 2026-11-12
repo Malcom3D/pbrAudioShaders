@@ -217,8 +217,8 @@ class DistanceSolver:
 #        distances_margin = distances[distances <= 2*collision_margin]
 
         # Remove outliers for better threshold calculation
-        q1, q3 = np.percentile(distances, [20, 80])
-#        q1, q3 = np.percentile(distances_margin, [25, 75])
+#        q1, q3 = np.percentile(distances, [20, 80])
+        q1, q3 = np.percentile(distances_margin, [25, 75])
         iqr = q3 - q1
         lower_bound = q1 - 1.5 * iqr
         upper_bound = q3 + 1.5 * iqr
@@ -256,7 +256,7 @@ class DistanceSolver:
         )
         
         # Ensure threshold is reasonable
-        threshold = max(threshold, collision_margin * 0.2)  # At least 10% of collision margin
+        threshold = max(threshold, collision_margin * 0.1)  # At least 10% of collision margin
         threshold = min(threshold, collision_margin * 2.0)  # At most 200% of collision margin
         
         return threshold
