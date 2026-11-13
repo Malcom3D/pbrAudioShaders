@@ -276,7 +276,7 @@ class postProcess:
                     "params": {
                         "alpha_quiet": 0.999,
                         "alpha_active": 0.9999,
-                        " "min_force": 0.02,
+                        "min_force": 0.02,
                         "enable_local_mean": True,
                     },
                 })
@@ -478,7 +478,7 @@ class postProcess:
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
-    def _resolve_force_for_object(self, obj_idx: int) -> Optional[ForceDataDataSequence]:
+    def _resolve_force_for_object(self, obj_idx: int) -> Optional[ForceDataSequence]:
         """
         Return the first ForceDataSequence in the entity manager whose
         `obj_idx` matches the requested object. Each object has exactly one

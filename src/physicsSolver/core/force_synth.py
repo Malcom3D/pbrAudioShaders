@@ -212,7 +212,7 @@ class ForceSynth:
         actual_impulse = np.trapz(force_envelope, t)
         if actual_impulse > 0:
             force_envelope = force_envelope * (impulse / actual_impulse)
-        
+
         # Create impact signal and coupling strength signal
         impact_samples, coupling_strength = (np.zeros(total_samples) for _ in range(2))
         for force_idx in range(force_envelope.shape[0]):
