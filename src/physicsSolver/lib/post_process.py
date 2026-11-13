@@ -18,402 +18,624 @@
 
 import os
 import numpy as np
-from typing import Any, Dict, List, Optional
-
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 from dataclasses import dataclass
 
-from pbrAudioCommon import EntityManager
+from pbrAudioCommon import EntityManager, ForceDataSequence
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
 from pbrAudioStorage import StorageEngine
-from pbrAudioSignals.core.groups import AUDIO_FORCE, GENERIC
+from pbrAudioStorage.utils.errors import StorageError
+from pbrAudioSignals.core.groups import AUDIO_FORCE
 
 
-# Track name -> (semantic track type, default processor params)
-# The semantics drive the choice of processor params below.
-_TRACK_TYPES: Dict[str, str] = {
-    'impact':            'impact',
-    'sliding':           'continuous',
-    'scraping':          'continuous',
-    'rolling':           'continuous',
-    'non_collision':     'ambient',
-    'coupling_strength': 'control',
-}
+# ---------------------------------------------------------------------------
+# Track classification
+# ---------------------------------------------------------------------------
+# Impact tracks are transient-heavy: DC blocker + envelope smoother, but no
+# aggressive spectral work (that would kill the attack).
+#
+# Continuous tracks (sliding/scraping/rolling) benefit from spectral leak
+# reduction because their tail rings much longer than the physical event.
+#
+# Periodic repeats deserve the periodicity breaker.
+#
+# `_sound` tracks are the noise-enhancement side tracks synthesized alongside
+# the vibration signal. They are the *cleanest* target for spectral work.
+#
+# `coupling_strength` is a control-side channel; never processed.
 
-_NOISE_TRACKS: Dict[str, str] = {
-    'sliding_sound':  'noise',
-    'scraping_sound': 'noise',
-    'rolling_sound':  'noise',
-}
+_IMPACT_TRACKS    = ("impact",)
+_CONTINUOUS_TRACKS = ("sliding", "scraping", "rolling")
+_NOISE_TRACKS     = ("sliding_sound", "scraping_sound", "rolling_sound")
+_CONTROL_TRACKS   = ("coupling_strength",)
+_AMBIENT_TRACKS   = ("non_collision",)
+
 
 @dataclass
 class postProcess:
     """
-    Non-destructive post-processing engine for synthesized audio forces.
+    Non-destructive post-processor for synthesized audio-force tracks.
 
-    Writes processor *chain metadata* onto each track's AudioDataType via the
-    StorageEngine. Actual DSP runs at read time through the DAG evaluator in
-    pbrAudioStorage, so nothing is ever re-computed on disk.
+    What this class does
+    --------------------
+    For every dynamic object, walk each audio-force track and *attach* a
+    processor chain to its AudioDataType via `StorageEngine.set_chains()`.
 
-    This replaces the deprecated AudioForcePostProcessEngine (which used the
-    old postProcess module and wrote processed WAVs).
+    The actual DSP is then executed lazily by `StorageEngine.read(...)` when
+    downstream consumers (ModalPlayer, AudioRenderer, analytics, exports,
+    etc.) pull the audio:
+
+        StorageEngine.read(...)
+            └─ _traverse_signal()
+                └─ _process_audio()
+                    ├─ _apply_behavior()      # single / merge / multi
+                    ├─ _apply_chain()         # <-- this is what we drive
+                    │      └─ DagEvaluator
+                    │          └─ DCBlockerForce
+                    │          └─ ForceEnvelopeSmoothing
+                    │          └─ ForceSpectralLeakReduce
+                    │          └─ ForcePeriodicityBreaker
+                    │          └─ ForceDynamicAmplify
+                    └─ _apply_kinds()         # mono / multi / ambisonic
+
+    Key points
+    ----------
+    * Nothing is written to disk beyond metadata. Re-running postProcess is
+      idempotent (chains are replaced, not appended).
+    * The `force` side-channel (a `ForceDataSequence`) and `obj_config` are
+      injected *by StorageEngine* at read time via `_get_props()`; we only
+      need to make sure the chains dict requests them.
+    * `sample_rate`, `sfps`, `obj_idx` are exposed to processors via
+      `props.custom["params"]` so the same chain works across tracks.
+    * Global normalization is *not* applied to the raw tracks; instead, the
+      `PerTrackNormalize` processor is appended at the end of every chain with
+      a conservative target peak. Truly global normalization belongs to the
+      final render stage, which can call `StorageEngine.read(...)` on every
+      track, take the max, and pass it as `props.custom["global_peak"]` to a
+      `GlobalNormalize` node it appends afterward.
+
+    Parameters
+    ----------
+    entity_manager : EntityManager
+        Provides `config` and the `forces` collection.
+    storage_engine : StorageEngine, optional
+        If omitted, a new instance is constructed.
+    collection : str, optional
+        Storage collection. Defaults to `config.system.collection`.
+    engine : str, optional
+        Storage engine label under which audio-force tracks are stored.
+        Defaults to `"physicsEngine"` to match `ForceSynth._write_tracks_to_storage`.
     """
 
     entity_manager: EntityManager
     storage_engine: Optional[StorageEngine] = None
+    collection: Optional[str] = None
+    engine: str = "physicsEngine"
 
+    # ------------------------------------------------------------------
     def __post_init__(self):
-        self.config = self.entity_manager.get('config')
+        self.config = self.entity_manager.get("config")
         set_debug(self.config.system.debug)
         set_debug_prefix(self.__class__.__name__)
 
-        self.audio_forces_postprocess = self.config.audio_forces_postprocess
-        self.postprocess = self.config.synth_postprocess
+        self.afp = getattr(self.config, "audio_forces_postprocess", None)
 
         if self.storage_engine is None:
             self.storage_engine = StorageEngine(self.entity_manager)
 
-        # Engine key as registered in physicsEngine._register_storage_schema
-        self.engine = "physicsEngine" # -> "postProcess"
-        # Fallback engine name used by ForceSynth. If your ForceSynth writes
-        # under "physicsSolver" keep the constant below in sync.
-        self.force_engine = "physicsEngine"
+        if self.collection is None:
+            self.collection = self.config.system.collection
+
+        # Derived timing
+        self.sample_rate = int(self.config.system.sample_rate)
+        fps = self.config.system.fps
+        fps_base = self.config.system.fps_base or 1
+        subframes = self.config.system.subframes or 1
+        self.sfps = (fps / fps_base) * subframes
 
     # ------------------------------------------------------------------
-    # Public API
+    # Public entry point
     # ------------------------------------------------------------------
-    def process(self) -> None:
-        """Configure read-time processing chains for every dynamic object."""
-        config = self.config
-        debug_print("Configuring processing chains...")
-
-        # Global normalisation target: peak across all *raw* tracks.
-        global_peak = self._compute_global_peak()
-        debug_print(f"Global peak value: {global_peak}")
-
-        configured = 0
-        for config_obj in config.objects:
-            if not self._object_has_tracks(config_obj.idx):
-                continue
-            self._configure_object_chains(config_obj, global_peak)
-            configured += 1
-
-        debug_print(f"Configured processing chains for {configured} objects")
-
-    def clear_chains(self, obj_idx: Optional[int] = None, track_name: Optional[str] = None) -> None:
+    def process(self) -> Dict[int, Dict[str, Any]]:
         """
-        Clear processing chains via the StorageEngine.
+        Walk every dynamic object, attach a chain to each of its tracks, and
+        return a per-object report describing what was applied.
 
-        Args:
-            obj_idx    : if None, clear all dynamic objects.
-            track_name : if None, clear every track of the object(s).
+        Returns
+        -------
+        dict
+            { obj_idx: { track_name: {"chain_types": [...], "signal_names": [...], "skipped": bool or reason} } }
         """
-        config = self.config
+        debug_print("[postProcess] attaching non-destructive chains to audio-force tracks")
 
-        if obj_idx is not None:
-            obj_indices = [obj_idx]
-        else:
-            obj_indices = [o.idx for o in config.objects if not o.static]
+        report: Dict[int, Dict[str, Any]] = {}
 
-        track_names = list(_TRACK_TYPES.keys())
-        if config.system.enable_noise_enhancement:
-            track_names += list(_NOISE_TRACKS.keys())
-
-        cleared = 0
-        for o_idx in obj_indices:
-            if not self._object_has_tracks(o_idx):
-                continue
-
-            targets = [track_name] if track_name else track_names
-            for t_name in targets:
-                try:
-                    n = self.storage_engine.clear_chains(
-                        collection=config.system.collection,
-                        engine=self.force_engine,
-                        obj_idx=o_idx,
-                        track_name=t_name,
-                    )
-                    cleared += n
-                except Exception as e:
-                    debug_print(
-                        f"clear_chains failed for {o_idx}/{t_name}: {e}"
-                    )
-
-        debug_print(f"Cleared {cleared} chain-bearing nodes")
-
-    def get_chain_spec(self, obj_idx: int, track_name: str) -> Optional[Dict[str, Any]]:
-        """Read the current chain spec for an object's track (metadata only)."""
-        try:
-            meta = self.storage_engine.get_track_meta(
-                collection=self.config.system.collection,
-                engine=self.force_engine,
-                obj_idx=obj_idx,
-                track_name=track_name,
-            )
-        except Exception as e:
-            debug_print(f"get_chain_spec: {e}")
-            return None
-
-        # Track-level chains are the mirror that set_chains() writes.
-        return meta.chains
-
-    # ------------------------------------------------------------------
-    # Discovery helpers
-    # ------------------------------------------------------------------
-    def _object_has_tracks(self, obj_idx: int) -> bool:
-        """
-        True if *any* physicsEngine track node exists for this object.
-
-        We use the StorageEngine.read() with unprocessed=True so the DAG
-        evaluator never tries to run a chain that isn't installed yet.
-        """
-        for t_name in _TRACK_TYPES:
-            try:
-                data = self.storage_engine.read(
-                    collection=self.config.system.collection,
-                    engine=self.force_engine,
-                    obj_idx=obj_idx,
-                    track_name=t_name,
-                    signal_name=None,
-                    unprocessed=True,
-                )
-                if data is not None and data.size > 0 and np.any(data):
-                    return True
-            except Exception:
-                continue
-        return False
-
-    def _compute_global_peak(self) -> float:
-        """Peak across all raw (unprocessed) physicsSolver tracks."""
-        config = self.config
-        all_tracks = list(_TRACK_TYPES.keys())
-        if config.system.enable_noise_enhancement:
-            all_tracks += list(_NOISE_TRACKS.keys())
-
-        max_peak = 0.0
-        for config_obj in config.objects:
+        for config_obj in self.config.objects:
             if config_obj.static:
                 continue
-            for t_name in all_tracks:
-                try:
-                    data = self.storage_engine.read(
-                        collection=config.system.collection,
-                        engine=self.force_engine,
-                        obj_idx=config_obj.idx,
-                        track_name=t_name,
-                        signal_name=None,
-                        unprocessed=True,
-                    )
-                    if data is not None and data.size > 0:
-                        max_peak = max(max_peak, float(np.max(np.abs(data))))
-                except Exception:
-                    continue
 
-        return max_peak if max_peak > 0 else 1.0
-
-    # ------------------------------------------------------------------
-    # Chain construction
-    # ------------------------------------------------------------------
-    def _configure_object_chains(self, config_obj: Any, global_peak: float) -> None:
-        """Build & attach chain specs for for every track of one object."""
-        config = self.config
-
-        track_types = dict(_TRACK_TYPES)
-        if config.system.enable_noise_enhancement:
-            track_types.update(_NOISE_TRACKS)
-
-        for track_name, track_type in track_types.items():
-            # Only touch tracks that actually contain audio.
-            if not self._track_has_audio(config_obj.idx, track_name):
+            force_side = self._resolve_force_for_object(config_obj.idx)
+            if force_side is None:
+                debug_print(
+                    f"[postProcess] skipping obj_idx={config_obj.idx} "
+                    f"({config_obj.name}): no ForceDataSequence found"
+                )
+                report[config_obj.idx] = {"__skipped__": "no force side-channel"}
                 continue
 
-            chain_spec = self._build_chain_spec(
-                track_name=track_name,
-                track_type=track_type,
-                config_obj=config_obj,
-                global_peak=global_peak,
-            )
+            report[config_obj.idx] = self._process_object(config_obj)
 
-            if not chain_spec:
+        return report
+
+    # ------------------------------------------------------------------
+    # Per-object processing
+    # ------------------------------------------------------------------
+    def _process_object(self, config_obj: Any) -> Dict[str, Any]:
+        obj_idx = config_obj.idx
+        obj_report: Dict[str, Any] = {}
+
+        existing_tracks = self._list_existing_tracks(obj_idx)
+        if not existing_tracks:
+            debug_print(f"[postProcess] obj_idx={obj_idx} ({config_obj.name}): no materialized tracks")
+            return obj_report
+
+        # Build the shared `props.custom.params` block that every processor
+        # in every chain will see at read time.
+        shared_params = {
+            "sample_rate": self.sample_rate,
+            "sfps": self.sfps,
+            "obj_idx": obj_idx,
+        }
+
+        for track_name in existing_tracks:
+            chain_spec = self._build_chain_for_track(
+                track_name=track_name,
+                config_obj=config_obj,
+                shared_params=shared_params,
+            )
+            if chain_spec is None:
+                obj_report[track_name] = {"skipped": "no-op track"}
                 continue
 
             try:
-                n = self.storage_engine.set_chains(
-                    collection=config.system.collection,
-                    engine=self.force_engine,
-                    obj_idx=config_obj.idx,
+                changed = self.storage_engine.set_chains(
+                    collection=self.collection,
+                    engine=self.engine,
+                    obj_idx=obj_idx,
                     track_name=track_name,
-                    chains={
-                        "op": "sequential",
-                        "processors": chain_spec,
-                    },
+                    chains=chain_spec,
+                    signal_names=None,  # apply to every signal of this track
                 )
-                debug_print(
-                    f"Configured chain for {config_obj.name}/{track_name}: "
-                    f"{len(chain_spec)} processors ({n} nodes updated)"
-                )
-            except Exception as e:
-                debug_print(
-                    f"set_chains failed for {config_obj.name}/{track_name}: {e}"
-                )
+            except StorageError as e:
+                debug_print(f"[postProcess] failed to set chain on {config_obj.name}/{track_name}: {e}")
+                obj_report[track_name] = {"error": str(e)}
+                continue
 
-    def _track_has_audio(self, obj_idx: int, track_name: str) -> bool:
-        try:
-            data = self.storage_engine.read(
-                collection=self.config.system.system.collection,
-                engine=self.force_engine,
-                obj_idx=obj_idx,
-                track_name=track_name,
-                signal_name=None,
-                unprocessed=True,
+            obj_report[track_name] = {
+                "chain_types": [s["type"] for s in chain_spec["processors"]],
+                "signal_names": list(
+                    self.storage_engine.list_signals(
+                        self.collection, self.engine, obj_idx, track_name
+                    )
+                ),
+                "nodes_updated": changed,
+            }
+            debug_print(
+                f"[postProcess] obj={config_obj.name}({obj_idx}) track={track_name}: "
+                f"chain={[s['type'] for s in chain_spec['processors']]}"
             )
-            return data is not None and data.size > 0 and bool(np.any(data))
-        except Exception:
-            return False
 
-    def _build_chain_spec(self, track_name: str, track_type: str,
-                          config_obj: Any, global_peak: float) -> List[Dict[str, Any]]:
-        """Build a list of {type, params} dicts for one track."""
-        audio_forces_postprocess = self.audio_forces_postprocess
-        pp = self.synth_postprocess
-        sr = self.config.system.sample_rate
+        return obj_report
 
-        # Control signal: leave alone.
-        if track_type == 'control':
+    # ------------------------------------------------------------------
+    # Chain selection
+    # ------------------------------------------------------------------
+    def _build_chain_for_track(
+        self,
+        track_name: str,
+        config_obj: Any,
+        shared_params: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Return a chain spec (`{"op": "sequential", "processors": [...], "props": {...}}`)
+        for the given track, or None if this track should be left untouched.
+
+        The exact parameter defaults mirror the old `AudioForcesDenoiser`
+        settings but expose them through the new individual processors.
+        """
+        afp = self.afp
+
+        # -------- control tracks: never touch --------
+        if track_name in _CONTROL_TRACKS:
+            return None
+
+        # -------- ambient tracks: only gentle DC + normalize --------
+        if track_name in _AMBIENT_TRACKS:
+            steps: List[Dict[str, Any]] = []
+            if afp is not None and getattr(afp, "enable_dc_blocker", False):
+                steps.append({
+                    "type": "force_dc_blocker",
+                    "params": {
+                        "alpha_quiet": float(afp.dc_blocker_alpha),
+                        "alpha_active": float(max(0.9999, afp.dc_blocker_alpha)),
+                        "enable_local_mean": True,
+                    },
+                })
+            steps.append({
+                "type": "per_track_normalize",
+                "params": {"target_peak": 0.95},
+            })
+            return self._wrap_chain(steps, config_obj, shared_params, track_name)
+
+        # -------- impact tracks: DC blocker + envelope smoothing + amplify --------
+        if track_name in _IMPACT_TRACKS:
+            steps: List[Dict[str, Any]] = []
+
+            if afp is None or getattr(afp, "enable_dc_blocker", False):
+                steps.append({
+                    "type": "force_dc_blocker",
+                    "params": {
+                        "alpha_quiet": 0.999,
+                        "alpha_active": 0.9999,
+                        " "min_force": 0.02,
+                        "enable_local_mean": True,
+                    },
+                })
+
+            if afp is None or getattr(afp, "enable_noise_gate", False):
+                # The force_processor `ForceEnvelopeSmoothing` dominates the
+                # old noise-gate path because it doesn't kill the attack.
+                steps.append({
+                    "type": "force_envelope_smoothing",
+                    "params": {
+                        "spike_ratio": 0.35,
+                        "smooth_strength_quiet": 0.9,
+                        "smooth_strength_active": 0.0,
+                        "attr": "normal_force_magnitude",
+                    },
+                })
+
+            if afp is None or getattr(afp, "enable_temporal_smoothing", False):
+                steps.append({
+                    "type": "force_adaptive_smoothing",
+                    "params": {
+                        "alpha_min": 0.05,
+                        "alpha_max": 0.6,
+                        "smooth_ms": 0.5,
+                    },
+                })
+
+            if getattr(self.config.synth_postprocess, "dynamic_denoise_enabled", False):
+                steps.append({
+                    "type": "force_dynamic_amplify",
+                    "params": {
+                        "target_rms": 0.15,
+                        "max_gain_db": 20.0,
+                        "dynamic_range_compression": 0.5,
+                        "smooth_ms": 5.0,
+                    },
+                })
+
+            steps.append({
+                "type": "per_track_normalize",
+                "params": {"target_peak": 0.95},
+            })
+            return self._wrap_chain(steps, config_obj, shared_params, track_name)
+
+        # -------- continuous tracks: DC + envelope + spectral leak reduction --------
+        if track_name in _CONTINUOUS_TRACKS:
+            steps: List[Dict[str, Any]] = []
+
+            if afp is None or getattr(afp, "enable_dc_blocker", False):
+                steps.append({
+                    "type": "force_dc_blocker",
+                    "params": {
+                        "alpha_quiet": 0.9995,
+                        "alpha_active": 0.99995,
+                        "min_force": 0.02,
+                        "enable_local_mean": True,
+                    },
+                })
+
+            steps.append({
+                "type": "force_envelope_smoothing",
+                "params": {
+                    "spike_ratio": 0.25,
+                    "smooth_strength_quiet": 0.7,
+                    "smooth_strength_active": 0.0,
+                },
+            })
+
+            # Spectral leak reduction is *the* fix for the long ForceSynth tail
+            # smearing beyond the true contact duration.
+            if afp is None or getattr(afp, "enable_spectral_noise_reduction", False):
+                steps.append({
+                    "type": "force_spectral_leak_reduce",
+                    "params": {
+                        "n_fft": 1024,
+                        "hop_length": 256,
+                        "min_gain_db": -30.0,
+                        "leak_margin": 0.25,
+                    },
+                })
+
+            if getattr(self.config.synth_postprocess, "dynamic_denoise_enabled", False):
+                steps.append({
+                    "type": "force_dynamic_amplify",
+                    "params": {
+                        "target_rms": 0.08,
+                        "max_gain_db": 18.0,
+                        "dynamic_range_compression": 0.6,
+                        "smooth_ms": 8.0,
+                    },
+                })
+
+            steps.append({
+                "type": "per_track_normalize",
+                "params": {"target_peak": 0.95},
+            })
+            return self._wrap_chain(steps, config_obj, shared_params, track_name)
+
+        # -------- noise-enhancement tracks: periodicity breaker + spectral denoise --------
+        if track_name in _NOISE_TRACKS:
+            steps: List[Dict[str, Any]] = []
+
+            # Noise tracks are the *cleanest* place to kill the loop feel
+            # because their amplitude story is entirely synthesized.
+            steps.append({
+                "type": "force_periodicity_breaker",
+                "params": {
+                    "event_gain_jitter": 0.12,
+                    "lfo_depth": 0.04,
+                    "lfo_delay_depth": 0.25,
+                    "lfo_rate_hz": 0.8,
+                    "repetition_boost": 1.8,
+                    "coupling_tol": 0.02,
+                    "seed": 1337,
+                },
+            })
+
+            if afp is None or getattr(afp, "enable_spectral_noise_reduction", False):
+                # The generic spectral denoise (STFT) is *safe* on the noise
+                # tracks because they are already noise; the spectral subtraction
+
+                # simply tightens their band to the physical contact band.
+                steps.append({
+                    "type": "force_spectral_denoise",
+                    "params": {
+                        "fft_size": 2048,
+                        "hop_size": 512,
+                        "reduction_strength": 0.7,
+                        "force_coupling": 0.8,
+                        "quiet_threshold": 0.1,
+                    },
+                })
+
+            if getattr(self.config.synth_postprocess, "dynamic_denoise_enabled", False):
+                steps.append({
+                    "type": "force_dynamic_amplify",
+                    "params": {
+                        "target_rms": 0.04,
+                        "max_gain_db": 16.0,
+                        "dynamic_range_compression": 0.7,
+                        "smooth_ms": 10.0,
+                    },
+                })
+
+            steps.append({
+                "type": "per_track_normalize",
+                "params": {"target_peak": 0.9},
+            })
+            return self._wrap_chain(steps, config_obj, shared_params, track_name)
+
+        # -------- unknown track: leave untouched --------
+        return None
+
+    # ------------------------------------------------------------------
+    def _wrap_chain(
+        self,
+        steps: List[Dict[str, Any]],
+        config_obj: Any,
+        shared_params: Dict[str, Any],
+        track_name: str,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Wrap the processor list in the standard chain envelope, attaching
+        the side-channel declarations that StorageEngine._get_props() will
+        resolve at read time.
+
+        The `props.custom` block has two responsibilities:
+          1. Declare the `force` side-channel (a ForceDataSequence).
+          2. Declare the `obj_config` side-channel (the ObjectConfig).
+        """
+        if not steps:
+            return None
+
+        # Only declare side-channels if at least one step requires them.
+        # Cheap heuristic: force_* processors all need `force`; only a few
+        # need `obj_config`. Declaring both unconditionally is harmless
+        # because StorageEngine gracefully skips missing ones.
+        custom: Dict[str, Any] = {
+            "entity": "forces",
+            "entity_idx": config_obj.idx,
+            "obj_config": True,
+            "objs_type": "objects",
+        }
+
+        return {
+            "op": "sequential",
+            "processors": steps,
+            "props": {
+                "custom": custom,
+                "params": dict(shared_params),
+            },
+            "meta": {
+                "track_name": track_name,
+                "obj_name": getattr(config_obj, "name", None),
+                "obj_idx": config_obj.idx,
+            },
+        }
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+    def _resolve_force_for_object(self, obj_idx: int) -> Optional[ForceDataDataSequence]:
+        """
+        Return the first ForceDataSequence in the entity manager whose
+        `obj_idx` matches the requested object. Each object has exactly one
+        aggregated ForceDataSequence that covers *all* its contacts.
+        """
+        forces = self.entity_manager.get("forces") or {}
+        for _, seq in forces.items():
+            if isinstance(seq, ForceDataSequence) and getattr(seq, "obj_idx", None) == obj_idx:
+                return seq
+        return None
+
+    def _list_existing_tracks(self, obj_idx: int) -> List[str]:
+        """
+        Return the track names that actually exist for this object in the
+        backend. We deliberately check the backend rather than the config,
+        because `enable_noise_enhancement=False` means noise tracks may
+        not exist even though they're in the schema.
+        """
+        try:
+            track_meta = self.storage_engine.get_track_meta(
+                collection=self.collection,
+                engine=self.engine,
+                obj_idx=obj_idx,
+                track_name="",  # not used by the check below
+            )
+        except StorageError:
+            track_meta = None
+
+        # The object-level meta lists its track names in `child_names`.
+        try:
+            obj_meta = self.storage_engine._backend.get_meta(
+                path=f"/{self.collection}/{self.engine}/{obj_idx}"
+            )
+            return list(obj_meta.child_names)
+        except Exception as e:
+            debug_print(f"[postProcess] could not list tracks for obj_idx={obj_idx}: {e}")
             return []
 
-        chain: List[Dict[str, Any]] = []
+    # ------------------------------------------------------------------
+    # Optional: cross-track global normalization helper
+    # ------------------------------------------------------------------
+    def compute_global_peak(
+        self,
+        obj_indices: Optional[Sequence[int]] = None,
+        max_samples: int = 0,
+        unprocessed: bool = True,
+    ) -> float:
+        """
+        Compute a scene-wide peak across every audio-force track.
 
-        # --- 1. DC blocker (always first if enabled) ---
-        if audio_forces_postprocess.enable_dc_blocker or pp.dynamic_denoise_enabled:
-            chain.append({
-                "type": "dc_blocker",
-                "params": {
-                    "alpha": audio_forces_postprocess.dc_blocker_alpha
-                    if audio_forces_postprocess.enable_dc_blocker else 0.999,
-                },
-            })
+        This is the *replacement* for the old `GlobalNormalize.process()`
+        file-scanning approach. Callers who want explicit global
+        normalization append a `global_normalize` processor with
+            params: {"peak_key": "global_peak"}
+        and feed `props.custom["global_peak"] = peak` through the DAG
+        evaluator at read time.
 
-        # --- 2. Adaptive noise gate (force-correlated) ---
-        if audio_forces_postprocess.enable_noise_gate or pp.dynamic_denoise_enabled:
-            threshold_db, force_weight = self._gate_params_for(track_type)
-            chain.append({
-                "type": "adaptive_noise_gate",
-                "params": {
-                    "sample_rate": sr,
-                    "threshold_db": threshold_db,
-                    "attack_ms": audio_forces_postprocess.gate_attack_ms,
-                    "release_ms": audio_forces_postprocess.gate_release_ms,
-                    "hold_ms": audio_forces_postprocess.gate_hold_ms,
-                    "force_weight": force_weight,
-                },
-            })
+        Parameters
+        ----------
+        obj_indices : sequence of int, optional
+            Objects to include. Defaults to all dynamic objects.
+        max_samples : int
+            If > 0, only read the first `max_samples` of each track (fast
+            approximation for very long scenes).
+        unprocessed : bool
+            Read raw signals without evaluating any attached chain. That is
+            the right thing when you intend to install a `global_normalize`
+            node later (otherwise normalization cycles).
 
-        # --- 3. Temporal smoothing ---
-        if audio_forces_postprocess.enable_temporal_smoothing or pp.smoothing_enabled:
-            window = 3 if track_type == 'impact' else (
-                audio_forces_postprocess.temporal_smoothing_window if track_type == 'continuous' else 5
-            )
-            chain.append({
-                "type": "temporal_smoothing",
-                "params": {
-                    "window": window,
-                    "transient_threshold": 0.15,
-                },
-            })
+        Returns
+        -------
+        float
+            The maximum absolute sample across all included tracks, or 1.0
+            if nothing was found.
+        """
+        if obj_indices is None:
+            obj_indices = [o.idx for o in self.config.objects if not o.static]
 
-        # --- 4. Spectral denoising ---
-        if audio_forces_postprocess.enable_spectral_noise_reduction or pp.dynamic_denoise_enabled:
-            quiet, loud = self._spectral_params_for(track_type, pp)
-            chain.append({
-                "type": "spectral_denoise",
-                "params": {
-                    "n_fft": audio_forces_postprocess.spectral_fft_size,
-                    "hop_length": audio_forces_postprocess.spectral_hop_size,
-                    "reduction_strength_quiet": quiet,
-                    "reduction_strength_loud": loud,
-                    "noise_floor_percentile": 10.0,
-                },
-            })
+        peak = 0.0
+        for obj_idx in obj_indices:
+            for track_name in self._list_existing_tracks(obj_idx):
+                if track_name in _CONTROL_TRACKS:
+                    continue
+                try:
+                    sig = self.storage_engine.read(
+                        collection=self.collection,
+                        engine=self.engine,
+                        obj_idx=obj_idx,
+                        track_name=track_name,
+                        unprocessed=unprocessed,
+                    )
+                except Exception as e:
+                    debug_print(
+                        f"[postProcess] cannot read {obj_idx}/{track_name} for global peak: {e}"
+                    )
+                    continue
+                if sig is None or sig.size == 0:
+                    continue
+                if max_samples and sig.shape[-1] > max_samples:
+                    sig = sig[..., :max_samples]
+                local = float(np.max(np.abs(sig)))
+                if local > peak:
+                    peak = local
 
-        # --- 5. Envelope shaping ---
-        if audio_forces_postprocess.enable_envelope_shaping:
-            chain.append({
-                "type": "envelope_shaper",
-                "params": {
-                    "depth": 0.5 if track_type == 'continuous' else 0.3,
-                },
-            })
-
-        # --- 6. Gaussian adaptive smoothing ---
-        if audio_forces_postprocess.enable_gaussian_adaptive_smoothing:
-            chain.append({
-                "type": "adaptive_gaussian",
-                "params": {
-                    "sigma_min": audio_forces_postprocess.gaussian_sigma_min,
-                    "sigma_max": audio_forces_postprocess.gaussian_sigma_max,
-                    "force_threshold": audio_forces_postprocess.gaussian_force_threshold,
-                },
-            })
-
-        # --- 7. Force-weighted gain ---
-        if pp.dynamic_denoise_enabled or pp.smoothing_enabled:
-            target_rms, gain_low, gain_high = self._gain_params_for(track_type)
-            chain.append({
-                "type": "force_weighted_gain",
-                "params": {
-                    "target_rms": target_rms,
-                    "gain_low": gain_low,
-                    "gain_high": gain_high,
-                    "max_gain_db": pp.max_gain_db,
-                    "compression": pp.dynamic_range_compression,
-                    "smooth_ms": pp.smoothing_window_ms,
-                    "sample_rate": sr,
-                },
-            })
-
-        # --- 8. Scene-wide normalisation ---
-        if pp.normalize_output:
-            chain.append({
-                "type": "global_normalize",
-                "params": {
-                    "target_peak": 0.95,
-                    "peak_key": "global_peak",
-                },
-            })
-
-        return chain
+        return peak if peak > 0.0 else 1.0
 
     # ------------------------------------------------------------------
-    # Parameter palette per track type
+    # Introspection
     # ------------------------------------------------------------------
-    @staticmethod
-    def _gate_params_for(track_type: str):
-        if track_type == 'impact':
-            return -70.0, 0.7
-        if track_type == 'continuous':
-            return -60.0, 0.5
-        if track_type == 'noise':
-            return -50.0, 0.3
-        return -40.0, 0.1  # ambient / anything else
+    def dump(self) -> Dict[int, Dict[str, Any]]:
+        """
+        Read back the currently attached chains for every dynamic object.
 
-    @staticmethod
-    def _spectral_params_for(track_type: str, pp: Any):
-        if track_type == 'impact':
-            return 0.5, 0.1
-        if track_type == 'continuous':
-            return pp.spectral_reduction_strength, 0.2
-        if track_type == 'noise':
-            return 0.9, 0.3
-        return 1.0, 0.4  # # ambient
+        Useful for debugging / regression tests.
+        """
+        out: Dict[int, Dict[str, Any]] = {}
+        for config_obj in self.config.objects:
+            if config_obj.static:
+                continue
+            obj_idx = config_obj.idx
+            out[obj_idx] = {}
+            for track_name in self._list_existing_tracks(obj_idx):
+                try:
+                    meta = self.storage_engine.get_track_meta(
+                        collection=self.collection,
+                        engine=self.engine,
+                        obj_idx=obj_idx,
+                        track_name=track_name,
+                    )
+                except StorageError:
+                    continue
+                out[obj_idx][track_name] = {
+                    "chains": meta.chains,
+                    "signal_names": list(meta.child_names),
+                }
+        return out
 
-    @staticmethod
-    def _gain_params_for(track_type: str):
-        if track_type == 'impact':
-            return 0.20, 0.5, 1.2
-        if track_type == 'continuous':
-            return 0.10, 0.3, 1.0
-        if track_type == 'noise':
-            return 0.05, 0.2, 0.8
-        return 0.03, 0.1, 0.5  # ambient
+    def clear(self) -> int:
+        """
+        Remove every chain attached by a previous call to `process()`.
 
+        Returns the number of track nodes that were reset.
+        """
+        cleared = 0
+        for config_obj in self.config.objects:
+            if config_obj.static:
+                continue
+            for track_name in self._list_existing_tracks(config_obj.idx):
+                try:
+                    cleared += self.storage_engine.clear_chains(
+                        collection=self.collection,
+                        engine=self.engine,
+                        obj_idx=config_obj.idx,
+                        track_name=track_name,
+                    )
+                except StorageError as e:
+                    debug_print(f"[postProcess] clear_chains failed for {config_obj.idx}/{track_name}: {e}")
+        return cleared
