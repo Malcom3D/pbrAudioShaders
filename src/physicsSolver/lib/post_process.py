@@ -145,7 +145,7 @@ class postProcess:
         dict
             { obj_idx: { track_name: {"chain_types": [...], "signal_names": [...], "skipped": bool or reason} } }
         """
-        debug_print("[postProcess] attaching non-destructive chains to audio-force tracks")
+        debug_print("attaching non-destructive chains to audio-force tracks")
 
         report: Dict[int, Dict[str, Any]] = {}
 
@@ -155,10 +155,7 @@ class postProcess:
 
             force_side = self._resolve_force_for_object(config_obj.idx)
             if force_side is None:
-                debug_print(
-                    f"[postProcess] skipping obj_idx={config_obj.idx} "
-                    f"({config_obj.name}): no ForceDataSequence found"
-                )
+                debug_print(f"skipping obj_idx={config_obj.idx} ({config_obj.name}): no ForceDataSequence found")
                 report[config_obj.idx] = {"__skipped__": "no force side-channel"}
                 continue
 
@@ -175,66 +172,34 @@ class postProcess:
 
         existing_tracks = self._list_existing_tracks(obj_idx)
         if not existing_tracks:
-            debug_print(f"[postProcess] obj_idx={obj_idx} ({config_obj.name}): no materialized tracks")
+            debug_print(f"obj_idx={obj_idx} ({config_obj.name}): no materialized tracks")
             return obj_report
 
         # Build the shared `props.custom.params` block that every processor
         # in every chain will see at read time.
-        shared_params = {
-            "sample_rate": self.sample_rate,
-            "sfps": self.sfps,
-            "obj_idx": obj_idx,
-        }
+        shared_params = {"sample_rate": self.sample_rate, "sfps": self.sfps, "obj_idx": obj_idx}
 
         for track_name in existing_tracks:
-            chain_spec = self._build_chain_for_track(
-                track_name=track_name,
-                config_obj=config_obj,
-                shared_params=shared_params,
-            )
+            chain_spec = self._build_chain_for_track(track_name=track_name, config_obj=config_obj, shared_params=shared_params)
             if chain_spec is None:
                 obj_report[track_name] = {"skipped": "no-op track"}
                 continue
-
             try:
-                changed = self.storage_engine.set_chains(
-                    collection=self.collection,
-                    engine=self.engine,
-                    obj_idx=obj_idx,
-                    track_name=track_name,
-                    chains=chain_spec,
-                    signal_names=None,  # apply to every signal of this track
-                )
+                changed = self.storage_engine.set_chains(collection=self.collection, engine=self.engine, obj_idx=obj_idx, track_name=track_name, chains=chain_spec, signal_names=None)
             except StorageError as e:
-                debug_print(f"[postProcess] failed to set chain on {config_obj.name}/{track_name}: {e}")
+                debug_print(f"failed to set chain on {config_obj.name}/{track_name}: {e}")
                 obj_report[track_name] = {"error": str(e)}
                 continue
 
-            obj_report[track_name] = {
-                "chain_types": [s["type"] for s in chain_spec["processors"]],
-                "signal_names": list(
-                    self.storage_engine.list_signals(
-                        self.collection, self.engine, obj_idx, track_name
-                    )
-                ),
-                "nodes_updated": changed,
-            }
-            debug_print(
-                f"[postProcess] obj={config_obj.name}({obj_idx}) track={track_name}: "
-                f"chain={[s['type'] for s in chain_spec['processors']]}"
-            )
+            obj_report[track_name] = {"chain_types": [s["type"] for s in chain_spec["processors"]], "signal_names": list(self.storage_engine.list_signals(self.collection, self.engine, obj_idx, track_name)), "nodes_updated": changed}
+            debug_print(f"obj={config_obj.name}({obj_idx}) track={track_name}: chain={[s['type'] for s in chain_spec['processors']]}")
 
         return obj_report
 
     # ------------------------------------------------------------------
     # Chain selection
     # ------------------------------------------------------------------
-    def _build_chain_for_track(
-        self,
-        track_name: str,
-        config_obj: Any,
-        shared_params: Dict[str, Any],
-    ) -> Optional[Dict[str, Any]]:
+    def _build_chain_for_track(self, track_name: str, config_obj: Any, shared_params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         Return a chain spec (`{"op": "sequential", "processors": [...], "props": {...}}`)
         for the given track, or None if this track should be left untouched.
@@ -431,13 +396,7 @@ class postProcess:
         return None
 
     # ------------------------------------------------------------------
-    def _wrap_chain(
-        self,
-        steps: List[Dict[str, Any]],
-        config_obj: Any,
-        shared_params: Dict[str, Any],
-        track_name: str,
-    ) -> Optional[Dict[str, Any]]:
+    def _wrap_chain(self, steps: List[Dict[str, Any]], config_obj: Any, shared_params: Dict[str, Any], track_name: str) -> Optional[Dict[str, Any]]:
         """
         Wrap the processor list in the standard chain envelope, attaching
         the side-channel declarations that StorageEngine._get_props() will
@@ -498,34 +457,16 @@ class postProcess:
         not exist even though they're in the schema.
         """
         try:
-            track_meta = self.storage_engine.get_track_meta(
-                collection=self.collection,
-                engine=self.engine,
-                obj_idx=obj_idx,
-                track_name="",  # not used by the check below
-            )
-        except StorageError:
-            track_meta = None
-
-        # The object-level meta lists its track names in `child_names`.
-        try:
-            obj_meta = self.storage_engine._backend.get_meta(
-                path=f"/{self.collection}/{self.engine}/{obj_idx}"
-            )
+            obj_meta = self.storage_engine._backend.get_meta(path=f"/{self.collection}/{self.engine}/{obj_idx}")
             return list(obj_meta.child_names)
         except Exception as e:
-            debug_print(f"[postProcess] could not list tracks for obj_idx={obj_idx}: {e}")
+            debug_print(f"could not list tracks for obj_idx={obj_idx}: {e}")
             return []
 
     # ------------------------------------------------------------------
     # Optional: cross-track global normalization helper
     # ------------------------------------------------------------------
-    def compute_global_peak(
-        self,
-        obj_indices: Optional[Sequence[int]] = None,
-        max_samples: int = 0,
-        unprocessed: bool = True,
-    ) -> float:
+    def compute_global_peak(self, obj_indices: Optional[Sequence[int]] = None, max_samples: int = 0, unprocessed: bool = True) -> float:
         """
         Compute a scene-wide peak across every audio-force track.
 
@@ -572,7 +513,7 @@ class postProcess:
                     )
                 except Exception as e:
                     debug_print(
-                        f"[postProcess] cannot read {obj_idx}/{track_name} for global peak: {e}"
+                        f"cannot read {obj_idx}/{track_name} for global peak: {e}"
                     )
                     continue
                 if sig is None or sig.size == 0:
@@ -635,5 +576,5 @@ class postProcess:
                         track_name=track_name,
                     )
                 except StorageError as e:
-                    debug_print(f"[postProcess] clear_chains failed for {config_obj.idx}/{track_name}: {e}")
+                    debug_print(f"clear_chains failed for {config_obj.idx}/{track_name}: {e}")
         return cleared

@@ -193,7 +193,8 @@ class ForceSynth:
         impulse = normal_force_mag * impact_duration
  
         # impact_duration in samples@sample_rate
-        total_impact_sample = int(sample_rate*impact_duration)
+#        total_impact_sample = int(sample_rate*impact_duration)
+        total_impact_sample = int(impact_duration)
 
         # Generate impact envelope (Hertzian asimmetric force profile)
         rise_sample = int(total_impact_sample / 2) + 1
