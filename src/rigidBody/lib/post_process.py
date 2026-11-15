@@ -466,7 +466,7 @@ class postProcess:
 
         if track_name in MODAL_TRACKS:
             chain = _build_modal_track_chain(track_name, self.config)
-        elif track_name in in NOISE_TRACKS:
+        elif track_name in NOISE_TRACKS:
             chain = _build_noise_track_chain(track_name, self.config)
         else:
             return None
