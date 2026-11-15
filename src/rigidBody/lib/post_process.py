@@ -17,27 +17,55 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """
-Non-destructive chain writer for rigidBodyEngine tracks.
+Non-destructive chain writer for rigidBodyEngine MODAL_DISPLACEMENT tracks.
 
-This replaces the old pbrAudioPostProcess.postProcess. Instead of
-loading/writing audio, it writes `chains` metadata onto the AudioDataType
-nodes produced by rigidBodyEngine in pbrAudioStorage. The DAG evaluator
-inside StorageEngine.read() applies them lazily.
+This is the successor to the old pbrAudioPostProcess.postProcess module.
+It writes ``chains`` metadata onto the AudioDataType nodes produced by
+rigidBodyEngine in pbrAudioStorage. StorageEngine's DAG evaluator applies
+them lazily at ``read()`` time.
 
-The class no longer talks to Blosc2Backend directly: it goes exclusively
-through the StorageEngine public helpers:
-    - set_chains()      -> write a chain spec on track / signals
-    - clear_chains()    -> remove all chains
-    - get_track_meta()  -> read AudioDataType on a track node
-    - list_signals()    -> discover which signals exist
-    - _signal_node_exists() -> cheap "is the track materialized?" check
+Design notes
+------------
+The set of processors below is now split along two axes:
 
-All processors referenced here exist in pbrAudioSignals and accept the
-side-chain key `force` injected through StorageEngine._get_props() via
-`chains["props"]["custom"] = {"entity": "forces", "entity_idx": <obj>}`.
+  * **MODAL_DISPLACEMENT tracks** (``rigidbody``, ``resonance``)
+    use the ``force_modal_*`` family. These read the current object's
+    ``ForceDataSequence`` via ``props.custom["force"]`` and treat
+    ``obj_config`` as a physical reference for size/mass/contact
+    calibration.
+
+  * **Noise tracks** (``sliding``, ``scraping``, ``rolling``) stay
+    on the AUDIO_FORCE / AUDIO_SIGNAL pipeline. They still use
+    ``force_adaptive_smoothing``, ``force_phase_align``,
+    ``force_dynamic_amplify`` — the modal-specific variants assume
+    modal synthesis and would produce incorrect behaviour on noise.
+
+Because a track is idempotent when re-applied, ``apply_for_object()``
+can be called repeatedly without double-processing: ``set_chains()``
+overwrites the previous chain dict.
+
+The chain for MODAL_DISPLACEMENT tracks uses the following order,
+which is the physically correct signal flow:
+
+    1. force_modal_radiation_calibrator   (static + force_rms)
+    2. force_modal_equalizer              (size/mass/contact-type shelf)
+    3. force_modal_contact_tilt           (contact-type shelf + sharpen)
+    4. force_modal_dc_blocker             (envelope-shaped DC)
+    5. force_modal_smoothing              (fixed-length spike / dip)
+    6. force_modal_compressor             (force-driven compression)
+    7. force_modal_phase_align            (align to noise reference)
+    8. force_modal_dynamic_amplify        (final level match)
+    9. per_track_normalize                (peak ceiling)
+
+The noise-track chain keeps the AUDIO_FORCE / AUDIO_SIGNAL pipeline:
+
+    1. force_adaptive_smoothing
+    2. force_phase_align
+    3. force_dynamic_amplify
+    4. per_track_normalize
 """
 
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
 
 from pbrAudioCommon import EntityManager
@@ -45,24 +73,25 @@ from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
 from pbrAudioStorage import StorageEngine
 
+# ---------------------------------------------------------------------------
+# Track classification
+# ---------------------------------------------------------------------------
+# Tracks whose Buffer is *modal displacement* (meters), processed by the
+# force_modal_* family.
+MODAL_TRACKS: List[str] = ["rigidbody", "resonance"]
 
-# Track-name -> force side-chain name. Currently every track in this engine
-# reads `props.custom["force"]`, so the force-track name is used only for
-# future-proofing if we ever expose multiple side channels.
-DEFAULT_TRACK_FORCE_MAP: Dict[str, str] = {
-    "rigidbody": "impact",
-    "resonance": "impact",
-    "sliding":   "sliding",
-    "scraping":  "scraping",
-    "rolling":   "rolling",
-}
+# Tracks whose Buffer is an *audio-signal* representation of a contact
+# (acoustic noise), processed by the force_adaptive_*/force_phase_align
+# family.
+NOISE_TRACKS: List[str] = ["sliding", "scraping", "rolling"]
 
-DEFAULT_TRACKS_TO_POST: List[str] = [
-    "rigidbody", "resonance", "sliding", "scraping", "rolling",
-]
+# Everything the pipeline is allowed to touch, in a stable order.
+DEFAULT_TRACKS_TO_POST: List[str] = MODAL_TRACKS + NOISE_TRACKS
 
-# Per-track target RMS used by force_dynamic_amplify. Kept inline so the
-# postProcess behaviour is fully described in this one file.
+# Per-track RMS targets. These are the value used at
+# ``force_modal_dynamic_amplify`` (modal) or ``force_dynamic_amplify``
+# (noise). They assume the calibrator has already placed the modal
+# track on a physically plausible absolute level.
 DEFAULT_TRACK_RMS: Dict[str, float] = {
     "rigidbody": 0.15,
     "resonance": 0.08,
@@ -71,91 +100,152 @@ DEFAULT_TRACK_RMS: Dict[str, float] = {
     "rolling":   0.032,
 }
 
+# Which FORCE track each sound is driven by. This map is informational
+# only — the actual side-chain is bound by ``force_modal_*`` reading
+# ``props.custom["force"]`` (see ``_sidechain_for``).
+DEFAULT_FORCE_TRACK_MAP: Dict[str, str] = {
+    "rigidbody":  "impact",
+    "resonance":  "impact",
+    "sliding":    "sliding",
+    "scraping":   "scraping",
+    "rolling":    "rolling",
+}
 
-def _build_track_chain(track_name: str, cfg: Any) -> Dict[str, Any]:
+# ---------------------------------------------------------------------------
+# Chain builders
+# ---------------------------------------------------------------------------
+def _build_modal_track_chain(track_name: str, cfg: Any) -> Dict[str, Any]:
     """
-    Build the `chains` dict for one rigidBodyEngine track.
+    Chain for MODAL_DISPLACEMENT tracks (rigidbody, resonance).
 
-    The chain assumes the DAG evaluator will inject the current object's
-    ForceDataSequence into ``props.custom["force"]`` (StorageEngine reads
-    ``chains["props"]["custom"]`` to do so).
+    Assumes ``force_modal_*`` processors will read the current object's
+    ``ForceDataSequence`` from ``props.custom["force"]`` and the
+    ``ObjectConfig`` from ``props.custom["obj_config"]``. The
+    ``StorageEngine._get_props()`` helper injects those when it sees the
+    matching ``entity`` / ``obj_config`` entries in the chain's
+    ``props.custom``.
     """
+    sp = cfg.synth_postprocess
+    sr = cfg.system.sample_rate
+    sfps = (cfg.system.fps / cfg.system.fps_base) * cfg.system.subframes
+
     steps: List[Dict[str, Any]] = []
 
-    # --- 1. Force-correlated noise gate --------------------------------
-    # adaptive_noise_gate is group=AUDIO_SIGNAL|ACOUSTIC_PRESSURE|AUDIO_FORCE|GENERIC
-    # -> valid in this generic per-track chain (it's only a signal processor;
-    #    the group check only runs at schema registration time).
-    if cfg.synth_postprocess.dynamic_denoise_enabled:
-        steps.append({
-            "type": "adaptive_noise_gate",
-            "params": {
-                "threshold_db": cfg.synth_postprocess.noise_gate_threshold_db,
-                "attack_ms": 2.0,
-                "release_ms": 50.0,
-                "hold_ms": 10.0,
-                "force_weight": cfg.synth_postprocess.force_reference_weight,
-                "sample_rate": cfg.system.sample_rate,
-            },
-        })
-
-        # --- 2. Spectral subtraction -----------------------------------
-        # NOTE: force_spectral_denoise expects fft_size/hop_size/
-        # reduction_strength/force_coupling/quiet_threshold — NOT
-        # noise_floor_db.  We honour cfg.synth_postprocess.noise_floor_estimate_db
-        # by mapping it into a threshold via a soft derived parameter:
-        # quiet_threshold = the linear force level below which we estimate
-        # the noise floor.  The dB value is just informational on
-        # cfg; we simply use the defaults that pbrAudioSignals ships
-        # with, which are tuned for typical modal signals.
-        steps.append({
-            "type": "force_spectral_denoise",
-            "params": {
-                "fft_size": 2048,
-                "hop_size": 512,
-                "reduction_strength": cfg.synth_postprocess.spectral_reduction_strength,
-                "force_coupling": 0.8,
-                "quiet_threshold": 0.1,
-                "sample_rate": cfg.system.sample_rate,
-            },
-        })
-
-    # --- 3. Adaptive smoothing ----------------------------------------
-    if cfg.synth_postprocess.smoothing_enabled:
-        steps.append({
-            "type": "force_adaptive_smoothing",
-            "params": {
-                "alpha_min": 0.1,
-                "alpha_max": 0.9 if cfg.synth_postprocess.adaptive_smoothing else 0.5,
-                "smooth_ms": cfg.synth_postprocess.smoothing_window_ms,
-                "sample_rate": cfg.system.sample_rate,
-            },
-        })
-
-    # --- 4. Phase alignment -------------------------------------------
-    if cfg.synth_postprocess.phase_align_enabled:
-        steps.append({
-            "type": "force_phase_align",
-            "params": {
-                "crossfade_samples": cfg.synth_postprocess.crossfade_samples,
-                "sample_rate": cfg.system.sample_rate,
-            },
-        })
-
-    # --- 5. Dynamic amplify -------------------------------------------
-    target_rms = DEFAULT_TRACK_RMS.get(track_name, cfg.synth_postprocess.target_rms)
+    # --- 1. Radiation calibration (absolute level from size/mass) -----
+    # This MUST be first: it establishes the physical reference so the
+    # equalizer and compressor see a meaningful absolute scale.
     steps.append({
-        "type": "force_dynamic_amplify",
+        "type": "force_modal_radiation_calibrator",
         "params": {
-            "target_rms": target_rms,
-            "max_gain_db": cfg.synth_postprocess.max_gain_db,
-            "dynamic_range_compression": cfg.synth_postprocess.dynamic_range_compression,
-            "sample_rate": cfg.system.sample_rate,
+            # Use the same RMS that this track targets, so the calibrator
+            # and the amplifer are consistent.
+            "target_rms_active": DEFAULT_TRACK_RMS.get(track_name, sp.target_rms),
+            "force_threshold": 0.05,
+            "env_smooth_ms": sp.smoothing_window_ms or 5.0,
+            "mode": "force_rms",
+            "sample_rate": sr,
+            "sfps": sfps,
         },
     })
 
-    # --- 6. Peak normalize -------------------------------------------
-    if cfg.synth_postprocess.normalize_output:
+    # --- 2. Size/mass/contact-type equalizer -------------------------
+    steps.append({
+        "type": "force_modal_equalizer",
+        "params": {
+            # Sensible defaults from the modern processor set.
+            "size_pivot": 0.2,
+            "mass_pivot": 1.0,
+            "brightness_db_range": 6.0,
+            "hardness_db_range": 3.0,
+            "sample_rate": sr,
+            "sfps": sfps,
+        },
+    })
+
+    # --- 3. Contact-type tilt + IMPACT transient sharpen -------------
+    steps.append({
+        "type": "force_modal_contact_tilt",
+        "params": {
+            "sample_rate": sr,
+            "sfps": sfps,
+            "impulse_sharpen_depth": 0.20,
+            "impulse_sharpen_ms": 3.0,
+        },
+    })
+
+    # --- 4. Envelope-shaped DC removal ------------------------------
+    steps.append({
+        "type": "force_modal_dc_blocker",
+        "params": {
+            "sample_rate": sr,
+            "sfps": sfps,
+            "use_object_tau": True,
+            "reference_tau_ms": 20.0,
+        },
+    })
+
+    # --- 5. Spike / cancellation smoothing --------------------------
+    if sp.smoothing_enabled:
+        steps.append({
+            "type": "force_modal_smoothing",
+            "params": {
+                "spike_ratio": 0.35,
+                "blend_quiet": 0.9,
+                "blend_active": 0.0 if sp.adaptive_smoothing else 0.15,
+                "sample_rate": sr,
+                "sfps": sfps,
+            },
+        })
+
+    # --- 6. Force-driven compressor ---------------------------------
+    steps.append({
+        "type": "force_modal_compressor",
+        "params": {
+            "thr_min_db": -6.0,
+            "thr_max_db": -24.0,
+            "ratio_min": 2.0,
+            "ratio_max": 4.0 if sp.adaptive_smoothing else 6.0,
+            "attack_ms": 2.0,
+            "release_ms": 80.0,
+            "makeup_db": 0.0,
+            "smooth_ms": sp.smoothing_window_ms or 5.0,
+            "sample_rate": sr,
+            "sfps": sfps,
+        },
+    })
+
+    # --- 7. Align to the noise reference (sliding/scraping/rolling) -
+    if sp.phase_align_enabled:
+        steps.append({
+            "type": "force_modal_phase_align",
+            "params": {
+                # ``modal_ref`` is resolved by StorageEngine._inject_custom
+                # (see _sidechain_for below).
+                "reference_key": "modal_ref",
+                "max_delay_ms": 5.0,
+                "window_ms": 20.0,
+                "event_threshold": 0.2,
+                "target_contact_types": (1, 2, 3, 5),   # IMPACT/SCRAPING/SLIDING/MIXED
+                "sample_rate": sr,
+                "sfps": sfps,
+            },
+        })
+
+    # --- 8. Final level match ----------------------------------------
+    steps.append({
+        "type": "force_modal_dynamic_amplify",
+        "params": {
+            "target_rms": DEFAULT_TRACK_RMS.get(track_name, sp.target_rms),
+            "target_rms_per_kg": 0.05,
+            "max_gain_db": sp.max_gain_db,
+            "smooth_ms": sp.smoothing_window_ms or 5.0,
+            "sample_rate": sr,
+            "sfps": sfps,
+        },
+    })
+
+    # --- 9. Peak ceiling ---------------------------------------------
+    if sp.normalize_output:
         steps.append({
             "type": "per_track_normalize",
             "params": {"target_peak": 0.95},
@@ -164,44 +254,110 @@ def _build_track_chain(track_name: str, cfg: Any) -> Dict[str, Any]:
     return {
         "op": "sequential",
         "processors": steps,
-        # Sidechain injection: StorageEngine._get_props() reads this dict
-        # and stuffs the matching ForceDataSequence into props.custom["force"].
-        "props": {
-            "custom": {
-                "entity": "forces",
-                "entity_idx": None,   # filled in per-object in apply_for_object()
-            },
-        },
+        # NOTE: entity/entity_idx are filled in per-object in
+        # ``_chain_for`` and the modal_ref sibling is added there too.
     }
 
 
+def _build_noise_track_chain(track_name: str, cfg: Any) -> Dict[str, Any]:
+    """
+    Chain for AUDIO_SIGNAL / AUDIO_FORCE tracks (sliding, scraping,
+    rolling).
+
+    These tracks are acoustic noise. They do NOT go through the modal
+    calibrator / equalizer / compressor family because their absolute
+    scale and spectral content are already governed by the noise
+    synthesizer.
+    """
+    sp = cfg.synth_postprocess
+    sr = cfg.system.sample_rate
+    sfps = (cfg.system.fps / cfg.system.fps_base) * cfg.system.subframes
+
+    steps: List[Dict[str, Any]] = []
+
+    # --- 1. Force-driven adaptive smoothing --------------------------
+    if sp.smoothing_enabled:
+        steps.append({
+            "type": "force_adaptive_smoothing",
+            "params": {
+                "alpha_min": 0.1,
+                "alpha_max": 0.9 if sp.adaptive_smoothing else 0.5,
+                "smooth_ms": sp sp.smoothing_window_ms or 2.0,
+                "sample_rate": sr,
+            },
+        })
+
+    # --- 2. Phase alignment to the impact track ---------------------
+    # Noise events should not precede the rigid-body impact they
+    # accompany. The AUDIO_FORCE variant of force_phase_align takes
+    # the impact force from props.custom["force"] directly.
+    if sp.phase_align_enabled:
+        steps.append({
+            "type": "force_phase_align",
+            "params": {
+                "crossfade_samples": sp.crossfade_samples,
+                "sample_rate": sr,
+            },
+        })
+
+    # --- 3. Force-driven amplification ------------------------------
+    steps.append({
+        "type": "force_dynamic_amplify",
+        "params": {
+            "target_rms": DEFAULT_TRACK_RMS.get(track_name, sp.target_rms),
+            "max_gain_db": sp.max_gain_db,
+            "dynamic_range_compression": sp.dynamic_range_compression,
+            "sample_rate": sr,
+        },
+    })
+
+    # --- 4. Peak ceiling --------------------------------------------
+    if sp.normalize_output:
+        steps.append({
+            "type": "per_track_normalize",
+            "params": {"target_peak": 0.95},
+        })
+
+    return {
+        "op": "sequential",
+        "processors": steps,
+        # entity/entity_idx filled per object.
+    }
+
+
+# ---------------------------------------------------------------------------
+# Main class
+# ---------------------------------------------------------------------------
 @dataclass
 class postProcess:
     """
-    Writes non-destructive chains metadata for rigidBodyEngine's tracks.
+    Write non-destructive ``chains`` metadata for rigidBodyEngine tracks.
 
-    In the new architecture this class is NOT responsible for applying the
-    chains — StorageEngine.read() applies them lazily via its DAG evaluator.
-    We only describe *what* processing should happen on each track, then
-    hand that description to StorageEngine.set_chains().
+    Responsibilities
+    ----------------
+    * Decide *which* processors apply to *which* signal.
+    * Write that decision into the AudioDataType of each track / signal
+      via ``StorageEngine.set_chains()``.
+
+    It does NOT load audio or materialise any sample. StorageEngine owns
+    the DAG evaluation at read time.
     """
 
     entity_manager: EntityManager
-    storage_engine: StorageEngine = None
+    storage_engine: Optional[StorageEngine] = None
 
-    # Per-object chain overrides. Keys are obj_idx,
-    # values are dict[track_name, chains].
+    # Per-object chain overrides. Keys are obj_idx, values are
+    # dict[track_name, chains].
     overrides: Dict[int, Dict[str, Dict[str, Any]]] = field(default_factory=dict)
 
-    # Optional: restrict processing to a subset of tracks.
+    # Restrict which tracks are processed.
     tracks_to_process: List[str] = field(
         default_factory=lambda: list(DEFAULT_TRACKS_TO_POST)
     )
 
-    # Force-track mapping overrides (patchable per-instance).
-    force_track_map: Dict[str, str] = field(
-        default_factory=lambda: dict(DEFAULT_TRACK_FORCE_MAP)
-    )
+    # Optional per-object disabling. When a track name is absent
+    # from this set for a given object, ``apply_for_object`` skips it.
+    object_track_filter: Optional[Dict[int, List[str]]] = None
 
     # ------------------------------------------------------------------
     def __post_init__(self):
@@ -222,42 +378,42 @@ class postProcess:
     # ------------------------------------------------------------------
     def apply(self) -> Dict[str, int]:
         """
-        Write chains metadata for every dynamic object's rigidBodyEngine
-        tracks.
+        Write chains metadata for every dynamic object's tracks.
 
-        Returns:
-            Dict[obj_name, count_of_tracks_patched]
+        Returns ``{obj_name: patched_track_count}``.
         """
         results: Dict[str, int] = {}
         for obj in self.config.objects:
             name = getattr(obj, "name", str(obj.idx))
-            n = self.apply_for_object(obj_idx=obj.idx, obj_name=name)
-            results[name] = n
+            results[name] = self.apply_for_object(obj_idx=obj.idx, obj_name=name)
         return results
 
     def apply_for_object(self, obj_idx: int, obj_name: Optional[str] = None) -> int:
         """
         Write chains for one object's tracks.
 
-        Returns the number of tracks that were patched (0 if the object
-        has no materialized tracks).
+        Returns the number of tracks that were patched.
         """
         cfg_obj = self._find_config_obj(obj_idx)
         if cfg_obj is None:
             debug_print(f"postProcess: no ObjectConfig for obj_idx={obj_idx}")
             return 0
 
+        allowed = None
+        if self.object_track_filter is not None:
+            allowed = self.object_track_filter.get(obj_idx, self.tracks_to_process)
+
         patched = 0
         for track_name in self.tracks_to_process:
-            # Fast skip: track was never materialized (e.g. noise enhancement
-            # disabled and this isn't rigidbody/resonance).
+            if allowed is not None and track_name not in allowed:
+                continue
+
             if not self.storage_engine._signal_node_exists(
                 self.collection, self.engine_name, obj_idx, track_name
             ):
                 debug_print(
-                    f"postProcess: "
-                    f"{self.collection}/{self.engine_name}/{obj_idx}/{track_name} "
-                    f"not materialized — skipped"
+                    f"postProcess: {self.collection}/{self.engine_name}/"
+                    f"{obj_idx}/{track_name} not materialized — skipped"
                 )
                 continue
 
@@ -301,27 +457,64 @@ class postProcess:
     # ------------------------------------------------------------------
     # Internal: chain resolution
     # ------------------------------------------------------------------
-    def _chain_for(
-        self, obj_idx: int, track_name: str
-    ) -> Optional[Dict[str, Any]]:
+    def _chain_for(self, obj_idx: int, track_name: str) -> Optional[Dict[str, Any]]:
         # Caller-supplied override wins.
         if obj_idx in self.overrides and track_name in self.overrides[obj_idx]:
             chain = dict(self.overrides[obj_idx][track_name])
-            custom = chain.setdefault("props", {}).setdefault("custom", {})
-            custom["entity"] = "forces"
-            custom["entity_idx"] = obj_idx
+            self._attach_sidechain(chain, obj_idx)
             return chain
 
-        if track_name not in self.tracks_to_process:
+        if track_name in MODAL_TRACKS:
+            chain = _build_modal_track_chain(track_name, self.config)
+        elif track_name in in NOISE_TRACKS:
+            chain = _build_noise_track_chain(track_name, self.config)
+        else:
             return None
 
-        # Build default chain from config.
-        chain = _build_track_chain(track_name, self.config)
-        # Inject per-object force sidechain reference.
-        chain["props"] = {
-            "custom": {"entity": "forces", "entity_idx": obj_idx},
-        }
+        self._attach_sidechain(chain, obj_idx)
         return chain
+
+    # ------------------------------------------------------------------
+    def _attach_sidechain(self, chain: Dict[str, Any], obj_idx: int) -> None:
+        """
+        Fill in the per-object side-channel references on a chain dict.
+
+        We set:
+
+          * ``props.custom.entity`` / ``entity_idx``
+                -> StorageEngine injects the ForceDataSequence here.
+
+          * ``props.custom.obj_config`` / ``objs_type`` / ``entity_idx``
+                -> StorageEngine injectss the ObjectConfig here (used by
+                   RadiationCalibrator, Equalizer, DynamicAmplify, DCBlocker).
+
+        For MODAL tracks we also set the sibling reference that the
+        phase-align step uses to align to the noise track of the *same*
+        object:
+
+          * ``props.custom.sibling_track`` = "sliding" (preferred) or
+            "scraping"/"rolling", whichever exists.
+        """
+        custom = chain.setdefault("props", {}).setdefault("custom", {})
+
+        # Always inject the object's ForceDataSequence.
+        custom.setdefault("entity", "forces")
+        custom["entity_idx"] = obj_idx
+
+        # Always inject the object's ObjectConfig (size/mass/shader).
+        custom.setdefault("obj_config", "obj_config")
+        custom.setdefault("objs_type", "objects")
+
+        # For MODAL tracks, prefer aligning to a noise sibling if one
+        # exists.
+        if custom.get("sibling_track") is None:
+            for candidate in ("sliding", "scraping", "rolling"):
+                if self.storage_engine._signal_node_exists(self.collection, self.engine_name, obj_idx, candidate):
+                    custom["sibling_track"] = candidate
+                    custom["key"] = "modal_ref"
+                    custom["engine"] = self.engine_name
+                    custom["collection"] = self.collection
+                    break
 
     # ------------------------------------------------------------------
     # Internal: storage mutation
@@ -332,14 +525,9 @@ class postProcess:
                 return obj
         return None
 
-    def _write_chain_to_storage(
-        self, obj_idx: int, track_name: str, chain: Dict[str, Any]
-    ) -> int:
+    def _write_chain_to_storage(self, obj_idx: int, track_name: str, chain: Dict[str, Any]) -> int:
         """
-        Attach `chain` to every signal of the track via StorageEngine.
-
-        Returns the number of AudioDataTypeDataType nodes that were updated
-        (signals when present, otherwise the track itself).
+        Attach ``chain`` to every signal of the track via StorageEngine.
         """
         try:
             updated = self.storage_engine.set_chains(
@@ -353,14 +541,12 @@ class postProcess:
         except Exception as e:
             debug_print(
                 f"postProcess: set_chains failed for "
-                f"{self.collection}/{self.engine_name}/{obj_idx}/{track_name}: {e}"
+                f"{self.collection}/{self.engine_name}/{obj_idx}/"
+                f"{track_name}: {e}"
             )
             return 0
 
         if updated <= 1:
-            # Either the track itself was updated (no signals) or
-            # nothing was updated; sanity-check against existing signals
-            # so log messages stay accurate.
             signals = self.storage_engine.list_signals(
                 self.collection, self.engine_name, obj_idx, track_name
             )
