@@ -282,7 +282,7 @@ def _build_noise_track_chain(track_name: str, cfg: Any) -> Dict[str, Any]:
             "params": {
                 "alpha_min": 0.1,
                 "alpha_max": 0.9 if sp.adaptive_smoothing else 0.5,
-                "smooth_ms": sp sp.smoothing_window_ms or 2.0,
+                "smooth_ms": sp.smoothing_window_ms or 2.0,
                 "sample_rate": sr,
             },
         })
