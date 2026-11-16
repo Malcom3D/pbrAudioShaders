@@ -93,11 +93,11 @@ DEFAULT_TRACKS_TO_POST: List[str] = MODAL_TRACKS + NOISE_TRACKS
 # (noise). They assume the calibrator has already placed the modal
 # track on a physically plausible absolute level.
 DEFAULT_TRACK_RMS: Dict[str, float] = {
-    "rigidbody": 0.15,
-    "resonance": 0.08,
-    "sliding":   0.04,
-    "scraping":  0.0036,
-    "rolling":   0.032,
+    "rigidbody": 1,
+    "resonance": 1,
+    "sliding":   1,
+    "scraping":  1,
+    "rolling":   1,
 }
 
 # Which FORCE track each sound is driven by. This map is informational
@@ -137,7 +137,7 @@ def _build_modal_track_chain(track_name: str, cfg: Any) -> Dict[str, Any]:
     steps.append({
         "type": "force_modal_radiation_calibrator",
         "params": {
-            # Use the same RMS that this track targets, so the calibrator
+            # Use the same RMS that track targets, so the calibrator
             # and the amplifer are consistent.
             "target_rms_active": DEFAULT_TRACK_RMS.get(track_name, sp.target_rms),
             "force_threshold": 0.05,
@@ -225,7 +225,7 @@ def _build_modal_track_chain(track_name: str, cfg: Any) -> Dict[str, Any]:
                 "max_delay_ms": 5.0,
                 "window_ms": 20.0,
                 "event_threshold": 0.2,
-                "target_contact_types": (1, 2, 3, 5),   # IMPACT/SCRAPING/SLIDING/MIXED
+                "target_contact_types": (2, 3, 4),   # ROLLING/SCRAPING/SLIDING # prev IMPACT/SCRAPING/SLIDING/ROLLING 1,2,3,5
                 "sample_rate": sr,
                 "sfps": sfps,
             },
