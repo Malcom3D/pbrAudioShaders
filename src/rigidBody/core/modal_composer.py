@@ -73,7 +73,7 @@ class ModalComposer:
                 force, coupling_strength = self._load_audioforce_tracks(obj_idx=config_obj.idx)
 
         # configure blosc2 compression
-        cparams = blosc2.CParams(codec=blosc2.Codec.LZ4, typesize=1, clevel=1, nthreads=8)
+        cparams = blosc2.CParams(codec=blosc2.Codec.LZ4, clevel=1, nthreads=8)
         dparams = blosc2.DParams(nthreads=16)
 
         debug_print(f'Score compositing for {config_obj.name} started...')
@@ -82,7 +82,8 @@ class ModalComposer:
 
             # init zeros array
             final_type = np.zeros_like(event_track.type)
-            final_vertex_ids = np.full(event_track.vertex_ids.shape, np.bool_(False), dtype=np.bool_)
+#            final_vertex_ids = np.full(event_track.vertex_ids.shape, np.bool_(False), dtype=np.bool_)
+            final_vertex_ids = np.full(event_track.vertex_ids.shape, -1)
             final_contact_area = np.zeros_like(event_track.contact_area)
             final_force = np.zeros_like(coupling_strength)
             final_coupling_data = np.zeros_like(coupling_strength)
@@ -114,7 +115,8 @@ class ModalComposer:
             # Add event type 3 and 4 to complete mixed event
             # init zeros array
             final_type = np.zeros_like(event_track.type)
-            final_vertex_ids = np.full(event_track.vertex_ids.shape, np.bool_(False), dtype=np.bool_)
+#            final_vertex_ids = np.full(event_track.vertex_ids.shape, np.bool_(False), dtype=np.bool_)
+            final_vertex_ids = np.full(event_track.vertex_ids.shape, -1)
             final_contact_area = np.zeros_like(event_track.contact_area)
             final_force = np.zeros_like(coupling_strength)
             final_coupling_data = np.zeros_like(coupling_strength)

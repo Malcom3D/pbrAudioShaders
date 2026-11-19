@@ -27,6 +27,7 @@ import math
 
 from pbrAudioCommon import EntityManager, ContactType, ForceData, ForceDataSequence, HertzianContact
 from pbrAudioCommon import CubicSplineWithNaN
+from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 
 from ..lib.contact_geometry import ContactGeometry
 
@@ -36,11 +37,14 @@ class ForceSolver:
 
     def __post_init__(self):
         config = self.entity_manager.get('config')
+        set_debug(config.system.debug)
+        set_debug_prefix(self.__class__.__name__)
 #        self.output_dir = f"{config.system.cache_path}/forces_data"
 #        os.makedirs(self.output_dir, exist_ok=True)
 
     def compute(self, obj_idx: int) -> None:
         config = self.entity_manager.get('config')
+        debug_print('compute: ', obj_idx)
         collision_margin = config.system.collision_margin
         fps = config.system.fps
         fps_base = config.system.fps_base
@@ -162,6 +166,7 @@ class ForceSolver:
 
                     force_data_sequence = ForceDataSequence(frames=forces_frames, obj_idx=obj_idx, other_obj_idx=other_obj_idx, restitution=restitution, relative_velocity=relative_velocity, normal_velocity=normal_velocity, normal_force=normal_force, tangential_force=tangential_force, tangential_velocity=tangential_velocity, normal_force_magnitude=normal_force_magnitude, tangential_force_magnitude=tangential_force_magnitude, stochastic_normal_force=stochastic_normal_force, stochastic_tangential_force=stochastic_tangential_force, contact_type=contact_type, contact_point=contact_point, contact_radius=contact_radius, rolling_radius=rolling_radius, impact_duration=impact_duration, contact_pressure=contact_pressure, penetration_depth=penetration_depth, coupling_strength=coupling_strength)
 
+                    debug_print('Registering ForceDataSequence for obj_idx:', obj_idx)
                     _ = self.entity_manager.register('forces', force_data_sequence)
 
     def _interpolate(self, times: np.ndarray, data: np.ndarray, extrapolate: int = 1) -> Union[CubicSpline, CubicSplineWithNaN]:

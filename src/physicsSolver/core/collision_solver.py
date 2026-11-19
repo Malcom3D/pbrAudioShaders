@@ -95,21 +95,15 @@ class CollisionSolver:
         mesh1_faces = trajectory1.get_faces()
         mesh2_faces = trajectory2.get_faces()
         
-        # configure blosc2 compression BLOSCLZ LZ4 
-        cparams = blosc2.CParams(codec=blosc2.Codec.LZ4, typesize=1, clevel=1, nthreads=8)
-        dparams = blosc2.DParams(nthreads=16)
-
         # Initialize score data arrays
         mesh1_verts = trajectory1.get_vertices(0)
         score_type1 = np.zeros((total_samples, 1), dtype=np.int32)
-        score_vertex_ids1 = np.full((total_samples, mesh1_verts.shape[0]), np.bool_(False), dtype=np.bool_)
-        score_vertex_ids1 = blosc2.asarray(score_vertex_ids1, cparams=cparams, dparams=dparams)
+        score_vertex_ids1 = [[] for _ in range(total_samples)]
         score_contact_area1 = np.zeros((total_samples, 1), dtype=np.float32)
         
         mesh2_verts = trajectory2.get_vertices(0)
         score_type2 = np.zeros((total_samples, 1), dtype=np.int32)
-        score_vertex_ids2 = np.full((total_samples, mesh2_verts.shape[0]), np.bool_(False), dtype=np.bool_)
-        score_vertex_ids2 = blosc2.asarray(score_vertex_ids2, cparams=cparams, dparams=dparams)
+        score_vertex_ids2 = [[] for _ in range(total_samples)]
         score_contact_area2 = np.zeros((total_samples, 1), dtype=np.float32)
         
         vertex1_id_list = []
@@ -134,7 +128,7 @@ class CollisionSolver:
             
             # Update score data
             if vertices1_idx is not None and vertices2_idx is not None:
-                self._update_score_data(sample_idx, impact_end, contact_type, vertices1_idx, vertices2_idx, face_area1, face_area2, score_type1, score_type2, score_vertex_ids1, score_vertex_ids2, score_contact_area1, score_contact_area2, vertex1_id_list, vertex2_id_list, config_obj1, config_obj2)
+                self._update_score_data(sample_idx, start_samples, impact_end, contact_type, vertices1_idx, vertices2_idx, face_area1, face_area2, score_type1, score_type2, score_vertex_ids1, score_vertex_ids2, score_contact_area1, score_contact_area2, vertex1_id_list, vertex2_id_list, config_obj1, config_obj2)
 
                 debug_print(f"facing faces between {config_obj1.name} and {config_obj2.name} at sample {sample_idx}: {np.count_nonzero(vertices1_idx)} {np.count_nonzero(vertices2_idx)} at distance {collision_margin} for {ContactType(contact_type).name.lower()}")
 
@@ -292,7 +286,7 @@ class CollisionSolver:
                     return force.get_contact_type(force_frames[0])
         return 0  # Default to no contact
 
-    def _update_score_data(self, sample_idx, impact_end, contact_type, vertices1_idx, vertices2_idx, face_area1, face_area2, score_type1, score_type2, score_vertex_ids1, score_vertex_ids2, score_contact_area1, score_contact_area2, vertex1_id_list, vertex2_id_list, config_obj1, config_obj2):
+    def _update_score_data(self, sample_idx, start_samples, impact_end, contact_type, vertices1_idx, vertices2_idx, face_area1, face_area2, score_type1, score_type2, score_vertex_ids1, score_vertex_ids2, score_contact_area1, score_contact_area2, vertex1_id_list, vertex2_id_list, config_obj1, config_obj2):
         """Update score data arrays for a sample."""
         if len(vertices1_idx) > 0 and len(vertices2_idx) > 0:
             vertex1_id_list.extend(vertices1_idx.tolist())
@@ -308,20 +302,31 @@ class CollisionSolver:
             score_contact_area1[sample_idx] = face_area1
             score_contact_area2[sample_idx] = face_area2
 
-            # score_vertex_ids1[sample_idx, vertices1_idx] = True
-            tmp_vertex_ids1 = score_vertex_ids1[sample_idx]
-            tmp_vertex_ids1[vertices1_idx] = True
-            score_vertex_ids1[sample_idx] = tmp_vertex_ids1
+            score_vertex_ids1[sample_idx].append(vertices1_idx)
+            score_vertex_ids2[sample_idx].append(vertices2_idx)
 
-            # score_vertex_ids2[sample_idx, vertices2_idx] = True
-            tmp_vertex_ids2 = score_vertex_ids2[sample_idx]
-            tmp_vertex_ids2[vertices2_idx] = True
-            score_vertex_ids2[sample_idx] = tmp_vertex_ids2
+#            # score_vertex_ids1[sample_idx, vertices1_idx] = True
+#            tmp_vertex_ids1 = score_vertex_ids1[sample_idx]
+#            tmp_vertex_ids1[vertices1_idx] = True
+#            score_vertex_ids1[sample_idx] = tmp_vertex_ids1
+#
+#            # score_vertex_ids2[sample_idx, vertices2_idx] = True
+#            tmp_vertex_ids2 = score_vertex_ids2[sample_idx]
+#            tmp_vertex_ids2[vertices2_idx] = True
+#            score_vertex_ids2[sample_idx] = tmp_vertex_ids2
 
-    def _finalize_score_tracks(self, score_track1, score_track2, config_obj1, config_obj2, start_sample, stop_sample,score_type1, score_type2, score_vertex_ids1, score_vertex_ids2, score_contact_area1, score_contact_area2):
-        """Add events to to score tracks."""
+    def _finalize_score_tracks(self, score_track1, score_track2, config_obj1, config_obj2, start_sample, stop_sample, score_type1, score_type2, tmp_score_vertex_ids1, tmp_score_vertex_ids2, score_contact_area1, score_contact_area2):
+        """Add events to score tracks."""
+        n_verts1 = max([np.unique(k).shape[0] for k in tmp_score_vertex_ids1])
+        n_verts2 = max([np.unique(k).shape[0] for k in tmp_score_vertex_ids2])
+        score_vertex_ids1 = np.full((stop_sample-start_sample, n_verts1), -1)
+        score_vertex_ids2 = np.full((stop_sample-start_sample, n_verts2), -1)
+        for idx in range(start_sample, stop_sample + 1):
+            if not tmp_score_vertex_ids1[idx] == []:
+                score_vertex_ids1[idx-start_sample] = np.unique(tmp_score_vertex_ids1[idx])
+            if not tmp_score_vertex_ids2[idx] == []:
+                score_vertex_ids2[idx-start_sample] = np.unique(tmp_score_vertex_ids2[idx])
         score_track1.add_event(ScoreEvent(coll_obj=config_obj2.idx, start_sample=start_sample, stop_sample=stop_sample, type=score_type1, contact_area=score_contact_area1, vertex_ids=score_vertex_ids1))
-        
         score_track2.add_event(ScoreEvent(coll_obj=config_obj1.idx, start_sample=start_sample, stop_sample=stop_sample, type=score_type2, contact_area=score_contact_area2, vertex_ids=score_vertex_ids2))
 
     def _update_modal_vertices(self, obj1_idx, obj2_idx, vertex1_id_list, vertex2_id_list, trajectory1, trajectory2, mesh1_faces, mesh2_faces):
