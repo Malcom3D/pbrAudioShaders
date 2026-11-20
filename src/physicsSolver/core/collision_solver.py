@@ -321,7 +321,7 @@ class CollisionSolver:
         n_verts2 = max([np.unique(k).shape[0] for k in tmp_score_vertex_ids2])
         score_vertex_ids1 = np.full((stop_sample-start_sample, n_verts1), -1)
         score_vertex_ids2 = np.full((stop_sample-start_sample, n_verts2), -1)
-        for idx in range(start_sample, stop_sample + 1):
+        for idx in range(start_sample, stop_sample):
             if not tmp_score_vertex_ids1[idx] == []:
                 score_vertex_ids1[idx-start_sample] = np.unique(tmp_score_vertex_ids1[idx])
             if not tmp_score_vertex_ids2[idx] == []:
