@@ -99,20 +99,20 @@ class ModalComposer:
                 final_type[type_mask] = event_type
                 final_coupling_data[type_mask] = coupling_strength[type_mask]
                 final_contact_area[type_mask] = event_track.contact_area[type_mask]
-                vertex_ids_mask = type_mask.reshape(-1,)[event_track.stop_sample,event_track.start_sample]
+                vertex_ids_mask = type_mask.reshape(-1,)[event_track.stop_sample:event_track.start_sample]
 #                final_vertex_ids[type_mask.reshape(-1,)] = event_track.vertex_ids[type_mask.reshape(-1,)]
                 final_vertex_ids[vertex_ids_mask] = event_track.vertex_ids[vertex_ids_mask]
-                final_force[type_mask] = np.divide(force[event_type][type_mask], n_vertex_ids[type_mask.reshape(-1,)], out=np.zeros_like(force[event_type][type_mask]), where=n_vertex_ids[type_mask.reshape(-1,)] != 0)
+                final_force[type_mask] = np.divide(force[event_type][type_mask], n_vertex_ids[type_mask.reshape(-1,)[event_track.stop_sample:event_track.start_sample]], out=np.zeros_like(force[event_type][type_mask]), where=n_vertex_ids[type_mask.reshape(-1,)[event_track.stop_sample:event_track.start_sample]] != 0)
 
                 # Rewrite final*[mixed_mask] with type == 2
                 if event_type == 2:
                     final_type[mixed_mask] = event_type
                     final_coupling_data[mixed_mask] = coupling_strength[mixed_mask]
                     final_contact_area[mixed_mask] = event_track.contact_area[mixed_mask]
-                    vertex_ids_mask = mixed_mask.reshape(-1,)[event_track.stop_sample,event_track.start_sample]
+                    vertex_ids_mask = mixed_mask.reshape(-1,)[event_track.stop_sample:event_track.start_sample]
 #                    final_vertex_ids[mixed_mask.reshape(-1,)] = event_track.vertex_ids[mixed_mask.reshape(-1,)]
                     final_vertex_ids[vertex_ids_mask] = event_track.vertex_ids[vertex_ids_mask]
-                    final_force[mixed_mask] = np.divide(force[event_type][mixed_mask], n_vertex_ids[mixed_mask.reshape(-1,)], out=np.zeros_like(force[event_type][mixed_mask]), where=n_vertex_ids[mixed_mask.reshape(-1,)] != 0)
+                    final_force[mixed_mask] = np.divide(force[event_type][mixed_mask], n_vertex_ids[mixed_mask.reshape(-1,)[event_track.stop_sample:event_track.start_sample]], out=np.zeros_like(force[event_type][mixed_mask]), where=n_vertex_ids[mixed_mask.reshape(-1,)[event_track.stop_sample:event_track.start_sample]] != 0)
 
             final_vertex_ids = blosc2.asarray(final_vertex_ids, cparams=cparams, dparams=dparams)
             score_track_final.add_event(ScoreEvent(coll_obj=obj2_idx, start_sample=event_track.start_sample, stop_sample=event_track.stop_sample, type=final_type, vertex_ids=final_vertex_ids, contact_area=final_contact_area, force=final_force, coupling_data=final_coupling_data))
@@ -131,7 +131,7 @@ class ModalComposer:
                 final_contact_area[mixed_mask] = event_track.contact_area[mixed_mask]
 #                final_vertex_ids[mixed_mask.reshape(-1,)] = event_track.vertex_ids[mixed_mask.reshape(-1,)]
                 final_vertex_ids[vertex_ids_mask] = event_track.vertex_ids[vertex_ids_mask]
-                final_force[mixed_mask] = np.divide(force[event_type][mixed_mask], n_vertex_ids[mixed_mask.reshape(-1,)], out=np.zeros_like(force[event_type][mixed_mask]), where=n_vertex_ids[mixed_mask.reshape(-1,)] != 0)
+                final_force[mixed_mask] = np.divide(force[event_type][mixed_mask], n_vertex_ids[mixed_mask.reshape(-1,)[event_track.stop_sample:event_track.start_sample]], out=np.zeros_like(force[event_type][mixed_mask]), where=n_vertex_ids[mixed_mask.reshape(-1,)[event_track.stop_sample:event_track.start_sample]] != 0)
 
             final_vertex_ids = blosc2.asarray(final_vertex_ids, cparams=cparams, dparams=dparams)
             score_track_final.add_event(ScoreEvent(coll_obj=obj2_idx, start_sample=event_track.start_sample, stop_sample=event_track.stop_sample, type=final_type, vertex_ids=final_vertex_ids, contact_area=final_contact_area, force=final_force, coupling_data=final_coupling_data))
