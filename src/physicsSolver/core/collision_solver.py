@@ -317,8 +317,8 @@ class CollisionSolver:
 
     def _finalize_score_tracks(self, score_track1, score_track2, config_obj1, config_obj2, start_sample, stop_sample, score_type1, score_type2, tmp_score_vertex_ids1, tmp_score_vertex_ids2, score_contact_area1, score_contact_area2):
         """Add events to score tracks."""
-        n_verts1 = max([np.unique(k).shape[0] for k in tmp_score_vertex_ids1])
-        n_verts2 = max([np.unique(k).shape[0] for k in tmp_score_vertex_ids2])
+        n_verts1 = max([np.unique(k).shape[0] for k in tmp_score_vertex_ids1]) +1
+        n_verts2 = max([np.unique(k).shape[0] for k in tmp_score_vertex_ids2]) +1
         delta_sample = stop_sample - start_sample
         score_vertex_ids1 = np.full((delta_sample, n_verts1), -1)
         score_vertex_ids2 = np.full((delta_sample, n_verts2), -1)
