@@ -322,14 +322,13 @@ class CollisionSolver:
         delta_sample = stop_sample - start_sample
         score_vertex_ids1 = np.full((delta_sample, n_verts1), -1)
         score_vertex_ids2 = np.full((delta_sample, n_verts2), -1)
-        for idx in range(delta_sample):
-            tmp_idx = start_sample + idx
-            tmp_ids1 = tmp_score_vertex_ids1[tmp_idx]
-            tmp_ids2 = tmp_score_vertex_ids2[tmp_idx]
-            if not tmp_ids1 == []:
-                score_vertex_ids1[idx] = np.pad(np.unique(tmp_ids1), (0,len(tmp_ids1)), 'constant', constant_values=(-1))
-            if not tmp_ids2 == []:
-                score_vertex_ids2[idx] = np.pad(np.unique(tmp_ids2), (0,len(tmp_ids2)), 'constant', constant_values=(-1))
+        for idx, row in enumerate(tmp_score_vertex_ids1):
+            if idx - start_sample >= 0 and stop_sample - idx > 0:
+                score_vertex_ids1[idx - start_sample, :np.unique(row).shape[0]] = np.unique(row)
+        for idx, row in enumerate(tmp_score_vertex_ids2):
+            if idx - start_sample >= 0 and stop_sample - idx > 0:
+                score_vertex_ids2[idx - start_sample, :np.unique(row).shape[0]] = np.unique(row)
+
         score_track1.add_event(ScoreEvent(coll_obj=config_obj2.idx, start_sample=start_sample, stop_sample=stop_sample, type=score_type1, contact_area=score_contact_area1, vertex_ids=score_vertex_ids1))
         score_track2.add_event(ScoreEvent(coll_obj=config_obj1.idx, start_sample=start_sample, stop_sample=stop_sample, type=score_type2, contact_area=score_contact_area2, vertex_ids=score_vertex_ids2))
 
