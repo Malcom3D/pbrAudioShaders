@@ -317,17 +317,19 @@ class CollisionSolver:
 
     def _finalize_score_tracks(self, score_track1, score_track2, config_obj1, config_obj2, start_sample, stop_sample, score_type1, score_type2, tmp_score_vertex_ids1, tmp_score_vertex_ids2, score_contact_area1, score_contact_area2):
         """Add events to score tracks."""
-        n_verts1 = max([np.unique(k).shape[0] for k in tmp_score_vertex_ids1]) +1
-        n_verts2 = max([np.unique(k).shape[0] for k in tmp_score_vertex_ids2]) +1
+        n_verts1 = max([np.unique(k).shape[0] for k in tmp_score_vertex_ids1])
+        n_verts2 = max([np.unique(k).shape[0] for k in tmp_score_vertex_ids2])
         delta_sample = stop_sample - start_sample
         score_vertex_ids1 = np.full((delta_sample, n_verts1), -1)
         score_vertex_ids2 = np.full((delta_sample, n_verts2), -1)
         for idx in range(delta_sample):
             tmp_idx = start_sample + idx
-            if not tmp_score_vertex_ids1[tmp_idx] == []:
-                score_vertex_ids1[idx] = np.unique(tmp_score_vertex_ids1[tmp_idx])
-            if not tmp_score_vertex_ids2[tmp_idx] == []:
-                score_vertex_ids2[idx] = np.unique(tmp_score_vertex_ids2[tmp_idx])
+            tmp_ids1 = tmp_score_vertex_ids1[tmp_idx]
+            tmp_ids2 = tmp_score_vertex_ids2[tmp_idx]
+            if not tmp_ids1 == []:
+                score_vertex_ids1[idx] = np.pad(np.unique(tmp_ids1), (0,tmp_ids1.shape[0]), 'constant', constant_values=(-1))
+            if not tmp_ids2 == []:
+                score_vertex_ids2[idx] = np.pad(np.unique(tmp_ids2), (0,tmp_ids2.shape[0]), 'constant', constant_values=(-1))
         score_track1.add_event(ScoreEvent(coll_obj=config_obj2.idx, start_sample=start_sample, stop_sample=stop_sample, type=score_type1, contact_area=score_contact_area1, vertex_ids=score_vertex_ids1))
         score_track2.add_event(ScoreEvent(coll_obj=config_obj1.idx, start_sample=start_sample, stop_sample=stop_sample, type=score_type2, contact_area=score_contact_area2, vertex_ids=score_vertex_ids2))
 
