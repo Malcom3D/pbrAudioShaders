@@ -116,7 +116,8 @@ class ModalComposer:
                 # Rewrite final*[mixed_mask] with type == 2
                 if event_type == 2:
                     final_type[mixed_mask] = event_type
-                    final_coupling_data[mixed_mask] = coupling_strength[mixed_mask]
+                    debug_print('final_coupling_data', final_coupling_data.shape, 'coupling_strength', coupling_strength.shape)
+                    final_coupling_data[mixed_mask.reshape(-1,)] = coupling_strength[mixed_mask.reshape(-1,)]
                     final_contact_area[mixed_mask] = event_track.contact_area[mixed_mask]
                     vertex_ids_mask = mixed_mask.reshape(-1,)[event_track.start_sample:event_track.stop_sample]
                     debug_print('vertex_ids_mask', vertex_ids_mask.shape, np.count_nonzero(vertex_ids_mask))
