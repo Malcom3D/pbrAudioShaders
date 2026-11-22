@@ -107,11 +107,11 @@ class ModalComposer:
                 final_coupling_data[type_mask.reshape(-1,)] = coupling_strength[type_mask.reshape(-1,)]
                 final_contact_area[type_mask] = event_track.contact_area[type_mask]
                 vertex_ids_mask = type_mask.reshape(-1,)[event_track.start_sample:event_track.stop_sample]
-                debug_print('vertex_ids_mask', vertex_ids_mask.shape, np.count_nonzero(vertex_ids_mask))
+                debug_print('vertex_ids_mask', vertex_ids_mask.shape, np.count_nonzero(vertex_ids_mask), np.all(vertex_ids_mask))
 #                final_vertex_ids[type_mask.reshape(-1,)] = event_track.vertex_ids[type_mask.reshape(-1,)]
                 final_vertex_ids[vertex_ids_mask] = event_track.vertex_ids[vertex_ids_mask]
                 debug_print('final_vertex_ids', final_vertex_ids.shape, np.count_nonzero(final_vertex_ids))
-                if np.all(vertex_ids_mask):
+                if not np.count_nonzero(vertex_ids_mask) == 0:
                     final_force[type_mask] = np.divide(force[event_type][type_mask], n_vertex_ids[vertex_ids_mask], out=np.zeros_like(force[event_type][type_mask]), where=n_vertex_ids[vertex_ids_mask] != 0)
                 debug_print('event_type', event_type, 'final_force', final_force.shape, np.count_nonzero(final_force))
 
@@ -125,7 +125,7 @@ class ModalComposer:
                     debug_print('vertex_ids_mask', vertex_ids_mask.shape, np.count_nonzero(vertex_ids_mask))
 #                    final_vertex_ids[mixed_mask.reshape(-1,)] = event_track.vertex_ids[mixed_mask.reshape(-1,)]
                     final_vertex_ids[vertex_ids_mask] = event_track.vertex_ids[vertex_ids_mask]
-                    if np.all(vertex_ids_mask):
+                    if not np.count_nonzero(vertex_ids_mask) == 0:
                         final_force[mixed_mask] = np.divide(force[event_type][mixed_mask], n_vertex_ids[vertex_ids_mask], out=np.zeros_like(force[event_type][mixed_mask]), where=n_vertex_ids[vertex_ids_mask] != 0)
                 debug_print('event_type', event_type, 'final_force', final_force.shape, np.count_nonzero(final_force))
 
@@ -146,7 +146,7 @@ class ModalComposer:
                 final_contact_area[mixed_mask] = event_track.contact_area[mixed_mask]
 #                final_vertex_ids[mixed_mask.reshape(-1,)] = event_track.vertex_ids[mixed_mask.reshape(-1,)]
                 final_vertex_ids[vertex_ids_mask] = event_track.vertex_ids[vertex_ids_mask]
-                if np.all(vertex_ids_mask):
+                if not np.count_nonzero(vertex_ids_mask) == 0:
                     final_force[mixed_mask] = np.divide(force[event_type][mixed_mask], n_vertex_ids[vertex_ids_mask], out=np.zeros_like(force[event_type][mixed_mask]), where=n_vertex_ids[vertex_ids_mask] != 0)
                 debug_print('event_type', event_type, 'final_force', final_force.shape, np.count_nonzero(final_force))
 
