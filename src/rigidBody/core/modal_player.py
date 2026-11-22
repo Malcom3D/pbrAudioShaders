@@ -208,6 +208,7 @@ class ModalPlayer:
                     if other_obj_idx is not None:
                         self.rigidbody_synth.connected_buffer.write_to_obj(int(other_obj_idx), synth_type, coupling_force[synth_type])
 
+                    debug_print('rigidbody_output', rigidbody_output, 'resonance_output', resonance_output, 'sliding_output', sliding_output, 'scraping_output', scraping_output, 'rolling_output', rolling_output)
                     self.rigidbody_synth_track[sample_idx] += rigidbody_output if not np.isnan(rigidbody_output) else 0
                     self.resonance_synth_track[sample_idx] += resonance_output if not np.isnan(resonance_output) else 0
                     if config.system.enable_noise_enhancement:
