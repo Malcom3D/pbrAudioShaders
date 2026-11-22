@@ -71,6 +71,9 @@ class ModalComposer:
                 config_obj = conf_obj
                 # Use the new storage-based method
                 force, coupling_strength = self._load_audioforce_tracks(obj_idx=config_obj.idx)
+                for f_idx in range(len(force)):
+                    debug_print('force[f_idx]', force[f_idx])
+                debug_print('coupling_strength', coupling_strength)
 
         # configure blosc2 compression
         if config.storage.blosc2_codec == "LZ4":
@@ -90,21 +93,25 @@ class ModalComposer:
             final_coupling_data = np.zeros_like(coupling_strength)
 
             mixed_mask = event_track.type == 5
+            debug_print('mixed_mask', mixed_mask.shape, np.count_nonzero(mixed_mask))
             for event_type in range(1, 5):
 
                 # score_track_final
 #                n_vertex_ids = np.count_nonzero(event_track.vertex_ids, axis=1)
                 n_vertex_ids = np.count_nonzero(event_track.vertex_ids != -1, axis=1)
                 type_mask = event_track.type == event_type
+                debug_print('event_type', event_type, 'type_mask', type_mask.shape, np.count_nonzero(type_mask))
 
                 final_type[type_mask] = event_type
                 final_coupling_data[type_mask] = coupling_strength[type_mask]
                 final_contact_area[type_mask] = event_track.contact_area[type_mask]
                 vertex_ids_mask = type_mask.reshape(-1,)[event_track.start_sample:event_track.stop_sample]
+                debug_print('vertex_ids_mask', vertex_ids_mask.shape, np.count_nonzero(vertex_ids_mask))
 #                final_vertex_ids[type_mask.reshape(-1,)] = event_track.vertex_ids[type_mask.reshape(-1,)]
                 final_vertex_ids[vertex_ids_mask] = event_track.vertex_ids[vertex_ids_mask]
                 if np.all(vertex_ids_mask):
                     final_force[type_mask] = np.divide(force[event_type][type_mask], n_vertex_ids[vertex_ids_mask], out=np.zeros_like(force[event_type][type_mask]), where=n_vertex_ids[vertex_ids_mask] != 0)
+                debug_print('event_type', event_type, 'final_force', final_force.shape, np.count_nonzero(final_force))
 
                 # Rewrite final*[mixed_mask] with type == 2
                 if event_type == 2:
@@ -112,10 +119,12 @@ class ModalComposer:
                     final_coupling_data[mixed_mask] = coupling_strength[mixed_mask]
                     final_contact_area[mixed_mask] = event_track.contact_area[mixed_mask]
                     vertex_ids_mask = mixed_mask.reshape(-1,)[event_track.start_sample:event_track.stop_sample]
+                    debug_print('vertex_ids_mask', vertex_ids_mask.shape, np.count_nonzero(vertex_ids_mask))
 #                    final_vertex_ids[mixed_mask.reshape(-1,)] = event_track.vertex_ids[mixed_mask.reshape(-1,)]
                     final_vertex_ids[vertex_ids_mask] = event_track.vertex_ids[vertex_ids_mask]
                     if np.all(vertex_ids_mask):
                         final_force[mixed_mask] = np.divide(force[event_type][mixed_mask], n_vertex_ids[vertex_ids_mask], out=np.zeros_like(force[event_type][mixed_mask]), where=n_vertex_ids[vertex_ids_mask] != 0)
+                debug_print('event_type', event_type, 'final_force', final_force.shape, np.count_nonzero(final_force))
 
             final_vertex_ids = blosc2.asarray(final_vertex_ids, cparams=cparams, dparams=dparams)
             score_track_final.add_event(ScoreEvent(coll_obj=obj2_idx, start_sample=event_track.start_sample, stop_sample=event_track.stop_sample, type=final_type, vertex_ids=final_vertex_ids, contact_area=final_contact_area, force=final_force, coupling_data=final_coupling_data))
@@ -136,6 +145,7 @@ class ModalComposer:
                 final_vertex_ids[vertex_ids_mask] = event_track.vertex_ids[vertex_ids_mask]
                 if np.all(vertex_ids_mask):
                     final_force[mixed_mask] = np.divide(force[event_type][mixed_mask], n_vertex_ids[vertex_ids_mask], out=np.zeros_like(force[event_type][mixed_mask]), where=n_vertex_ids[vertex_ids_mask] != 0)
+                debug_print('event_type', event_type, 'final_force', final_force.shape, np.count_nonzero(final_force))
 
             final_vertex_ids = blosc2.asarray(final_vertex_ids, cparams=cparams, dparams=dparams)
             score_track_final.add_event(ScoreEvent(coll_obj=obj2_idx, start_sample=event_track.start_sample, stop_sample=event_track.stop_sample, type=final_type, vertex_ids=final_vertex_ids, contact_area=final_contact_area, force=final_force, coupling_data=final_coupling_data))
@@ -153,52 +163,63 @@ class ModalComposer:
         loaded_tracks = {}
 
         debug_print(f"Loading audio-force tracks for obj_idx {obj_idx} from storage...")
+        force_tracks = []
         for track_name in track_names:
-            try:
-                # The read method returns a (1, N) array, so we flatten it.
-                track_data = self.storage_engine.read(collection=config.system.collection,  engine='physicsEngine', obj_idx=obj_idx, track_name=track_name)
-                if track_data is not None and np.asarray(track_data).size > 0:
+            track_data = self.storage_engine.read(collection=config.system.collection,  engine='physicsEngine', obj_idx=obj_idx, track_name=track_name)
+            if track_name == 'coupling_strength':
+                coupling_strength_track = track_data.reshape(-1,)
+            else:
+                force_tracks.append(track_data.reshape(-1,))
+
+        return force_tracks, coupling_strength_track
+
+#            loaded_tracks[track_name] = np.ascontiguousarray(track_data, dtype=np.float32).reshape(-1,1)
+#            try:
+#                # The read method returns a (1, N) array, so we flatten it.
+#                track_data = self.storage_engine.read(collection=config.system.collection,  engine='physicsEngine', obj_idx=obj_idx, track_name=track_name)
+#                if track_data is not None and np.asarray(track_data).size > 0:
 #                    loaded_tracks[track_name] = track_data.flatten().reshape(1,-1)
-                    loaded_tracks[track_name] = np.ascontiguousarray(track_data, dtype=np.float32).reshape(-1,1)
-                else:
-                    # If a track is not found, create a silent one.
-                    # We need a length. We can get it from any other loaded track.
-                    # If no tracks are loaded yet, we'll handle it later.
-                    debug_print(f"Could not load track '{track_name}' for obj {obj_idx}: use a silent one")
-                    loaded_tracks[track_name] = np.zeros((1,self.total_samples), dtype=np.float32)
-            except Exception as e:
-                debug_print(f"Could not load track '{track_name}' for obj {obj_idx}: use a silent one: [{e}]")
-                loaded_tracks[track_name] = np.zeros((1,self.total_samples), dtype=np.float32)
+#                    loaded_tracks[track_name] = np.ascontiguousarray(track_data, dtype=np.float32).reshape(-1,1)
+#                else:
+#                    # If a track is not found, create a silent one.
+#                    # We need a length. We can get it from any other loaded track.
+#                    # If no tracks are loaded yet, we'll handle it later.
+#                    debug_print(f"Could not load track '{track_name}' for obj {obj_idx}: use a silent one")
+#                    loaded_tracks[track_name] = np.zeros((1,self.total_samples), dtype=np.float32)
+#            except Exception as e:
+#                debug_print(f"Could not load track '{track_name}' for obj {obj_idx}: use a silent one: [{e}]")
+#                loaded_tracks[track_name] = np.zeros((1,self.total_samples), dtype=np.float32)
         
 #        # Determine the total length from the first successfully loaded track
 #        self.total_samples = next((t.shape[0] for t in loaded_tracks.values() if t is not None), 0)
 
-        # If no tracks were loaded, we can't proceed.
-        if self.total_samples == 0:
-            debug_print(f"No audio-force tracks found for obj {obj_idx}. Returning empty arrays.")
-            # Return a list of empty arrays and an empty coupling array
-            return [np.zeros(1) for _ in range(5)], np.zeros(1)
+#        # If no tracks were loaded, we can't proceed.
+#        if self.total_samples == 0:
+#            debug_print(f"No audio-force tracks found for obj {obj_idx}. Returning empty arrays.")
+#            # Return a list of empty arrays and an empty coupling array
+#            return [np.zeros(1) for _ in range(5)], np.zeros(1)
 
-        # Fill in any missing tracks with zeros
-        for track_name, track_data in loaded_tracks.items():
-            if track_data is None:
-                loaded_tracks[track_name] = np.zeros(self.total_samples, dtype=np.float32)
+#        # Fill in any missing tracks with zeros
+#        for track_name, track_data in loaded_tracks.items():
+#            if track_data is None:
+#                loaded_tracks[track_name] = np.zeros(self.total_samples, dtype=np.float32)
+#                debug_print(f"No audio-force tracks found for obj {obj_idx}. Returning empty arrays.")
+#
+#        # Assemble the final lists and arrays
+#        # The order must match the indexing used in the 'compute' method:
+#        # [non_collision, impact, scraping, sliding, rolling]
+#        force_tracks = [
+#            loaded_tracks.get('non_collision'),
+#            loaded_tracks.get('impact'),
+#            loaded_tracks.get('scraping'),
+#            loaded_tracks.get('sliding'),
+#            loaded_tracks.get('rolling'),
+#        ]
+#        
+#        coupling_strength_track = loaded_tracks.get('coupling_strength')
+#
+#        # Reshape to (N, 1) to match the expected format in the compute method
+#        force_tracks = [track.reshape(-1, 1) for track in force_tracks]
+#        coupling_strength_track = coupling_strength_track.reshape(-1, 1)
 
-        # Assemble the final lists and arrays
-        # The order must match the indexing used in the 'compute' method:
-        # [non_collision, impact, scraping, sliding, rolling]
-        force_tracks = [
-            loaded_tracks.get('non_collision'),
-            loaded_tracks.get('impact'),
-            loaded_tracks.get('scraping'),
-            loaded_tracks.get('sliding'),
-            loaded_tracks.get('rolling'),
-        ]
-        
-        coupling_strength_track = loaded_tracks.get('coupling_strength')
-
-        # Reshape to (N, 1) to match the expected format in the compute method
-        force_tracks = [track.reshape(-1, 1) for track in force_tracks]
-        coupling_strength_track = coupling_strength_track.reshape(-1, 1)
-
-        return force_tracks, coupling_strength_track
+#        return force_tracks, coupling_strength_track

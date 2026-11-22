@@ -124,7 +124,7 @@ class ModalPlayer:
         if config.system.enable_noise_enhancement:
 #            self.sliding_sound, self.scraping_sound, self.rolling_sound = self._load_sound_tracks(sound_path, config_obj.name)
             self.sliding_sound, self.scraping_sound, self.rolling_sound = self._load_sound_tracks(storage_engine=storage_engine, config_obj=config_obj)
-            debug_print('self.sliding_sound', self.sliding_sound.shape, 'self.scraping_sound', self.scraping_sound.shape, 'self.rolling_sound', self.rolling_sound.shape)
+            debug_print('self.sliding_sound', self.sliding_sound.shape, np.count_nonzero(self.sliding_sound), 'self.scraping_sound', self.scraping_sound.shape, np.count_nonzero(self.scraping_sound), 'self.rolling_sound', self.rolling_sound.shape, np.count_nonzero(self.rolling_sound))
 
         coupling_strength = []
         if isinstance(config_obj.connected, np.ndarray):
