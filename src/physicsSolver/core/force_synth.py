@@ -225,6 +225,8 @@ class ForceSynth:
 #        # Normalize signal
 #        impact_samples = impact_samples / np.max(np.abs(impact_samples))
 
+        debug_print('_synthesize_impact: shape', impact_samples.shape, 'count', np.count_nonzero(impact_samples))
+
         # Create tracks
         result = {
             'impact': impact_samples,
@@ -489,6 +491,8 @@ class ForceSynth:
         scraping_vibration = np.zeros(total_samples)
         scraping_vibration[start_idx:stop_idx] += scraping_signal
 
+        debug_print('_synthesize_scraping: shape', scraping_vibration.shape, 'count', np.count_nonzero(scraping_vibration))
+
         # Create tracks
         result = {
             'impact': np.zeros(total_samples),
@@ -604,6 +608,8 @@ class ForceSynth:
         # Add sliding_signal to empty track
         sliding_vibration = np.zeros(total_samples)
         sliding_vibration[start_idx:stop_idx] += sliding_signal
+
+        debug_print('_synthesize_sliding: shape', sliding_vibration.shape, 'count', np.count_nonzero(sliding_vibration))
 
         # Create tracks
         result = {
@@ -774,6 +780,8 @@ class ForceSynth:
     
         rolling_vibration[start_idx:stop_idx] += vibration_signal
 
+        debug_print('_synthesize_rolling: shape', rolling_signal.shape, 'count', np.count_nonzero(rolling_signal))
+
         # Create tracks
         result = {
             'impact': np.zeros(total_samples),
@@ -908,7 +916,6 @@ class ForceSynth:
 
     def _create_empty_tracks(self, total_samples: int) -> Dict:
         """Create empty tracks for silent sections."""
-        config = self.entity_manager.get('config')
         result = {
             'impact': np.zeros(total_samples),
             'sliding': np.zeros(total_samples),
