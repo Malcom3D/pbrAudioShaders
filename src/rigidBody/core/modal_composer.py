@@ -72,8 +72,8 @@ class ModalComposer:
                 # Use the new storage-based method
                 force, coupling_strength = self._load_audioforce_tracks(obj_idx=config_obj.idx)
                 for f_idx in range(len(force)):
-                    debug_print('force[f_idx]', force[f_idx])
-                debug_print('coupling_strength', coupling_strength)
+                    debug_print('force[f_idx]', f_idx, force[f_idx].shape, np.count_nonzero(force[f_idx]))
+                debug_print('coupling_strength', coupling_strength.shape, np.count_nonzero(coupling_strength))
 
         # configure blosc2 compression
         if config.storage.blosc2_codec == "LZ4":
@@ -103,7 +103,7 @@ class ModalComposer:
                 debug_print('event_type', event_type, 'type_mask', type_mask.shape, np.count_nonzero(type_mask))
 
                 final_type[type_mask] = event_type
-                final_coupling_data[type_mask] = coupling_strength[type_mask]
+                final_coupling_data[type_mask.reshape(-1,)] = coupling_strength[type_mask.reshape(-1,)]
                 final_contact_area[type_mask] = event_track.contact_area[type_mask]
                 vertex_ids_mask = type_mask.reshape(-1,)[event_track.start_sample:event_track.stop_sample]
                 debug_print('vertex_ids_mask', vertex_ids_mask.shape, np.count_nonzero(vertex_ids_mask))
@@ -139,7 +139,7 @@ class ModalComposer:
             final_coupling_data = np.zeros_like(coupling_strength)
             for event_type in [3, 4]:
                 final_type[mixed_mask] = event_type
-                final_coupling_data[mixed_mask] = coupling_strength[mixed_mask]
+                final_coupling_data[mixed_mask.reshape(-1,)] = coupling_strength[mixed_mask.reshape(-1,)]
                 final_contact_area[mixed_mask] = event_track.contact_area[mixed_mask]
 #                final_vertex_ids[mixed_mask.reshape(-1,)] = event_track.vertex_ids[mixed_mask.reshape(-1,)]
                 final_vertex_ids[vertex_ids_mask] = event_track.vertex_ids[vertex_ids_mask]
