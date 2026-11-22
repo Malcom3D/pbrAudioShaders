@@ -916,6 +916,7 @@ class ForceSynth:
 
     def _create_empty_tracks(self, total_samples: int) -> Dict:
         """Create empty tracks for silent sections."""
+        config = self.entity_manager.get('config')
         result = {
             'impact': np.zeros(total_samples),
             'sliding': np.zeros(total_samples),
