@@ -124,6 +124,7 @@ class ModalPlayer:
         if config.system.enable_noise_enhancement:
 #            self.sliding_sound, self.scraping_sound, self.rolling_sound = self._load_sound_tracks(sound_path, config_obj.name)
             self.sliding_sound, self.scraping_sound, self.rolling_sound = self._load_sound_tracks(storage_engine=storage_engine, config_obj=config_obj)
+            debug_print('self.sliding_sound', self.sliding_sound.shape, 'self.scraping_sound', self.scraping_sound.shape, 'self.rolling_sound', self.rolling_sound.shape)
 
         coupling_strength = []
         if isinstance(config_obj.connected, np.ndarray):
@@ -162,6 +163,7 @@ class ModalPlayer:
                 if event.start_sample <= sample_idx and (is_shard_frame == None or is_shard_frame <= sample_idx) and (fracture_frame == None or sample_idx <= fracture_frame) and sample_idx <= end_sample:
                     # Process the current sample
                     synth_type, vertex_ids, input_force, contact_area, other_obj_idx, coupling_data = event.get_event_at_sample(sample_idx)
+                    debug_print('sample_idx', sample_idx, 'vertex_ids', vertex_ids, 'input_force', input_force, 'contact_area', contact_area, 'other_obj_idx', other_obj_idx, 'coupling_data', coupling_data)
                     # Modal sound
                     if not input_force == 0:
                         if synth_type in [1,2,3,4]:
