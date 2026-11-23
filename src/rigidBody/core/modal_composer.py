@@ -98,6 +98,7 @@ class ModalComposer:
                 # score_track_final
 #                n_vertex_ids = np.count_nonzero(event_track.vertex_ids, axis=1)
                 n_vertex_ids = np.count_nonzero(event_track.vertex_ids != -1, axis=1)
+                debug_print('max n_vertex_ids', max(n_vertex_ids))
                 type_mask = (event_track.type == event_type).reshape(-1,)
 
                 final_type[type_mask] = event_type
