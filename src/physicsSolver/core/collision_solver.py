@@ -302,8 +302,8 @@ class CollisionSolver:
             score_contact_area1[sample_idx] = face_area1
             score_contact_area2[sample_idx] = face_area2
 
-            score_vertex_ids1[sample_idx].append(vertices1_idx)
-            score_vertex_ids2[sample_idx].append(vertices2_idx)
+            score_vertex_ids1[sample_idx].append(vertices1_idx.tolist()[0])
+            score_vertex_ids2[sample_idx].append(vertices2_idx.tolist()[0])
 
 #            # score_vertex_ids1[sample_idx, vertices1_idx] = True
 #            tmp_vertex_ids1 = score_vertex_ids1[sample_idx]

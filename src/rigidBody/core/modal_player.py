@@ -163,7 +163,6 @@ class ModalPlayer:
                 if event.start_sample <= sample_idx and (is_shard_frame == None or is_shard_frame <= sample_idx) and (fracture_frame == None or sample_idx <= fracture_frame) and sample_idx <= end_sample:
                     # Process the current sample
                     synth_type, vertex_ids, input_force, contact_area, other_obj_idx, coupling_data = event.get_event_at_sample(sample_idx)
-                    debug_print('sample_idx', sample_idx, 'vertex_ids', vertex_ids, 'input_force', input_force, 'contact_area', contact_area, 'other_obj_idx', other_obj_idx, 'coupling_data', coupling_data)
                     # Modal sound
                     if not input_force == 0:
                         if synth_type in [1,2,3,4]:
@@ -171,7 +170,6 @@ class ModalPlayer:
                                 resonance_output += self.resonance_synth.process(synth_type, vertex_ids, input_force, contact_area, coupling_data)
                             input_signal = input_force + rigidbody_buffers[synth_type]
                             coupling_force[synth_type] += coupling_data * input_force
-                            debug_print('synth_type', synth_type, 'vertex_ids', vertex_ids, 'input_signal', input_signal, 'contact_area', contact_area, 'coupling_data', coupling_data)
                             rigidbody_output += self.rigidbody_synth.process(synth_type, vertex_ids, input_signal, contact_area, coupling_data)
 #                     t60_empty = 0
                     # Sound decay
@@ -211,7 +209,6 @@ class ModalPlayer:
                     if other_obj_idx is not None:
                         self.rigidbody_synth.connected_buffer.write_to_obj(int(other_obj_idx), synth_type, coupling_force[synth_type])
 
-                    debug_print('rigidbody_output', rigidbody_output, 'resonance_output', resonance_output, 'sliding_output', sliding_output, 'scraping_output', scraping_output, 'rolling_output', rolling_output)
                     self.rigidbody_synth_track[sample_idx] += rigidbody_output if not np.isnan(rigidbody_output) else 0
                     self.resonance_synth_track[sample_idx] += resonance_output if not np.isnan(resonance_output) else 0
                     if config.system.enable_noise_enhancement:
