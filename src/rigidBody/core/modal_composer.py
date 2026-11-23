@@ -136,7 +136,6 @@ class ModalComposer:
 
             # Add event type 3 and 4 to complete mixed event
             # init zeros array
-            mixed_type = 5
             for event_type in [3, 4]:
                 final_type = np.zeros_like(event_track.type)
 #                final_vertex_ids = np.full(event_track.vertex_ids.shape, np.bool_(False), dtype=np.bool_)
@@ -147,10 +146,12 @@ class ModalComposer:
                 final_type[mixed_mask] = event_type
                 final_coupling_data[mixed_mask] = coupling_strength[mixed_mask]
                 final_contact_area[mixed_mask] = event_track.contact_area[mixed_mask]
+                vertex_ids_mask = mixed_mask[event_track.start_sample:event_track.stop_sample]
+                debug_print('vertex_ids_mask', vertex_ids_mask.shape, np.count_nonzero(vertex_ids_mask))
 #                final_vertex_ids[mixed_mask.reshape(-1,)] = event_track.vertex_ids[mixed_mask.reshape(-1,)]
                 final_vertex_ids[vertex_ids_mask] = event_track.vertex_ids[vertex_ids_mask]
-                debug_print('force[mixed_type][mixed_mask]', force[mixed_type][mixed_mask].shape, np.count_nonzero(force[mixed_type][mixed_mask]))
-                final_force[mixed_mask] = np.divide(force[mixed_type][mixed_mask], n_vertex_ids[vertex_ids_mask], out=np.zeros_like(force[mixed_type][mixed_mask]), where=n_vertex_ids[vertex_ids_mask] != 0)
+                debug_print('force[event_type][mixed_mask]', force[event_type][mixed_mask].shape, np.count_nonzero(force[event_type][mixed_mask]))
+                final_force[mixed_mask] = np.divide(force[event_type][mixed_mask], n_vertex_ids[vertex_ids_mask], out=np.zeros_like(force[event_type][mixed_mask]), where=n_vertex_ids[vertex_ids_mask] != 0)
                 debug_print('event_type', event_type, 'final_force', final_force.shape, np.count_nonzero(final_force))
 
                 final_vertex_ids = blosc2.asarray(final_vertex_ids, cparams=cparams, dparams=dparams)
