@@ -171,6 +171,7 @@ class ModalPlayer:
                                 resonance_output += self.resonance_synth.process(synth_type, vertex_ids, input_force, contact_area, coupling_data)
                             input_signal = input_force + rigidbody_buffers[synth_type]
                             coupling_force[synth_type] += coupling_data * input_force
+                            debug_print('synth_type', synth_type, 'vertex_ids', vertex_ids, 'input_signal', input_signal, 'contact_area', contact_area, 'coupling_data', coupling_data)
                             rigidbody_output += self.rigidbody_synth.process(synth_type, vertex_ids, input_signal, contact_area, coupling_data)
 #                     t60_empty = 0
                     # Sound decay
