@@ -127,8 +127,8 @@ class ModalComposer:
 #                    final_vertex_ids[mixed_mask] = event_track.vertex_ids[mixed_mask]
                     final_vertex_ids[vertex_ids_mask] = event_track.vertex_ids[vertex_ids_mask]
                     debug_print('n_vertex_ids[vertex_ids_mask]', n_vertex_ids[vertex_ids_mask].shape, np.count_nonzero(n_vertex_ids[vertex_ids_mask]))
-                    debug_print('force[event_type][mixed_mask.reshape(1,-1)]', force[event_type][mixed_mask.reshape(1,-1)].shape, np.count_nonzero(force[event_type][mixed_mask.reshape(1,-1)]))
-                    final_force[mixed_mask.reshape(1,-1)] = np.divide(force[event_type][mixed_mask.reshape(1,-1)], n_vertex_ids[vertex_ids_mask], out=np.zeros_like(force[event_type][mixed_mask.reshape(1,-1)]), where=n_vertex_ids[vertex_ids_mask] != 0)
+                    debug_print('force[event_type][mixed_mask]', force[event_type][mixed_mask].shape, np.count_nonzero(force[event_type][mixed_mask]))
+                    final_force[mixed_mask] = np.divide(force[event_type][mixed_mask], n_vertex_ids[vertex_ids_mask], out=np.zeros_like(force[event_type][mixed_mask]), where=n_vertex_ids[vertex_ids_mask] != 0)
                     debug_print('event_type', event_type, 'final_force', final_force.shape, np.count_nonzero(final_force))
 
             final_vertex_ids = blosc2.asarray(final_vertex_ids, cparams=cparams, dparams=dparams)
