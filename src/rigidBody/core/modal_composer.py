@@ -105,7 +105,7 @@ class ModalComposer:
 
                 final_type[type_mask] = event_type
                 final_coupling_data[type_mask] = coupling_strength[type_mask]
-                final_contact_area[type_mask.reshape(1,-1)] = event_track.contact_area[type_mask.reshape(1,-1)]
+                final_contact_area[type_mask] = event_track.contact_area[type_mask]
                 vertex_ids_mask = type_mask[event_track.start_sample:event_track.stop_sample]
                 debug_print('vertex_ids_mask', vertex_ids_mask.shape, np.count_nonzero(vertex_ids_mask), np.all(vertex_ids_mask))
 #                final_vertex_ids[type_mask.reshape(-1,)] = event_track.vertex_ids[type_mask.reshape(-1,)]
