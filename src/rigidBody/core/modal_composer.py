@@ -112,8 +112,8 @@ class ModalComposer:
                 final_vertex_ids[vertex_ids_mask] = event_track.vertex_ids[vertex_ids_mask]
                 debug_print('final_vertex_ids', final_vertex_ids.shape, np.count_nonzero(final_vertex_ids))
                 debug_print('n_vertex_ids[vertex_ids_mask]', n_vertex_ids[vertex_ids_mask].shape, np.count_nonzero(n_vertex_ids[vertex_ids_mask]))
-                debug_print('force[event_type][type_mask]', force[event_type][type_mask].shape, np.count_nonzero(force[event_type][type_mask]))
-                final_force[type_mask] = np.divide(force[event_type][type_mask], n_vertex_ids[vertex_ids_mask], out=np.zeros_like(force[event_type][type_mask]), where=n_vertex_ids[vertex_ids_mask] != 0)
+                debug_print('force[event_type][type_mask.reshape)(-1)]', force[event_type][type_mask.reshape)(-1)].shape, np.count_nonzero(force[event_type][type_mask.reshape)(-1)]))
+                final_force[type_mask] = np.divide(force[event_type][type_mask.reshape)(-1)], n_vertex_ids[vertex_ids_mask], out=np.zeros_like(force[event_type][type_mask.reshape)(-1)]), where=n_vertex_ids[vertex_ids_mask] != 0)
                 debug_print('event_type', event_type, 'final_force', final_force.shape, np.count_nonzero(final_force))
 
                 # Rewrite final*[mixed_mask] with type == 2
