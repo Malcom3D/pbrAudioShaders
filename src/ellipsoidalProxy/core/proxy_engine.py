@@ -16,6 +16,7 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import os
 import numpy as np
 from dask import delayed
 from typing import Tuple, Optional, List, Dict, Any
@@ -29,6 +30,7 @@ from pbrAudioStorage import StorageEngine
 
 from ..lib.proxy_synth import ProxySynth
 from ..lib.proxy_ir_table import ProxyIRTable
+from ..lib.post_process import postProcess
 
 @dataclass
 class ProxyEngine:
@@ -63,6 +65,9 @@ class ProxyEngine:
         self.status_dir = f"{config.system.cache_path}/status/{__class__.__name__}"
         self.progress = 0
 
+        # Ensure status directory exists
+        os.makedirs(self.status_dir, exist_ok=True)
+
         # Initialize StorageEngine
         self.storage_engine = StorageEngine(self.entity_manager)
         self._register_storage_schema()
@@ -71,7 +76,7 @@ class ProxyEngine:
         debug_print("StorageEngine initialized for ProxyEngine.")
         
         # Initialize proxy synth
-        self.proxy_synth = ProxySynth(entity_manager=self.entity_manager)
+        self.proxy_synth = ProxySynth(entity_manager=self.entity_manager, storage_engine=self.storage_engine)
         self.progress = _update_status(f"{self.status_dir}", "/init", 50) # Update progress
     
         # Map IR table
@@ -145,4 +150,8 @@ class ProxyEngine:
         total_samples : int
             Total number of samples for the audio output
         """
+        config = self.entity_manager.get('config')
         self.proxy_synth.compute(obj_idx, total_samples)
+        if config.enable_synth_postprocess:
+            post_process = postProcess(self.entity_manager, storage_engine=self.storage_engine)
+            post_process.apply()

@@ -16,7 +16,7 @@
 # along with pbrAudio.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-__version__ = "0.0.11"
+__version__ = "0.0.12"
 __author__ = "Malcom3D"
 __description__ = "Ellipsoidal proxy generation, modal adaptation module for low importance meshes and lightweight proxy synthesizer for small meshes and debris sound synthesis"
 
@@ -35,6 +35,7 @@ from .lib.modal4proxy import Modal4Proxy
 from .lib.proxy_physics import ProxyPhysics
 from .lib.proxy_ir_table import ProxyIRTable
 from .lib.proxy_eq import ProxyEqualizer
+from .lib.post_process import postProcess
 
 __all__ = [
     'ProxyEngine',
@@ -43,5 +44,6 @@ __all__ = [
     'Modal4Proxy',
     'ProxyPhysics',
     'ProxyIRTable',
-    'ProxyEqualizer'
+    'ProxyEqualizer',
+    'postProcess',
 ]

@@ -21,16 +21,16 @@ import numpy as np
 from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass, field
 #import soundfile as sf
-from scipy import signal
-from scipy.ndimage import gaussian_filter1d
-from scipy.signal import butter, filtfilt
+#from scipy import signal
+#from scipy.ndimage import gaussian_filter1d
+#from scipy.signal import butter, filtfilt
 
 from pbrAudioCommon import EntityManager
 from pbrAudioCommon import debug_print, set_debug, set_debug_prefix
 from pbrAudioStorage import StorageEngine
 
 from .proxy_ir_table import ProxyIRTable
-from .proxy_eq import ProxyEqualizer
+#from .proxy_eq import ProxyEqualizer
 
 
 @dataclass
@@ -45,10 +45,11 @@ class ProxySynth:
     """
     
     entity_manager: EntityManager
+    storage_engine: StorageEngine
     
     # Components
     ir_table: ProxyIRTable = None
-    equalizer: ProxyEqualizer = None
+#    equalizer: ProxyEqualizer = None
     
     # Processing parameters
     sample_rate: int = 48000
@@ -74,8 +75,8 @@ class ProxySynth:
         if self.ir_table is None:
             self.ir_table = ProxyIRTable(self.entity_manager)
         
-        if self.equalizer is None:
-            self.equalizer = ProxyEqualizer(self.entity_manager)
+#        if self.equalizer is None:
+#            self.equalizer = ProxyEqualizer(self.entity_manager)
         
 #        # Set output directory
 #        if self.output_dir is None:
@@ -228,7 +229,7 @@ class ProxySynth:
         track_names = ['impact', 'sliding', 'scraping', 'rolling', 'rolling_sound', 'sliding_sound', 'scraping_sound']
         
         for track_name in track_names:
-            track_data = storage_engine.read(collection=config.system.collection, engine='physicsSolver', obj_idx=config_obj.idx, track_name=track_name)
+            track_data = storage_engine.read(collection=config.system.collection, engine='physicsEngine', obj_idx=config_obj.idx, track_name=track_name)
             if len(track_data) > 0:
                 tracks[track_name] = track_data
                 debug_print(f"Loaded {track_name} track: {len(track_data)} samples")
@@ -344,29 +345,32 @@ class ProxySynth:
                 excitation = excitation[:total_samples]
             
             # Convolve each band with the corresponding IR
-            if track_name.endswith('_sound'):
-                # Sound tracks are already processed (no IR convolution)
-                processed = excitation
-            else:
-                processed = self._convolve_with_irs(excitation, ir_matrix)
-                debug_print(f'After IR convolution for {config_obj.name} - {track_name}: {processed.shape}, non-zero: {np.count_nonzero(processed)}')
-                
-                # Apply equalization
-                contact_type_map = {
-                    'impact': 0,
-                    'sliding': 1,
-                    'scraping': 2,
-                    'rolling': 3,
-                    'rolling_sound': 4,
-                    'sliding_sound': 5, 
-                    'scraping_sound': 6
-                }
+            processed = self._convolve_with_irs(excitation, ir_matrix)
 
-                contact_type = contact_type_map.get(track_name, 0)
-                processed = self.equalizer.apply_equalization(processed, contact_type, excitation)
-                debug_print(f'After equalization for {config_obj.name} - {track_name}: {processed.shape}, non-zero: {np.count_nonzero(processed)}')
+#            if track_name.endswith('_sound'):
+#                # Sound tracks are already processed (no IR convolution)
+#                processed = excitation
+#            else:
+#                processed = self._convolve_with_irs(excitation, ir_matrix)
+#                processed_tracks[track_name] = processed
+#                debug_print(f'After IR convolution for {config_obj.name} - {track_name}: {processed.shape}, non-zero: {np.count_nonzero(processed)}')
+                
+#                # Apply equalization
+#                contact_type_map = {
+#                    'impact': 0,
+#                    'sliding': 1,
+#                    'scraping': 2,
+#                    'rolling': 3,
+#                    'rolling_sound': 4,
+#                    'sliding_sound': 5, 
+#                    'scraping_sound': 6
+#                }
+
+#                contact_type = contact_type_map.get(track_name, 0)
+#                processed = self.equalizer.apply_equalization(processed, contact_type, excitation)
+#                debug_print(f'After equalization for {config_obj.name} - {track_name}: {processed.shape}, non-zero: {np.count_nonzero(processed)}')
             
-            processed_tracks[track_name] = processed
+#            processed_tracks[track_name] = processed
 
 #        # Mix all tracks
 #        mixed = np.zeros(total_samples, dtype=np.float32)
@@ -400,5 +404,4 @@ class ProxySynth:
 #        # Save output
 #        self._save_audio(config_obj, mixed, processed_tracks)
         # Write the final tracks to storage
-        self.save_synth_tracks(storage_engine, config_obj, processed_tracks)
-
+        self.save_synth_tracks(self.storage_engine, config_obj, processed_tracks)
