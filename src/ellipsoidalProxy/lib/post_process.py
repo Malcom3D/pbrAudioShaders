@@ -207,7 +207,6 @@ def _build_proxy_track_chain(track_name: str, cfg: Any) -> Optional[Dict[str, An
             "neutral_size": 0.2,
             "low_shelf_hz": 250.0,
             "high_shelf_hz": 3000.0,
-,
             "sample_rate": sr,
         },
     })
@@ -555,8 +554,5 @@ class postProcess:
                     f"{track_name} (no signals present)"
                 )
         else:
-            debug_print(
-                f"proxy postProcess: chain written on {updated} signal node(s) "
-                f f"of {track_name}"
-            )
+            debug_print(f"proxy postProcess: chain written on {updated} signal node(s) of {track_name}")
         return updated
