@@ -231,8 +231,8 @@ class ProxySynth:
         for track_name in track_names:
             track_data = storage_engine.read(collection=config.system.collection, engine='physicsEngine', obj_idx=config_obj.idx, track_name=track_name)
             if len(track_data) > 0:
-                tracks[track_name] = track_data
-                debug_print(f"Loaded {track_name} track: {len(track_data)} samples")
+                tracks[track_name] = track_data.reshape(-1,)
+                debug_print(f"Loaded {track_name} track: {len(track_data.reshape(-1,))} samples")
         
         if not tracks:
             return None
