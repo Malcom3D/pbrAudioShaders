@@ -437,7 +437,7 @@ class postProcess:
         """Remove chains from an object's ProxyEngine tracks."""
         patched = 0
         for track_name in self.tracks_to_process:
-            if not self.storage_engine._signal_node_exists(self.collection, self.engine_name, obj_idx, track_name)
+            if not self.storage_engine._signal_node_exists(self.collection, self.engine_name, obj_idx, track_name):
                 continue
             n = self.storage_engine.clear_chains(
                 collection=self.collection,
