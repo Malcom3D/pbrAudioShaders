@@ -345,8 +345,8 @@ class ProxySynth:
                 excitation = excitation[:total_samples]
             
             # Convolve each band with the corresponding IR
-            debug_print(f'Convolved {config_obj.name} - {track_name} with Toeplitz IRs: {processed.shape}, non-zero: {np.count_nonzero(processed)}')
             processed = self._convolve_with_irs(excitation, ir_matrix)
+            debug_print(f'Convolved {config_obj.name} - {track_name} with Toeplitz IRs: {processed.shape}, non-zero: {np.count_nonzero(processed)}')
 
             processed_tracks[track_name] = processed
 

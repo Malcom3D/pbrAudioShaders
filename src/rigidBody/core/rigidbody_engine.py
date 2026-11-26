@@ -296,6 +296,10 @@ class rigidBodyEngine:
             tasks_proxy_synth = [proxy_engine.compute(obj_idx, self.total_samples) for obj_idx in self.obj_proxy_synth]
             results_proxy_synth = compute(*tasks_proxy_synth)
 
+            # apply ProxySynth postProcess
+            debug_print('Apply ProxySynth postProcess...')
+            proxy_engine.post_process()
+
         self.progress = _update_status(f"{self.status_dir}", "/bake", 90)
 
     def _post_process(self):

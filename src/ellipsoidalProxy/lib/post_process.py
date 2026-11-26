@@ -506,9 +506,7 @@ class postProcess:
                 return obj
         return None
 
-    def _write_chain_to_storage(
-        self, obj_idx: int, track_name: str, chain: Dict[str, Any]
-    ) -> int:
+    def _write_chain_to_storage(self, obj_idx: int, track_name: str, chain: Dict[str, Any]) -> int:
         """
         Attach ``chain`` to every signal of the track via StorageEngine.
         """
@@ -522,22 +520,13 @@ class postProcess:
                 signal_names=None,   # None -> apply to every signal
             )
         except Exception as e:
-            debug_print(
-                f"proxy postProcess: set_chains failed for "
-                f"{self.collection}/{self.engine_name}/{obj_idx}/"
-                f"{track_name}: {e}"
-            )
+            debug_print(f"proxy postProcess: set_chains failed for {self.collection}/{self.engine_name}/{obj_idx}/{track_name}: {e}")
             return 0
 
         if updated <= 1:
-            signals = self.storage_engine.list_signals(
-                self.collection, self.engine_name, obj_idx, track_name
-            )
+            signals = self.storage_engine.list_signals(self.collection, self.engine_name, obj_idx, track_name)
             if not signals and updated == 1:
-                debug_print(
-                    f"proxy postProcess: chain written on track node "
-                    f"{track_name} (no signals present)"
-                )
+                debug_print(f"proxy postProcess: chain written on track node {track_name} (no signals present)")
         else:
             debug_print(f"proxy postProcess: chain written on {updated} signal node(s) of {track_name}")
         return updated
