@@ -162,8 +162,15 @@ class ProxyIRTable:
         try:
             vertices, _, _ = _load_mesh(mesh, 0, use_proxy_path=True)
             if len(vertices) > 0:
-                min_coords = np.min(vertices, axis=0)
-                max_coords = np.max(vertices, axis=0)
+                # Compute the centroid of the mesh
+                centroid = np.mean(vertices, axis=0)
+
+                # Center the vertices around the origin for PCA
+                centered_vertices = vertices - centroid
+
+                # Compute min max coords
+                min_coords = np.min(centered_vertices, axis=0)
+                max_coords = np.max(centered_vertices, axis=0)
                 return float(np.linalg.norm(max_coords - min_coords))
         except Exception as e:
             debug_print(f"Error computing mesh size: {e}")
