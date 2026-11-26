@@ -150,10 +150,10 @@ class ProxyEngine:
         total_samples : int
             Total number of samples for the audio output
         """
-        config = self.entity_manager.get('config')
         self.proxy_synth.compute(obj_idx, total_samples)
 
     def post_process(self):
+        config = self.entity_manager.get('config')
         if config.system.enable_synth_postprocess:
             post_process = postProcess(self.entity_manager, storage_engine=self.storage_engine)
             post_process.apply()
