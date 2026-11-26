@@ -345,9 +345,7 @@ class postProcess:
     # Which tracks this instance will process. Defaults to ProxyEngine's
     # output set; pass ``PROXY_TRACKS + PROXY_SOUND_TRACKS`` to cover
     # the noise-enhanced tracks.
-    tracks_to_process: List[str] = field(
-        default_factory=lambda: list(PROXY_TRACKS) + list(PROXY_SOUND_TRACKS)
-    )
+    tracks_to_process: List[str] = field(default_factory=lambda: list(PROXY_TRACKS) + list(PROXY_SOUND_TRACKS))
 
     # Optional whitelist per object: {obj_idx: [track_name, ...]}.
     object_track_filter: Optional[Dict[int, List[str]]] = None
@@ -373,10 +371,7 @@ class postProcess:
         # Only attempt to process the sound-tracks when the engine
         # actually materialized them.
         if not getattr(config.system, "enable_noise_enhancement", False):
-            self.tracks_to_process = [
-                t for t in self.tracks_to_process
-                if t not in PROXY_SOUND_TRACKS
-            ]
+            self.tracks_to_process = [t for t in self.tracks_to_process if t not in PROXY_SOUND_TRACKS]
 
     # --------------------------------------------------------------
     # Public API
@@ -395,7 +390,7 @@ class postProcess:
             if obj.proxy_type not in (0, 1, 2, 3, 4, 5):
                 continue
             # ProxySynth only runs when enable_proxy_synth is set.
-            if not getattr(self.config.system, "enable_proxy_synth", False):
+            if not self.config.system.enable_proxy_synth:
                 continue
 
             name = getattr(obj, "name", str(obj.idx))
@@ -422,13 +417,8 @@ class postProcess:
             if allowed is not None and track_name not in allowed:
                 continue
 
-            if not self.storage_engine._signal_node_exists(
-                self.collection, self.engine_name, obj_idx, track_name
-            ):
-                debug_print(
-                    f"proxy postProcess: {self.collection}/{self.engine_name}/"
-                    f"{obj_idx}/{track_name} not materialized — skipped"
-                )
+            if not self.storage_engine._signal_node_exists(self.collection, self.engine_name, obj_idx, track_name):
+                debug_print(f"proxy postProcess: {self.collection}/{self.engine_name}/{obj_idx}/{track_name} not materialized — skipped")
                 continue
 
             chain = self._chain_for(obj_idx, track_name)
@@ -440,19 +430,14 @@ class postProcess:
                 patched += 1
 
         if patched:
-            debug_print(
-                f"proxy postProcess: patched {patched} tracks for "
-                f"{obj_name or obj_idx}"
-            )
+            debug_print(f"proxy postProcess: patched {patched} tracks for {obj_name or obj_idx}")
         return patched
 
     def revert_for_object(self, obj_idx: int) -> int:
         """Remove chains from an object's ProxyEngine tracks."""
         patched = 0
         for track_name in self.tracks_to_process:
-            if not self.storage_engine._signal_node_exists(
-                self.collection, self.engine_name, obj_idx, track_name
-            ):
+            if not self.storage_engine._signal_node_exists(self.collection, self.engine_name, obj_idx, track_name)
                 continue
             n = self.storage_engine.clear_chains(
                 collection=self.collection,
