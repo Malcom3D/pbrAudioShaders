@@ -347,6 +347,8 @@ class ProxySynth:
             # Convolve each band with the corresponding IR
             processed = self._convolve_with_irs(excitation, ir_matrix)
 
+            processed_tracks[track_name] = processed
+
 #            if track_name.endswith('_sound'):
 #                # Sound tracks are already processed (no IR convolution)
 #                processed = excitation

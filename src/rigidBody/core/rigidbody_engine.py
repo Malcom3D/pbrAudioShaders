@@ -79,7 +79,7 @@ class rigidBodyEngine:
                 self.obj_static.append(config_obj.idx)
             if config_obj.proxy_type is False or config_obj.proxy_type in [3,4,5]:
                 self.obj_modal.append(config_obj.idx)
-            elif config.system.enable_proxy_synth and config_obj.proxy_type in [0,1,2]:
+            if config.system.enable_proxy_synth and config_obj.proxy_type in [0,1,2]:
                 self.obj_proxy_synth.append(config_obj.idx)
         for i in range(len(config.objects)):
             for j in range(i + 1, len(config.objects)):
@@ -101,19 +101,6 @@ class rigidBodyEngine:
         self.total_samples = int(config.system.total_frames * sample_rate / sfps)
 
         self._register_storage_schema()
-
-    def prebake(self):
-        step_done = []
-        if os.path.exists(f"{self.status_dir}/step_done"):
-            with open(f"{self.status_dir}/step_done", 'r') as file:
-                step_done = file.read().split()
-
-        if '_modal' not in step_done:
-            self._modal()
-        if '_proxy' not in step_done:
-            self._proxy()
-        if '_composer' not in step_done:
-            self._composer()
 
     def _register_storage_schema(self):
         """
@@ -160,6 +147,20 @@ class rigidBodyEngine:
         self.progress = _update_status(f"{self.status_dir}", "/prebake", 5) # Update progress
         debug_print("Modal synth storage schema registered and materialized.")
 
+    def prebake(self):
+        step_done = []
+        if os.path.exists(f"{self.status_dir}/step_done"):
+            with open(f"{self.status_dir}/step_done", 'r') as file:
+                step_done = file.read().split()
+
+        if not len(self.obj_modal) == 0:
+            if '_modal' not in step_done:
+                self._modal()
+            if '_proxy' not in step_done:
+                self._proxy()
+            if '_composer' not in step_done:
+                self._composer()
+
     def _modal(self):
         tasks_modal = [self.prebake_modal(obj_idx) for obj_idx in self.obj_modal]
         results_modal = compute(*tasks_modal)
@@ -191,18 +192,24 @@ class rigidBodyEngine:
 #        self.progress = _update_status(f"{self.status_dir}", "/prebake", 99)
 
     def bake(self):
+        config = self.entity_manager.get('config')
+
         step_done = []
         if os.path.exists(f"{self.status_dir}/step_done"):
             with open(f"{self.status_dir}/step_done", 'r') as file:
                 step_done = file.read().split()
 
-        self._connected_buffer()
-        if '_modal_synth' not in step_done:
-            self._modal_synth()
-        if '_proxy_synth' not in step_done:
-            self._proxy_synth()
-        if '_post_process' not in step_done:
-            self._post_process()
+        modal_dyn_idx = list(set(self.obj_dyn) - set(self.obj_proxy_synth))
+        if not len(modal_dyn_idx) == 0:
+            self._connected_buffer()
+            if '_modal_synth' not in step_done:
+                self._modal_synth()
+        if config.system.enable_proxy_synth and not len(self.obj_proxy_synth) == 0:
+            if '_proxy_synth' not in step_done:
+                self._proxy_synth()
+        if config.system.enable_synth_postprocess:
+            if '_post_process' not in step_done:
+                self._post_process()
 
     def _modal_synth(self):
         modal_dyn_idx = list(set(self.obj_dyn) - set(self.obj_proxy_synth))
