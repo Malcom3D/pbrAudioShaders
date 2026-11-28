@@ -233,6 +233,7 @@ class physicsEngine:
             obj_ids.append(collisions[collision_idx].obj1_idx)
             obj_ids.append(collisions[collision_idx].obj2_idx)
         obj_ids = np.unique(obj_ids)
+        debug_print(f'Starting processing of ForceDataSequence for {obj_ids}')
         # ToDo add obj_idx for other synth (e.g. eolian)
         tasks_force = [self.force(obj_idx) for obj_idx in obj_ids]
         results_force = compute(*tasks_force)

@@ -405,7 +405,7 @@ class postProcess:
         """
         cfg_obj = self._find_config_obj(obj_idx)
         if cfg_obj is None:
-            debug_print(f"proxy postProcess: no ObjectConfig for obj_idx={obj_idx}")
+            debug_print(f"no ProxySynth ObjectConfig for obj_idx={obj_idx}")
             return 0
 
         allowed = None
@@ -418,7 +418,7 @@ class postProcess:
                 continue
 
             if not self.storage_engine._signal_node_exists(self.collection, self.engine_name, obj_idx, track_name):
-                debug_print(f"proxy postProcess: {self.collection}/{self.engine_name}/{obj_idx}/{track_name} not materialized — skipped")
+                debug_print(f"{self.collection}/{self.engine_name}/{obj_idx}/{track_name} not materialized — skipped")
                 continue
 
             chain = self._chain_for(obj_idx, track_name)
@@ -430,7 +430,7 @@ class postProcess:
                 patched += 1
 
         if patched:
-            debug_print(f"proxy postProcess: patched {patched} tracks for {obj_name or obj_idx}")
+            debug_print(f"patched ProxySynth {patched} tracks for {obj_name or obj_idx}")
         return patched
 
     def revert_for_object(self, obj_idx: int) -> int:
@@ -520,13 +520,13 @@ class postProcess:
                 signal_names=None,   # None -> apply to every signal
             )
         except Exception as e:
-            debug_print(f"proxy postProcess: set_chains failed for {self.collection}/{self.engine_name}/{obj_idx}/{track_name}: {e}")
+            debug_print(f"set_chains failed for {self.collection}/{self.engine_name}/{obj_idx}/{track_name}: {e}")
             return 0
 
         if updated <= 1:
             signals = self.storage_engine.list_signals(self.collection, self.engine_name, obj_idx, track_name)
             if not signals and updated == 1:
-                debug_print(f"proxy postProcess: chain written on track node {track_name} (no signals present)")
+                debug_print(f"chain written on ProxySynth track node {track_name} (no signals present)")
         else:
-            debug_print(f"proxy postProcess: chain written on {updated} signal node(s) of {track_name}")
+            debug_print(f"chain written on ProxySynth {updated} signal node(s) of {track_name}")
         return updated

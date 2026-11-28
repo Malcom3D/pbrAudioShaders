@@ -119,8 +119,8 @@ class CollisionSolver:
             # Get contact type
             contact_type = self._get_contact_type(forces, obj1_idx, obj2_idx, sample_idx)
             
-            # Use optimized proxy mesh collision detection
             if is_proxy1 or is_proxy2:
+                # Use optimized proxy mesh collision detection
                 vertices1_idx, vertices2_idx, face_area1, face_area2 = self.proxy_physics.optimized_proxy_collision(obj1_idx, obj2_idx, cp1, cp2, collision_margin, contact_type, trajectory1, trajectory2, mesh1_faces, mesh2_faces, sample_idx)
             else:
                 # Original method for non-proxy meshes
